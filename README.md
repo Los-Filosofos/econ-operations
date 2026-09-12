@@ -1,7 +1,14 @@
 # ECON · Backend de integración
 
-Base de FastAPI para explorar la integración de dos sistemas. El reto todavía no
-está definido: no hay tablas de negocio, conectores reales ni sincronización.
+Base de FastAPI para el Hub de Operaciones de Grupo ECON: integración entre
+Prisma y Startrack. Todavía no hay tablas de negocio, conectores reales ni sincronización.
+
+## Documentación del reto
+
+El contexto del **Equipo 6 — Los Filósofos**, los documentos convertidos y el
+análisis de la propuesta están en [docs/onedrive/README.md](docs/onedrive/README.md).
+Para comenzar, consultar el [contexto para IA](docs/onedrive/CONTEXTO-IA.md).
+La versión compartida omite las contraseñas del sandbox.
 
 ## Arrancar por CLI
 

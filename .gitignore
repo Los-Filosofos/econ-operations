@@ -21,3 +21,6 @@ wheels/
 .coverage
 htmlcov/
 *.log
+
+# Original documents, credentials, and conversion intermediates
+/.context-work/
