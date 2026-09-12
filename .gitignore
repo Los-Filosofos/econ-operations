@@ -24,3 +24,10 @@ htmlcov/
 
 # Original documents, credentials, and conversion intermediates
 /.context-work/
+
+# Frontend dependencies, local tooling and Cloudflare output
+node_modules/
+.wrangler/
+.vite/
+coverage/
+*.tsbuildinfo

@@ -1,0 +1,26 @@
+{
+  "name": "econ-protocol",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ECON operations hub — Los Filósofos",
+  "engines": {
+    "node": ">=24.19.0 <25"
+  },
+  "packageManager": "npm@11.5.2",
+  "scripts": {
+    "setup:web": "npm --prefix apps/web ci",
+    "setup:api": "uv sync --project apps/api --locked",
+    "dev:web": "npm --prefix apps/web run dev",
+    "dev:api": "uv run --directory apps/api --env-file .env fastapi dev",
+    "build": "npm --prefix apps/web run build",
+    "lint:web": "npm --prefix apps/web run lint",
+    "test:web": "npm --prefix apps/web run test",
+    "lint:api": "uv run --directory apps/api ruff check .",
+    "format:api:check": "uv run --directory apps/api ruff format --check .",
+    "test:api": "uv run --directory apps/api pytest",
+    "db:up": "docker compose up -d --wait db",
+    "db:migrate": "uv run --directory apps/api --env-file .env alembic upgrade head",
+    "deploy:web": "npm --prefix apps/web run deploy",
+    "deploy:web:check": "npm --prefix apps/web run deploy:check"
+  }
+}

@@ -1,5 +1,7 @@
 # Base central: PostgreSQL en Docker
 
+> Evaluación histórica anterior al acceso al sandbox. Las menciones siguientes a accesos pendientes describen esa etapa. PostgreSQL se conserva; las rutas y comandos actuales están en [desarrollo](desarrollo.md), la arquitectura en [ADR 0001](adr/0001-web-platform.md) y la evidencia de acceso en [revisión de contexto](revision-contexto.md).
+
 Recomendación inicial: PostgreSQL 18 para los datos compartidos, SQLModel para
 acceder a ellos desde FastAPI y Alembic para evolucionar el esquema. Docker
 Compose ejecuta PostgreSQL localmente; Docker no es una base de datos.

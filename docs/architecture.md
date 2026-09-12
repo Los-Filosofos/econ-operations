@@ -1,5 +1,7 @@
 # Elección inicial: FastAPI
 
+> Decisión histórica previa a la recepción del kit y a la integración inicial. Para la arquitectura vigente del monorepo consultar [ADR 0001](adr/0001-web-platform.md); para ejecutarlo, [desarrollo](desarrollo.md). Las observaciones actuales de acceso están en [revisión de contexto](revision-contexto.md).
+
 Para el escenario descrito, FastAPI es una buena elección provisional: una API
 central en Python que consulte o reciba datos de dos sistemas, los normalice y
 los sirva al panel o a una futura aplicación. Todavía no podemos demostrar que
