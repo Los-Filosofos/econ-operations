@@ -1,5 +1,7 @@
 # Documentación de ECON
 
+La [investigación ampliada de manuales y diseño](investigacion-manuales-y-diseno.md) contrasta el manual HTML completo de MAIC, la documentación de Startrack y la identidad de ECON con el problema operativo. La [arquitectura del frontend](frontend-architecture.md) explica la separación de componentes, consultas y navegación del rediseño.
+
 La implementación actual se organiza como monorepo: `apps/web` y `apps/api`. Comenzar por [desarrollo local](desarrollo.md), [decisión de plataforma web](adr/0001-web-platform.md) y [preparación para Cloudflare](deploy-cloudflare.md). La [revisión de contexto del 12/09/2026](revision-contexto.md) registra la lectura completa del kit, el cotejo del ZIP y los límites actuales de acceso. Los documentos históricos siguientes conservan sus afirmaciones con la fecha y el alcance de cada revisión.
 
 El [modelo operativo y sus matrices iniciales](modelo-operativo.md) documenta el contrato implementado, inventario de campos, mapeo por fuente, responsabilidades propuestas y señales medibles. Distingue las relaciones locales de demostración de las correspondencias externas todavía sin validar.

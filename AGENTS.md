@@ -34,7 +34,10 @@ Run `npm run lint:web`, `npm run test:web`, `npm run build`,
 `npm run test:api` for changes spanning both apps. A fresh environment needs
 `DATABASE_URL` for API import; tests use isolated SQLite databases.
 
-Use the official shadcn CLI for components and preserve the generated preset.
+Use the official shadcn CLI for components and preserve accessible primitives.
+The user requested a square ECON visual theme over the generated preset; keep
+its semantic tokens and component variants consistent. Read
+`docs/frontend-architecture.md` before reorganizing web components or queries.
 Update both API models and frontend runtime schemas for contract changes.
 Keep dependency lockfiles in their applications. Write commits and PRs in
 English; user-facing UI and team runbooks are Spanish. See `CONTRIBUTING.md`.

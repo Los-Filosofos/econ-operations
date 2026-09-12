@@ -1,5 +1,7 @@
 # Qué consultar ahora, indicadores e ISO
 
+> Propuesta de la etapa inicial. El [modelo operativo](modelo-operativo.md) registra las reglas implementadas después; la [investigación ampliada](investigacion-manuales-y-diseno.md) incorpora el manual HTML de MAIC y los estados documentados por Startrack. Los indicadores futuros de esta guía siguen sujetos a sus condiciones de evidencia.
+
 Propuesta de trabajo para Los Filósofos, revisada el **12 de septiembre de 2026**. Parte de los manuales, la exploración web y las lecturas HTTP documentadas en [integraciones-reales.md](integraciones-reales.md). No se calcularon KPIs globales ni se implementó el panel durante esta revisión.
 
 Para entender primero el problema y recorrer las plataformas, comenzar por [la guía de navegación](guia-problema-y-navegacion.md).

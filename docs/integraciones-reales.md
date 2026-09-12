@@ -1,5 +1,7 @@
 # Integración real: exploración de Nexus y Startrack
 
+> Registro de la exploración inicial. Para la implementación posterior consultar [revisión de contexto](revision-contexto.md); para el manual HTML completo y las nuevas conclusiones de diseño, [investigación ampliada](investigacion-manuales-y-diseno.md). Las afirmaciones de trabajo pendiente de este registro conservan su alcance histórico.
+
 Verificado el **12 de septiembre de 2026**, mediante Chrome, código JavaScript servido a ese navegador, documentación oficial y consultas HTTP pequeñas. Se utilizó únicamente la cuenta asignada a Rodrigo Trujillo / Los Filósofos. Los resultados corresponden a los entornos entregados, no a una validación de producción.
 
 El usuario pidió trabajar hacia una integración real. La agenda y las restricciones del evento se conservan como fuente en `docs/onedrive`; no limitan esta evaluación técnica a una demostración de 24 horas.

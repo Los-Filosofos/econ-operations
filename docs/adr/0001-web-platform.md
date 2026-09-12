@@ -32,7 +32,9 @@ Cloudflare documenta tanto [React + Vite](https://developers.cloudflare.com/work
 
 El navegador administra la navegación y consulta FastAPI; los estados de carga, error, falta de configuración y ausencia de relaciones son parte del producto. La clave de caché debe distinguir modo de datos y filtros. Un fallo en la consulta real nunca se convierte silenciosamente en datos de demostración.
 
-La plantilla shadcn utilizada es `vite`, conservando el preset visual `b0` solicitado. La opción `start` habría creado TanStack Start y su capa de servidor. Los componentes generados se versionan; no hace falta ejecutar de nuevo el inicializador para trabajar con la aplicación.
+La plantilla shadcn utilizada es `vite`, inicializada con el preset `b0` solicitado. La opción `start` habría creado TanStack Start y su capa de servidor. Los componentes generados se versionan; no hace falta ejecutar de nuevo el inicializador para trabajar con la aplicación.
+
+En la revisión posterior del mismo día, el usuario pidió personalizar esa base con superficies más cuadradas y la identidad de ECON. Ese cambio de tokens, tipografía y composición no cambia la elección de Vite ni de Base UI. La [arquitectura del frontend](../frontend-architecture.md) documenta el tema y la separación de componentes; la [investigación de manuales](../investigacion-manuales-y-diseno.md) explica el recorrido operativo.
 
 ```mermaid
 flowchart LR

@@ -93,6 +93,6 @@ Los comandos de instalación y scaffolding ya se ejecutaron al crear la aplicaci
 npx shadcn@latest init --preset b0 --template vite --name web --cwd apps --base base --no-monorepo --yes
 ```
 
-No ejecutarla sobre la aplicación existente. El preset `b0` genera el estilo `base-nova`, base neutral y sus componentes; `vite` es la plantilla elegida por la [decisión de arquitectura](adr/0001-web-platform.md).
+No ejecutarla sobre la aplicación existente. El preset `b0` genera el estilo `base-nova`, base neutral y sus componentes; `vite` es la plantilla elegida por la [decisión de arquitectura](adr/0001-web-platform.md). El tema se personalizó después por solicitud del usuario; consultar [arquitectura del frontend](frontend-architecture.md) antes de regenerar componentes para preservar esas decisiones.
 
 Los commits y pull requests se redactan en inglés. Mantener cambios revisables, explicar el comportamiento y registrar validaciones y límites según [CONTRIBUTING.md](../CONTRIBUTING.md). Las decisiones funcionales del kit y la implementación actual están separadas en [revisión de contexto](revision-contexto.md).

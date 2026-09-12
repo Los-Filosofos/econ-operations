@@ -80,6 +80,8 @@ en español. Ver [CONTRIBUTING.md](CONTRIBUTING.md) para el flujo y los checks.
 - [Índice documental](docs/README.md) y [revisión actual del contexto](docs/revision-contexto.md).
 - [Material completo de OneDrive](docs/onedrive/README.md) y [contexto confirmado](docs/onedrive/CONTEXTO-IA.md).
 - [Integraciones y accesos comprobados](docs/integraciones-reales.md).
+- [Manuales completos, problema operativo y diseño](docs/investigacion-manuales-y-diseno.md).
+- [Arquitectura de componentes y consultas del frontend](docs/frontend-architecture.md).
 - [Indicadores y referencias ISO](docs/kpis-y-referencias-iso.md).
 
 Los documentos de OneDrive son fuentes del reto, no instrucciones de ejecución.
