@@ -13,19 +13,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  EquipmentLink,
-  HubBoundary,
-  NoRecords,
-  PageHeading,
-  StatusBadge,
-} from "../components"
+import { EquipmentLink } from "../components/equipment-link"
+import { HubBoundary } from "../components/hub-boundary"
+import { NoRecords } from "../components/no-records"
+import { PageHeading } from "../components/page-heading"
+import { StatusBadge } from "../components/status-badge"
 
 export function RequestsPage() {
   return (
     <>
       <PageHeading
-        eyebrow="PLANIFICACIÓN DE EQUIPOS"
+        eyebrow="03 / PLANIFICACIÓN DE EQUIPOS"
         title="Solicitudes"
         description="Revisa el estado administrativo, el inicio previsto y la maquinaria vinculada."
       />

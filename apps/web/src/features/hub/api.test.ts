@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { fetchHub, hubQueryOptions } from "./api"
+import { fetchHub } from "./api"
+import { hubQueryOptions } from "./queries"
 import { hubSchema, hubSearchSchema, type Hub } from "./schema"
 
 const unavailable: Hub = {

@@ -1,20 +1,15 @@
 import { useNavigate, useSearch } from "@tanstack/react-router"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { EquipmentPanel, HubBoundary, PageHeading } from "../components"
+import { EquipmentPanel } from "../components/equipment-table"
+import { HubBoundary } from "../components/hub-boundary"
+import { PageHeading } from "../components/page-heading"
+import { filterEquipment } from "../selectors"
 import type { Hub } from "../schema"
 
 function EquipmentData({ hub }: { hub: Hub }) {
   const { filter, mode, q } = useSearch({ from: "/maquinaria/" })
   const navigate = useNavigate({ from: "/maquinaria/" })
-  const equipment = hub.equipment.filter(
-    (item) =>
-      filter === "all" ||
-      (filter === "available"
-        ? item.machinery_status.toUpperCase() === "DISPONIBLE"
-        : filter === "unlinked"
-          ? item.relation_status !== "confirmed"
-          : item.maintenance_failure_id !== null)
-  )
+  const equipment = filterEquipment(hub.equipment, filter)
   return (
     <>
       <div className="filter-toolbar">
@@ -43,13 +38,7 @@ function EquipmentData({ hub }: { hub: Hub }) {
         </ToggleGroup>
         <span>{equipment.length} equipos visibles</span>
       </div>
-      <EquipmentPanel
-        hub={{
-          ...hub,
-          equipment,
-          scope: { ...hub.scope, equipment_returned: equipment.length },
-        }}
-      />
+      <EquipmentPanel equipment={equipment} mode={hub.mode} />
     </>
   )
 }
@@ -58,7 +47,7 @@ export function EquipmentPage() {
   return (
     <>
       <PageHeading
-        eyebrow="CONSULTA UNIFICADA"
+        eyebrow="02 / CONSULTA UNIFICADA"
         title="Maquinaria"
         description="Selecciona un equipo para conocer su operación y revisar la evidencia."
       />

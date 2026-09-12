@@ -7,7 +7,10 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { AlertItem, HubBoundary, NoRecords, PageHeading } from "../components"
+import { AlertItem } from "../components/alert-item"
+import { HubBoundary } from "../components/hub-boundary"
+import { NoRecords } from "../components/no-records"
+import { PageHeading } from "../components/page-heading"
 import type { Hub } from "../schema"
 
 function AlertsData({ hub }: { hub: Hub }) {
@@ -67,7 +70,7 @@ export function AlertsPage() {
   return (
     <>
       <PageHeading
-        eyebrow="SEGUIMIENTO OPERATIVO"
+        eyebrow="05 / SEGUIMIENTO OPERATIVO"
         title="Centro de atención"
         description="Identifica qué necesita revisión, quién puede atenderlo y por qué."
       />

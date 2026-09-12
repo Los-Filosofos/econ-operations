@@ -6,14 +6,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { HubBoundary, PageHeading, SourceCard } from "../components"
+import { HubBoundary } from "../components/hub-boundary"
+import { PageHeading } from "../components/page-heading"
+import { SourceCard } from "../components/source-card"
 import { formatInstant } from "../format"
 
 export function SourcesPage() {
   return (
     <>
       <PageHeading
-        eyebrow="CALIDAD DE LA INFORMACIÓN"
+        eyebrow="06 / CALIDAD DE LA INFORMACIÓN"
         title="Fuentes y trazabilidad"
         description="Conoce de dónde provienen los datos y qué se pudo consultar."
       />

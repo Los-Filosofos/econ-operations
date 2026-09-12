@@ -1,6 +1,3 @@
-import { queryOptions, useQuery } from "@tanstack/react-query"
-import { useSearch } from "@tanstack/react-router"
-
 import { hubSchema, type DataMode } from "./schema"
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
@@ -45,19 +42,4 @@ export async function fetchHub(
     )
   }
   return result.data
-}
-
-export function hubQueryOptions(mode: DataMode, search: string) {
-  return queryOptions({
-    queryKey: ["hub", mode, search],
-    queryFn: ({ signal }) => fetchHub(mode, search, signal),
-    staleTime: 60_000,
-    retry: false,
-    refetchOnWindowFocus: false,
-  })
-}
-
-export function useHub() {
-  const { mode, q } = useSearch({ from: "__root__" })
-  return useQuery(hubQueryOptions(mode, q))
 }

@@ -15,20 +15,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  EquipmentLink,
-  HubBoundary,
-  NoRecords,
-  PageHeading,
-  StatusBadge,
-} from "../components"
+import { EquipmentLink } from "../components/equipment-link"
+import { HubBoundary } from "../components/hub-boundary"
+import { NoRecords } from "../components/no-records"
+import { PageHeading } from "../components/page-heading"
+import { StatusBadge } from "../components/status-badge"
 import { formatInstant, relationLabels } from "../format"
 
 export function TransfersPage() {
   return (
     <>
       <PageHeading
-        eyebrow="COORDINACIÓN LOGÍSTICA"
+        eyebrow="04 / COORDINACIÓN LOGÍSTICA"
         title="Traslados"
         description="Tareas relacionadas con la maquinaria del alcance consultado."
       />

@@ -24,7 +24,13 @@ en el navegador y nunca deben contener credenciales.
 ## Estructura
 
 - `src/routes`: rutas tipadas y partición automática del código.
-- `src/features/hub`: contrato validado con Zod, cliente de lectura y vistas.
+- `src/features/hub/schema.ts`: validación del contrato remoto y parámetros de URL.
+- `src/features/hub/api.ts`: transporte HTTP y validación de las respuestas.
+- `src/features/hub/queries.ts`: opciones de caché y conexión de React Query con la URL.
+- `src/features/hub/selectors.ts`: filtros y relaciones por identificadores, sin estado duplicado.
+- `src/features/hub/components`: tablas, evidencia, indicadores y ficha de maquinaria.
+- `src/features/hub/pages`: composición de las siete vistas del hub.
+- `src/components/layout`: navegación, búsqueda, origen seleccionado y estado de lectura.
 - `src/components/ui`: componentes añadidos con el CLI oficial de shadcn.
 - `src/routeTree.gen.ts`: árbol generado por TanStack Router.
 - `wrangler.jsonc`: activos estáticos en Workers y fallback de SPA.
@@ -58,8 +64,14 @@ npx shadcn@latest init --preset b0 --template vite --name web --cwd apps --base 
 ```
 
 El CLI resolvió `b0` como Base UI, `base-nova`, colores neutros, Inter y Lucide.
-Se conservaron los tokens y la tipografía. El frontend tiene su propio lockfile;
-no necesita un workspace JavaScript ni servidor SSR para desplegar activos.
+Por indicación del usuario, la apariencia se personalizó con la marca pública
+de ECON: azul `#144f81`, logo oficial, esquinas rectas y Roboto Condensed en
+encabezados. Inter se conserva para lectura de datos. Las fuentes y logos se
+sirven localmente, y se preservan las primitivas accesibles de Base UI.
+La [arquitectura del frontend](../../docs/frontend-architecture.md) registra
+responsabilidades, decisiones, referencias y procedencia de estos activos.
+El frontend tiene su propio lockfile; no necesita un workspace JavaScript ni
+servidor SSR para desplegar activos.
 
 Consultar [desarrollo](../../docs/desarrollo.md), la
 [decisión de frontend](../../docs/adr/0001-web-platform.md), el

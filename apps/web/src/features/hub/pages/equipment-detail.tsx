@@ -1,35 +1,24 @@
 import { Link } from "@tanstack/react-router"
-import {
-  ArrowLeft,
-  Boxes,
-  ClipboardList,
-  Link2,
-  MapPin,
-  Route,
-  Wrench,
-} from "lucide-react"
+import { ArrowLeft, Link2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import {
-  AlertItem,
-  HubBoundary,
-  NoRecords,
-  PageHeading,
-  ProvenanceBlock,
-  StatusBadge,
-} from "../components"
-import { equipmentLabel, formatInstant, relationLabels } from "../format"
+import { AlertItem } from "../components/alert-item"
+import { EquipmentFacts } from "../components/equipment-facts"
+import { RelatedRecords } from "../components/related-records"
+import { HubBoundary } from "../components/hub-boundary"
+import { NoRecords } from "../components/no-records"
+import { PageHeading } from "../components/page-heading"
+import { ProvenanceBlock } from "../components/provenance-block"
+import { equipmentLabel, relationLabels } from "../format"
 import type { Equipment, Hub } from "../schema"
 
 function EquipmentDetail({
@@ -67,189 +56,8 @@ function EquipmentDetail({
         <AlertTitle>{relationLabels[equipment.relation_status]}</AlertTitle>
         <AlertDescription>{equipment.relation_note}</AlertDescription>
       </Alert>
-      <div className="detail-top-grid">
-        <Card>
-          <CardHeader>
-            <CardDescription>Estado del equipo</CardDescription>
-            <CardTitle>Prisma / Nexus</CardTitle>
-            <CardAction>
-              <Boxes className="size-5" />
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <StatusBadge
-              status={equipment.machinery_status}
-              stopped={equipment.maintenance_is_stopped === true}
-            />
-            <p className="detail-explanation">
-              Describe su estado administrativo. No confirma ubicación, traslado
-              ni recepción.
-            </p>
-            <dl className="detail-grid">
-              <div>
-                <dt>Proyecto vinculado</dt>
-                <dd>{equipment.project_name ?? "Sin proyecto vinculado"}</dd>
-              </div>
-              <div>
-                <dt>Código de proyecto</dt>
-                <dd>{equipment.project_id ?? "Sin registro"}</dd>
-              </div>
-              <div>
-                <dt>Motorista</dt>
-                <dd>{equipment.driver ?? "Sin motorista confirmado"}</dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Condición registrada</CardDescription>
-            <CardTitle>Mantenimiento</CardTitle>
-            <CardAction>
-              <Wrench className="size-5" />
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <Badge
-              variant={
-                equipment.maintenance_is_stopped === true
-                  ? "destructive"
-                  : "outline"
-              }
-            >
-              {equipment.maintenance_is_stopped === true
-                ? "Paro registrado"
-                : equipment.maintenance_is_stopped === false
-                  ? "Sin paro registrado"
-                  : "Paro sin confirmar"}
-            </Badge>
-            <p className="detail-explanation">
-              {equipment.maintenance_failure_id
-                ? (equipment.maintenance_status ??
-                  "Falla activa registrada; detalle pendiente.")
-                : "No se recibió una referencia de falla activa en esta consulta."}
-            </p>
-            <dl className="detail-grid">
-              <div>
-                <dt>Referencia de falla</dt>
-                <dd className="break-all">
-                  {equipment.maintenance_failure_id ?? "Sin referencia"}
-                </dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Última observación</CardDescription>
-            <CardTitle>Ubicación</CardTitle>
-            <CardAction>
-              <MapPin className="size-5" />
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <p className="location-label">
-              {equipment.location?.label ?? "Sin ubicación confirmada"}
-            </p>
-            <p className="detail-explanation">
-              {equipment.location
-                ? `${formatInstant(equipment.location.observed_at)} · El Salvador (UTC−6). Una lectura reciente del hub no implica una posición reciente.`
-                : "Hace falta una observación fechada y la identificación del activo observado."}
-            </p>
-            {equipment.location ? (
-              <Badge variant="outline">
-                {equipment.location.provenance.environment === "local"
-                  ? "Ubicación sintética"
-                  : "Observación del sandbox"}
-              </Badge>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
-      <div className="source-grid">
-        <Card>
-          <CardHeader>
-            <CardTitle>Solicitudes relacionadas</CardTitle>
-            <CardDescription>
-              Registros vinculados por identificador.
-            </CardDescription>
-            <CardAction>
-              <ClipboardList className="size-5" />
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {requests.length ? (
-              <div className="linked-records">
-                {requests.map((request) => (
-                  <div key={request.id}>
-                    <div className="record-heading">
-                      <strong className="break-all">{request.id}</strong>
-                      <StatusBadge status={request.status} />
-                    </div>
-                    <p>{request.project_name ?? "Proyecto sin confirmar"}</p>
-                    <span className="footnote">
-                      Inicio previsto: {request.starts_on ?? "sin fecha"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <NoRecords
-                title="Sin solicitud en el alcance consultado"
-                description="Un registro faltante no confirma que la solicitud no exista en la fuente."
-              />
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Traslados relacionados</CardTitle>
-            <CardDescription>
-              {equipment.transfers.length} tareas. El equipo puede conservar
-              varios traslados.
-            </CardDescription>
-            <CardAction>
-              <Route className="size-5" />
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {equipment.transfers.length ? (
-              <div className="linked-records">
-                {equipment.transfers.map((transfer) => (
-                  <div key={transfer.id}>
-                    <div className="record-heading">
-                      <strong>{transfer.code}</strong>
-                      <StatusBadge status={transfer.status} />
-                    </div>
-                    <p>
-                      {transfer.destination_project_name ??
-                        "Destino sin confirmar"}
-                    </p>
-                    <span className="footnote">
-                      {transfer.driver ?? "Motorista sin confirmar"}
-                    </span>
-                    <details className="evidence-disclosure">
-                      <summary>Procedencia de la tarea</summary>
-                      <ProvenanceBlock provenance={transfer.provenance} />
-                    </details>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <NoRecords
-                title="Sin vínculo confirmado con un traslado"
-                description="Para relacionar una tarea se necesita validar su referencia, equipo y destino."
-              />
-            )}
-          </CardContent>
-          <CardFooter>
-            <p className="footnote">
-              El estado de la tarea y el estado del equipo describen objetos
-              diferentes.
-            </p>
-          </CardFooter>
-        </Card>
-      </div>
+      <EquipmentFacts equipment={equipment} />
+      <RelatedRecords equipment={equipment} requests={requests} />
       {alerts.length ? (
         <Card>
           <CardHeader>
@@ -265,7 +73,7 @@ function EquipmentDetail({
           </CardContent>
         </Card>
       ) : null}
-      <Card>
+      <Card className="mt-6">
         <CardHeader>
           <CardTitle>Procedencia del registro</CardTitle>
           <CardDescription>
