@@ -8,7 +8,7 @@ El usuario describió un grupo de construcción y logística que diseña, produc
 
 Inicialmente el reto era hipotético y aún no se había entregado la documentación. El usuario pidió evaluar e inicializar un backend FastAPI con un ORM, después elegir y configurar PostgreSQL, preparar el repositorio y agregar herramientas de colaboración. Posteriormente confirmó que se ofrecería un sandbox y que el volumen esperado era alto, sin dar cifras.
 
-Ahora se recibió el kit oficial del Hub de Operaciones: la integración es **Prisma + Startrack**. El usuario confirma su equipo como **Los Filósofos**. Según la introducción, es Equipo 6, con `RE-03`, `MOT-006 — Rodrigo Trujillo` y `PROY-006 — Proyecto Zeta`. Rodrigo se describe en la fuente como motorista asignado del sandbox. [Introducción](00-introduccion-equipo.md).
+Ahora se recibió el kit oficial del Hub de Operaciones: la integración es **Prisma + Startrack**. El usuario confirma su equipo como **Los Filósofos**. Según la introducción, es Equipo 6, con `RE-03`, `MOT-006 — Rodrigo Trujillo` y `PROY-006 — Proyecto Zeta`. Rodrigo se describe como motorista asignado del sandbox y también figura por nombre en las tablas de accesos de ambas plataformas, asociado al usuario `LosFilósofos` en Startrack. [Introducción](00-introduccion-equipo.md); [accesos y manuales](05-accesos-y-manuales.md).
 
 ## Backend inicializado
 

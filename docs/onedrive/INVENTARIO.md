@@ -70,13 +70,17 @@ Los documentos completos se convirtieron a Markdown y sus tablas se hicieron leg
 
 Los originales extraídos y los manifiestos técnicos de conversión están en `.context-work/`. La propuesta, las anotaciones editoriales de Word y el análisis se mantienen separados para distinguir lo recibido de las conclusiones del equipo.
 
-La revisión de la conversión inicial comprobó los 21 archivos Markdown: 182 enlaces locales, incluidos 90 enlaces con fragmento, sin destinos faltantes; los 22 comentarios contra el XML original; las 338 celdas contra el Excel; seis bloques JSON válidos y nueve pares de delimitadores de código completos. Las huellas de los 11 archivos coinciden con los bytes del ZIP. Estas comprobaciones verifican la conversión documental, no el funcionamiento del código de la propuesta.
+La revisión de fidelidad cotejó las 25 tablas de los Word (486 celdas) y sus 22 comentarios contra el XML original; las 338 celdas del Excel; las ocho capturas del manual, incluidos 31 registros de listados y dos vistas de detalle; seis bloques JSON válidos y nueve pares de delimitadores de código completos. Las huellas de los 11 archivos coinciden con los bytes del ZIP y los 14 medios originales de los Word se conservaron byte por byte. Las contraseñas omitidas son la excepción indicada arriba.
+
+La revisión de presentación comprobó los 21 Markdown de esta carpeta y el índice `docs/README.md` con el renderizador de GitHub: 65 tablas, 552 filas y 210 enlaces locales en el HTML, incluidos los enlaces que envuelven imágenes y 91 enlaces con fragmento. Todos tienen destinos válidos. Se corrigió el primer enlace del índice del brief para usar un encabezado Markdown y se eliminó un símbolo añadido por el convertidor que no estaba en el Word. El diagrama Mermaid se verificó mediante análisis de sintaxis y renderizado SVG: 11 nodos y 12 conexiones.
+
+El análisis distingue los horómetros documentados en ambas plataformas y la persistencia recomendada de los requisitos expresos del brief. El contexto recoge tanto la asignación de Rodrigo como motorista como su asociación en las tablas de accesos. Estas comprobaciones verifican la documentación; no acreditan el funcionamiento del código de la propuesta ni de las APIs del sandbox.
 
 ## Lo que no estaba dentro de los archivos
 
 - El resto del manual de 44 páginas, contratos de API, esquemas de autenticación técnica y un volcado completo de las plataformas.
 - El contenido de los enlaces externos, incluido el manual web de Startrack. Se conservan sus enlaces; no se presenta su contenido como si formara parte del ZIP.
-- Una lista confirmada de integrantes de Los Filósofos. Rodrigo Trujillo aparece como motorista MOT-006 del sandbox.
+- Una lista completa de integrantes de Los Filósofos. Rodrigo Trujillo aparece como motorista MOT-006 del sandbox y por nombre en las tablas de accesos, asociado al usuario `LosFilósofos` en Startrack.
 
 ## Publicación y conservación
 

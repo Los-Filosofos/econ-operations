@@ -17,13 +17,11 @@ Sede: Key Institute, Antiguo Cuscatlán, El Salvador
 
 *Versión 1.0 - Agosto 2026*
 
-*\*
-
 # Tabla de contenido
 
 Los números entre paréntesis conservan la página indicada en el Word original. La numeración de secciones se mantiene como fue recibida.
 
-- [1. Sobre Entropy Hack (3)](#_Toc235624676)
+- [1. Sobre Entropy Hack (3)](#1-sobre-entropy-hack)
 - [2. Objetivos (3)](#2-objetivos)
 - [3. Convocatoria, elegibilidad y selección de equipos (4)](#3-convocatoria-elegibilidad-y-selección-de-equipos)
 - [4. Perfiles deseables (5)](#4-perfiles-deseables)
@@ -41,7 +39,7 @@ Los números entre paréntesis conservan la página indicada en el Word original
 - [18. Roles de la organización (20)](#18-roles-de-la-organización)
 - [19. Preguntas frecuentes (20)](#19-preguntas-frecuentes)
 
-<span id="_Toc235624676" class="anchor"></span>**1. Sobre Entropy Hack**
+# 1. Sobre Entropy Hack
 
 Entropy Hack es un hackathon de 24 horas continuas que reunirá a cerca de 100 estudiantes universitarios y recién graduados de El Salvador.
 

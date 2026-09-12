@@ -13,7 +13,7 @@ Este documento es una síntesis derivada de las fuentes y de la conversación. N
 | Proyecto asignado | PROY-006 — Proyecto Zeta | Introducción |
 | Geocerca relacionada | Proyecto Zeta — San Salvador | Introducción |
 
-La fuente es [00-introduccion-equipo.md](00-introduccion-equipo.md). No se ha recibido una lista confirmada de integrantes del equipo. El documento denomina a Rodrigo Trujillo **motorista asignado**; ese dato no establece si también participa personalmente en el hackathon.
+La [introducción](00-introduccion-equipo.md) denomina a Rodrigo Trujillo **motorista asignado**. Además, las [tablas de accesos](05-accesos-y-manuales.md) lo incluyen por nombre en ambas plataformas y lo asocian al usuario `LosFilósofos` en Startrack. Son dos referencias documentadas a conservar. No se ha recibido una lista completa de integrantes ni un cargo confirmado de Rodrigo dentro del equipo.
 
 ## Problema y foco operativo
 
