@@ -1,6 +1,12 @@
 # ADR 0001 — Plataforma web del Hub de Operaciones
 
+> Registro anterior a la migración solicitada a Dash. La arquitectura vigente
+> está en [ADR 0003](0003-python-dash-hub.md). Las observaciones de negocio
+> y los límites de integración se conservan con su fecha original.
+
 Estado: aceptada para esta etapa. Fecha: **12 de septiembre de 2026**.
+
+La [ADR 0002](0002-analytics-interface.md) amplía esta decisión desde la perspectiva de análisis de datos: React/FastAPI, Dash, Streamlit y herramientas de BI.
 
 ## Decisión
 

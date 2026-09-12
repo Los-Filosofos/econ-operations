@@ -12,4 +12,4 @@ COPY alembic.ini ./
 RUN useradd --create-home --uid 10001 econ && chown -R econ:econ /service
 USER econ
 EXPOSE 8000
-CMD ["/bin/sh", "-c", "exec .venv/bin/fastapi run app/main.py --host 0.0.0.0 --port \"${PORT:-8000}\""]
+CMD ["/bin/sh", "-c", "exec .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port \"${PORT:-8000}\""]

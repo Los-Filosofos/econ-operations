@@ -1,20 +1,19 @@
 # Contribuir a ECON
 
-El equipo mantiene frontend y backend en el mismo repositorio, con dependencias
-y despliegues independientes. Leer [docs/desarrollo.md](docs/desarrollo.md) antes
+El equipo mantiene Dash y FastAPI en un servicio Python con un solo lockfile. Leer [docs/desarrollo.md](docs/desarrollo.md) antes
 de comenzar y registrar decisiones que cambien la arquitectura en `docs/adr/`.
 
 ## Flujo de cambios
 
 1. Crear una rama desde `main`: `feat/<short-description>`, `fix/<short-description>`
    o `docs/<short-description>`. Relacionar el trabajo con un issue existente.
-2. Mantener los cambios de UI en `apps/web`, los de API en `apps/api` y actualizar
-   el contrato cuando cambie una respuesta. Comunicar cambios entre ambos lados.
-3. Usar el CLI oficial de shadcn para añadir componentes y conservar los lockfiles.
+2. Mantener UI en `apps/api/app/dashboard`, negocio en `app/services` y HTTP
+   en `app/api`. Actualizar el contrato Pydantic y sus consumidores juntos.
+3. Usar componentes Dash y AG Grid Community accesibles; conservar `apps/api/uv.lock`.
    No copiar secretos ni originales privados desde `.context-work` a Git.
 4. Ejecutar las comprobaciones indicadas abajo y probar el recorrido afectado.
 5. Escribir commits, título y cuerpo del PR en inglés. Ejemplo:
-   `feat(web): add equipment operations dashboard`. La documentación operativa y
+   `feat(hub): add equipment operations dashboard`. La documentación operativa y
    los textos del producto se mantienen en español.
 6. Abrir un PR con problema, resultado, validación y límites. Para cambios de UI,
    adjuntar capturas verificadas en `docs/screenshots/`. Corregir CI y comentarios
@@ -23,16 +22,11 @@ de comenzar y registrar decisiones que cambien la arquitectura en `docs/adr/`.
 ## Comprobaciones desde la raíz
 
 ```powershell
-npm run lint:web
-npm run test:web
-npm run deploy:web:check
-npm run lint:api
-npm run format:api:check
-npm run test:api
+.\scripts\check.ps1 -Container
 ```
 
 Las pruebas de conectores usan respuestas HTTP controladas. Los checks de CI no
-necesitan cuentas de Nexus, Startrack o Cloudflare y no publican despliegues.
+necesitan cuentas de Nexus o Startrack y no publican despliegues.
 Los resultados de fixtures prueban reglas locales; no acreditan conectividad.
 
 ## Criterios del dominio

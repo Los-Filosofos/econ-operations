@@ -1,6 +1,6 @@
-# ECON API
+# ECON Python Hub
 
-FastAPI + SQLModel + Alembic, with PostgreSQL retained for the integration store. The first hub endpoint is a read projection; it does not persist snapshots or pretend to provide background synchronization. No application login is implemented.
+Dash + Plotly + AG Grid Community on FastAPI, with SQLModel + Alembic, with PostgreSQL retained for the integration store. The first hub endpoint is a read projection; it does not persist snapshots or pretend to provide background synchronization. No application login is implemented.
 
 From the repository root:
 
@@ -9,11 +9,11 @@ if (-not (Test-Path apps/api/.env)) {
     Copy-Item apps/api/.env.example apps/api/.env
 }
 docker compose up -d --wait db
-npm run setup:api
-npm run dev:api
+uv sync --project apps/api --locked
+.\scripts\dev.ps1
 ```
 
-Do not overwrite an existing `.env`; retain its database settings. Configuration loads `apps/api/.env` regardless of the working directory. Start the frontend separately with the root web script. Open `http://localhost:8000/docs` for the typed OpenAPI contract.
+Do not overwrite an existing `.env`; retain its database settings. Configuration loads `apps/api/.env` regardless of the working directory. Open `http://localhost:8050` for Dash and `http://localhost:8050/docs` for the typed OpenAPI contract. Both use one server and the shared `app/services/hub.py` read service. UI code and local assets live in `app/dashboard`; the URL carries the origin, search and display filter. Snapshots are scoped to each browser in memory. See [the dashboard architecture](../../docs/frontend-architecture.md).
 
 ```powershell
 uv run --directory apps/api ruff check .
@@ -58,4 +58,4 @@ A `401` allows one serialized reauthentication and one repeat of that safe GET. 
 
 ## Runtime
 
-Build the conventional Python container with `docker build -t econ-api apps/api`. Pass environment variables at runtime; `.env` is excluded from the image. The server binds `0.0.0.0` on `PORT`, defaulting to 8000. Keep PostgreSQL outside its filesystem. See the repository architecture/deployment documentation for the Cloudflare frontend and API hosting boundary. This Dockerfile does not make the current SQLModel/psycopg application a drop-in Python Worker.
+Build the conventional Python container with `docker build -t econ-hub apps/api`. Pass environment variables at runtime; `.env` is excluded from the image. The server binds `0.0.0.0` on `PORT`, defaulting to 8000. Keep PostgreSQL outside its filesystem. Dash and API routes run together on Uvicorn; no Node build or separate frontend deployment is needed. See [deployment](../../docs/despliegue-backend.md) and [ADR 0003](../../docs/adr/0003-python-dash-hub.md). This Dockerfile does not make the current SQLModel/psycopg application a drop-in Python Worker.

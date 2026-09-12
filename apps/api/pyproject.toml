@@ -6,8 +6,11 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.20.0",
+    "dash-ag-grid>=35,<36",
+    "dash[fastapi]>=4.2,<5",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.141.1",
     "httpx>=0.28.1",
+    "plotly>=6,<7",
     "psycopg[binary]>=3.3.5",
     "pydantic-settings>=2.15.0",
     "sqlmodel>=0.0.42",

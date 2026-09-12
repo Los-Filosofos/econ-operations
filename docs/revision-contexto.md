@@ -1,5 +1,9 @@
 # Revisión de contexto para iniciar el frontend y ampliar la API
 
+> Registro anterior a la migración solicitada a Dash. La arquitectura vigente
+> está en [ADR 0003](adr/0003-python-dash-hub.md). Las observaciones de negocio
+> y los límites de integración se conservan con su fecha original.
+
 Fecha: **12 de septiembre de 2026**. Esta revisión registra la lectura del material entregado, el cotejo del ZIP y las decisiones de implementación de esta etapa. Las conversiones originales de `docs/onedrive` se conservan sin modificaciones.
 
 ## Cobertura y procedencia

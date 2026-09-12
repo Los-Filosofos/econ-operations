@@ -1,5 +1,11 @@
 # Manuales, problema operativo y decisiones de interfaz
 
+> Registro anterior a la migración solicitada a Dash. La arquitectura vigente
+> está en [ADR 0003](adr/0003-python-dash-hub.md). Las observaciones de negocio
+> y los límites de integración se conservan con su fecha original.
+
+La [revisión analítica posterior](analitica-decisiones.md) concreta la portada para responsables de decisión, elimina elementos decorativos y define los gráficos que los datos actuales permiten sostener.
+
 Revisión del **12 de septiembre de 2026**, ampliada por pedido del usuario después de la primera versión del frontend. Complementa la [revisión del kit](revision-contexto.md) y el [modelo operativo](modelo-operativo.md). Las instrucciones de los manuales se leyeron como referencia: no se ejecutaron altas, aprobaciones, cambios de estado, regeneraciones de claves ni modificaciones de permisos.
 
 ## Qué se consultó

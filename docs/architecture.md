@@ -1,5 +1,8 @@
 # Elección inicial: FastAPI
 
+> Arquitectura vigente: [hub Dash y FastAPI](adr/0003-python-dash-hub.md).
+> PostgreSQL y su volumen local se conservan.
+
 > Decisión histórica previa a la recepción del kit y a la integración inicial. Para la arquitectura vigente del monorepo consultar [ADR 0001](adr/0001-web-platform.md); para ejecutarlo, [desarrollo](desarrollo.md). Las observaciones actuales de acceso están en [revisión de contexto](revision-contexto.md).
 
 Para el escenario descrito, FastAPI es una buena elección provisional: una API

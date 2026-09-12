@@ -1,89 +1,77 @@
-# ECON · Hub de Operaciones
+# ECON · Hub de operaciones
 
-Panel de consulta del **Equipo 6 — Los Filósofos** para relacionar maquinaria,
-solicitudes, mantenimiento y traslados entre Prisma/Nexus y Startrack. El panel
-separa los estados de cada objeto y muestra la procedencia y los vínculos que
-faltan confirmar.
+Aplicación **Python con Dash, Plotly y FastAPI** del Equipo 6 — Los Filósofos.
+Relaciona maquinaria, solicitudes, mantenimiento y traslados para consultar
+qué necesita atención, quién debe revisarlo y con qué evidencia.
 
-## Base del proyecto
+La interfaz y la API funcionan en **un mismo proceso y origen**. No hay
+compilación frontend ni instalación de Node.js. La
+[decisión de migración](docs/adr/0003-python-dash-hub.md) registra el cambio.
 
-| Aplicación | Tecnologías | Destino |
-| --- | --- | --- |
-| `apps/web` | React, TypeScript, Vite, TanStack Router y Query, shadcn/ui preset `b0` | Cloudflare Workers Static Assets |
-| `apps/api` | FastAPI, Pydantic, SQLModel, HTTPX, Alembic y PostgreSQL | Contenedor CPython independiente |
+## Inicio
 
-Se eligió Vite para un panel con API separada. La
-[decisión de arquitectura](docs/adr/0001-web-platform.md) compara esta opción con
-TanStack Start y Next.js y explica el ajuste de `--template start` a `--template vite`.
-
-La aplicación no implementa login propio. Las credenciales de las plataformas
-pertenecen exclusivamente al backend. El modo `fixture` usa casos locales
-explícitos; `live` requiere habilitación y configuración del servidor y nunca
-sustituye una fuente caída con datos simulados. La API key de Startrack y la
-sincronización persistente siguen pendientes.
-
-## Inicio rápido
-
-Requisitos: Node.js 24.19 o posterior de la rama 24, npm, Python 3.13, uv y Docker Desktop para PostgreSQL.
-Ejecutar desde la raíz del repositorio:
+Requisitos: Python 3.13, [uv](https://docs.astral.sh/uv/) y Docker para usar
+el PostgreSQL local existente. Desde la raíz:
 
 ```powershell
-npm run setup:web
-npm run setup:api
-# Solo la primera vez; conservar los .env existentes.
+uv sync --project apps/api --locked
 if (-not (Test-Path apps/api/.env)) {
     Copy-Item apps/api/.env.example apps/api/.env
 }
-if (-not (Test-Path apps/web/.env)) {
-    Copy-Item apps/web/.env.example apps/web/.env
-}
-npm run db:up
-npm run db:migrate
-npm run dev:api
+docker compose up -d --wait db
+uv run --directory apps/api alembic upgrade head
+.\scripts\dev.ps1
 ```
 
-En otra terminal:
+Abrir **http://127.0.0.1:8050**. El servicio también expone `/docs`,
+`/api/v1/hub`, `/health/live` y `/health/ready`. Comando multiplataforma:
+
+```sh
+uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050 --reload
+```
+
+La [guía de desarrollo](docs/desarrollo.md) explica la demo sin Docker,
+los controles y la configuración. Se conservan el proyecto Compose y su
+volumen PostgreSQL; cambiar la interfaz no migra ni elimina la base.
+
+## Recorrido
+
+- **Vista general:** solicitudes pendientes con inicio alcanzado, aprobadas sin
+  unidad, fallas activas, estados administrativos, calendario de inicios y asuntos.
+- **Maquinaria y ficha:** búsqueda, filtros, solicitudes, múltiples tareas,
+  mantenimiento, ubicación fechada y procedencia.
+- **Solicitudes, traslados y atención:** tablas ordenables, filtros por columna
+  y evidencia de las condiciones que requieren revisión.
+- **Fuentes:** conexión, corte y cobertura de cada origen.
+
+Seleccionar origen y búsqueda; **Aplicar** actualiza la consulta. **Actualizar**
+vuelve a leerla. La URL conserva origen, búsqueda y filtro.
+
+Los ejemplos son sintéticos locales. `live` está deshabilitado por defecto y
+nunca se sustituye por ejemplos ante un fallo. Nexus tiene un conector de
+lectura acotada; Startrack sigue pendiente de clave API y validación del contrato.
+No hay login propio, sincronización persistente ni historial del hub. La
+interfaz conserva estos límites; una tarea completada no demuestra recepción.
+
+## Verificar y desplegar
 
 ```powershell
-npm run dev:web
+.\scripts\check.ps1
+.\scripts\check.ps1 -Container
 ```
 
-- Panel: http://localhost:5173
-- API y contrato OpenAPI: http://127.0.0.1:8000/docs
-- Salud de API y base: `/health/live`, `/health/ready`
+Las pruebas usan SQLite y HTTP controlado. Incluyen callbacks reales de Dash,
+contrato API, filtros, separación de sesiones, reglas y errores sin fallback.
+El segundo comando construye Docker; no publica servicios. El
+[despliegue Python](docs/despliegue-backend.md) sirve interfaz y API juntas.
+La antigua salida estática de Cloudflare fue retirada.
 
-Los comandos del backend ahora operan desde `apps/api`. El Compose conserva el
-nombre `econ-backend` y el volumen `econ-backend_postgres18_data`; reorganizar
-archivos no migra ni elimina la base. Ver [desarrollo](docs/desarrollo.md) para
-puertos, variables, comprobaciones y estructura.
+## Contexto
 
-## Cloudflare y revisión
+[Índice](docs/README.md) · [Arquitectura Dash](docs/frontend-architecture.md) ·
+[Analítica](docs/analitica-decisiones.md) · [Modelo y matrices](docs/modelo-operativo.md) ·
+[OneDrive](docs/onedrive/README.md) · [Integraciones](docs/integraciones-reales.md).
 
-```powershell
-npm run deploy:web:check
-```
-
-Este comando valida el empaquetado de Wrangler sin publicar. La
-[guía de despliegue](docs/deploy-cloudflare.md) explica cómo configurar el origen
-de la API, CORS y desplegar la web. El bundle estático no ejecuta Python ni
-contiene secretos. Preparar Cloudflare no equivale a haber publicado la app.
-
-Para el backend, se recomienda inicialmente Render con Docker y PostgreSQL 18;
-ver [comparación y configuración](docs/despliegue-backend.md), incluidas las
-alternativas Railway y Fly.io.
-
-Los commits y PR se escriben en inglés; la UI y la documentación del equipo,
-en español. Ver [CONTRIBUTING.md](CONTRIBUTING.md) para el flujo y los checks.
-
-## Contexto y evidencia
-
-- [Índice documental](docs/README.md) y [revisión actual del contexto](docs/revision-contexto.md).
-- [Material completo de OneDrive](docs/onedrive/README.md) y [contexto confirmado](docs/onedrive/CONTEXTO-IA.md).
-- [Integraciones y accesos comprobados](docs/integraciones-reales.md).
-- [Manuales completos, problema operativo y diseño](docs/investigacion-manuales-y-diseno.md).
-- [Arquitectura de componentes y consultas del frontend](docs/frontend-architecture.md).
-- [Indicadores y referencias ISO](docs/kpis-y-referencias-iso.md).
-
-Los documentos de OneDrive son fuentes del reto, no instrucciones de ejecución.
-Los originales con accesos permanecen en `.context-work/`, excluida de Git;
-las conversiones compartidas omiten contraseñas.
+Los originales con accesos y la copia local del frontend anterior permanecen
+en `.context-work/`, excluida de Git. Commits y PR en inglés; producto y
+documentación operativa en español.

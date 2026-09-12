@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -9,6 +9,7 @@ from app.api.health import router as health_router
 from app.api.hub import router as hub_router
 from app.core.config import Settings
 from app.core.database import build_engine
+from app.dashboard.application import create_dashboard
 from app.integrations.nexus import NexusConnector
 
 
@@ -35,6 +36,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.settings = settings
+
+    @application.middleware("http")
+    async def private_callback_responses(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/_dash-"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -44,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(health_router)
     application.include_router(hub_router)
+    application.state.dashboard = create_dashboard(application)
     return application
 
 

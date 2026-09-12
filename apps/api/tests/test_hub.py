@@ -4,11 +4,11 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.hub import evaluate_alerts
 from app.core.config import Settings
 from app.integrations.fixtures import FIXTURE_AS_OF, fixture_records
 from app.integrations.nexus import NexusEquipment, NexusReadError, NexusRequest, NexusSnapshot
 from app.main import create_app
+from app.services.hub import evaluate_alerts
 
 
 @pytest.fixture

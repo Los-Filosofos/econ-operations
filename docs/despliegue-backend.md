@@ -1,12 +1,12 @@
-# Dónde desplegar FastAPI y PostgreSQL
+# Dónde desplegar el hub Python y PostgreSQL
 
-Recomendación consultada el **12 de septiembre de 2026**. El usuario confirmó
-que el backend permanece dockerizado y separado de Cloudflare; esta comparación
-no crea servicios ni contrata un plan.
+Recomendación consultada el **12 de septiembre de 2026**. El hub actual reúne Dash y FastAPI en un contenedor Python; véase
+[ADR 0003](adr/0003-python-dash-hub.md). Esta comparación no crea servicios
+ni contrata un plan.
 
 ## Recomendación para ECON
 
-Empezaría con **Render: un Web Service Docker para FastAPI y Render Postgres 18
+Empezaría con **Render: un Web Service Docker para Dash y FastAPI y Render Postgres 18
 en la misma región**. Encaja con el contenedor actual y permite añadir después
 un proceso de sincronización independiente. La recomendación es una decisión
 para esta base, no un benchmark de rendimiento ni una estimación de capacidad.
@@ -42,7 +42,7 @@ contratada. [Precios de Render](https://render.com/pricing).
 
 ## Configuración inicial recomendada en Render
 
-Crear la API desde este repositorio cuando se decida publicar, con `apps/api`
+Crear el servicio del hub desde este repositorio cuando se decida publicar, con `apps/api`
 como directorio raíz y `Dockerfile` relativo a ese directorio. El contexto de
 construcción también debe ser `apps/api`: el Dockerfile copia `pyproject.toml`,
 `uv.lock`, `README.md`, `app` y `migrations` desde allí. Conservar el `CMD` del
@@ -52,12 +52,12 @@ o el puerto `8000` por defecto.
 
 Crear PostgreSQL 18 en la misma región y usar su URL interna desde FastAPI.
 Configurar las siguientes variables en el servicio, nunca en la compilación
-de la web:
+de los assets:
 
 | Variable | Valor o criterio |
 | --- | --- |
 | `DATABASE_URL` | URL interna de PostgreSQL suministrada por el proveedor; conexión mediante Psycopg 3 |
-| `CORS_ORIGINS` | Lista JSON con el origen HTTPS real del frontend |
+| `CORS_ORIGINS` | `[]` para el hub del mismo origen; añadir únicamente clientes externos autorizados |
 | `ALLOW_LIVE_READS` | `false` en la demostración pública sin login |
 | `NEXUS_EMAIL`, `NEXUS_PASSWORD` | Omitidas en la demostración; solo para un entorno privado con lecturas autorizadas |
 
@@ -80,9 +80,10 @@ arranque ni al construir la imagen. Las revisiones de esquema nuevas requieren
 respaldo y una estrategia de compatibilidad con la versión que sigue atendiendo
 peticiones. [Predespliegue de Render](https://render.com/docs/deploys#pre-deploy-command).
 
-Después, configurar la URL HTTPS de esta API en `VITE_API_BASE_URL` y compilar
-la web según [la guía de Cloudflare](deploy-cloudflare.md). Verificar una
-consulta `fixture` desde el dominio final y una recarga de ruta interna.
+Dash y la API se sirven desde el mismo dominio mediante Uvicorn. No hay una
+compilación Node ni variables `VITE_*`. Verificar una consulta `fixture`, los
+callbacks, `/api/v1/hub` y una recarga de `/maquinaria` desde el dominio final.
+La antigua [guía de Cloudflare](deploy-cloudflare.md) queda archivada.
 
 ## Evolución de la sincronización
 

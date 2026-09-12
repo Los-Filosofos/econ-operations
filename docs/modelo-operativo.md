@@ -2,7 +2,7 @@
 
 Contrato **`schema_version: "1.0"`**, revisión del **12 de septiembre de 2026**. Este documento describe el alcance implementado de `GET /api/v1/hub`, su vocabulario y matrices iniciales para RF-01, RF-02 y RF-03. Las responsabilidades y equivalencias de negocio son propuestas pendientes de validar con ECON; no son permisos de la aplicación.
 
-La definición técnica está en [los modelos de FastAPI](../apps/api/app/models/hub.py), el [mapeo y las reglas](../apps/api/app/api/hub.py) y la [validación del frontend](../apps/web/src/features/hub/schema.ts). Las fuentes originales se conservan en [el diccionario](onedrive/06-diccionario-de-datos/README.md), [los casos](onedrive/04-casos-de-uso.md) y [la evidencia de integración](integraciones-reales.md).
+La definición técnica está en [los modelos de FastAPI](../apps/api/app/models/hub.py), el [mapeo y las reglas](../apps/api/app/services/hub.py) y la [validación de las vistas Dash](../apps/api/app/dashboard/application.py). Las fuentes originales se conservan en [el diccionario](onedrive/06-diccionario-de-datos/README.md), [los casos](onedrive/04-casos-de-uso.md) y [la evidencia de integración](integraciones-reales.md).
 
 ## Identidad y relaciones
 
