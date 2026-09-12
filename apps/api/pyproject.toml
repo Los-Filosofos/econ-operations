@@ -1,7 +1,7 @@
 [project]
 name = "econ-backend"
-version = "0.1.0"
-description = "Base de API para integración de sistemas de ECON"
+version = "0.2.0"
+description = "Read-only operations hub for ECON platform integrations"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

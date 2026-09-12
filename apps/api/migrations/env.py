@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 
 from app.core.config import Settings
-from app.core.database import build_engine
+from app.core.database import build_engine, normalize_database_url
 from app.models import metadata
 
 # this is the Alembic Config object, which provides
@@ -39,7 +39,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = Settings().database_url
+    url = normalize_database_url(Settings().database_url)
     context.configure(
         url=url,
         target_metadata=target_metadata,

@@ -1,0 +1,245 @@
+import json
+
+import httpx
+import pytest
+
+from app.core.config import Settings
+from app.integrations.nexus import MAX_RESPONSE_BYTES, NexusConnector, NexusReadError
+
+
+def settings(**kwargs) -> Settings:
+    return Settings(
+        database_url="sqlite://",
+        nexus_email="reader@example.test",
+        nexus_password="private-test-value",
+        nexus_page_size=1,
+        nexus_max_pages=2,
+        _env_file=None,
+        **kwargs,
+    )
+
+
+def login_response() -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={"success": True, "user": {"private": "not-exported"}},
+        headers={"Set-Cookie": "auth-token=test-only; Path=/; Secure; HttpOnly"},
+    )
+
+
+def equipment_page(number=1, total=1, identifier="eq-1") -> dict:
+    return {
+        "items": [
+            {
+                "id": identifier,
+                "clave": "RE-03",
+                "nombre": "Retroexcavadora",
+                "estado": "DISPONIBLE",
+                "unknown_private_field": "never-retained",
+            }
+        ],
+        "total": total,
+        "page": number,
+        "limit": 1,
+    }
+
+
+def empty_requests() -> httpx.Response:
+    return httpx.Response(200, json={"items": [], "total": 0, "page": 1, "limit": 1})
+
+
+def test_cookie_reuse_and_only_observed_routes_are_called():
+    calls = []
+
+    def handler(request):
+        calls.append((request.method, request.url.path))
+        if request.url.path == "/api/auth/login":
+            assert json.loads(request.content)["email"] == "reader@example.test"
+            return login_response()
+        assert request.headers["cookie"] == "auth-token=test-only"
+        if request.url.path.endswith("equipos"):
+            return httpx.Response(200, json=equipment_page())
+        return empty_requests()
+
+    connector = NexusConnector(settings(), transport=httpx.MockTransport(handler))
+    try:
+        first = connector.read()
+        connector.read()
+    finally:
+        connector.close()
+    assert first.complete is True
+    assert not hasattr(first.equipment[0], "unknown_private_field")
+    assert calls.count(("POST", "/api/auth/login")) == 1
+    assert set(calls) == {
+        ("POST", "/api/auth/login"),
+        ("GET", "/api/maquinaria/equipos"),
+        ("GET", "/api/maquinaria/requests"),
+    }
+
+
+@pytest.mark.parametrize("after_retry", [200, 401])
+def test_401_reauthenticates_once_and_repeats_safe_read_at_most_once(after_retry):
+    logins = reads = 0
+
+    def handler(request):
+        nonlocal logins, reads
+        if request.method == "POST":
+            logins += 1
+            return login_response()
+        if request.url.path.endswith("equipos"):
+            reads += 1
+            status = 401 if reads == 1 else after_retry
+            return httpx.Response(status, json=equipment_page())
+        return empty_requests()
+
+    connector = NexusConnector(settings(), transport=httpx.MockTransport(handler))
+    try:
+        if after_retry == 200:
+            assert connector.read().complete
+        else:
+            with pytest.raises(NexusReadError, match="después de reautenticar"):
+                connector.read()
+    finally:
+        connector.close()
+    assert logins == reads == 2
+
+
+@pytest.mark.parametrize("status", [403, 429, 500, 302])
+def test_access_errors_are_not_retried_and_upstream_details_are_hidden(status):
+    calls = []
+
+    def handler(request):
+        calls.append(request.method)
+        if request.method == "POST":
+            return login_response()
+        return httpx.Response(status, text="private-test-value server details")
+
+    connector = NexusConnector(settings(), transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(NexusReadError) as caught:
+            connector.read()
+    finally:
+        connector.close()
+    assert calls == ["POST", "GET"]
+    assert "private-test-value" not in str(caught.value)
+
+
+def test_bounded_pages_and_duplicate_ids_are_partial():
+    def handler(request):
+        if request.method == "POST":
+            return login_response()
+        if request.url.path.endswith("requests"):
+            return empty_requests()
+        page = int(request.url.params["page"])
+        return httpx.Response(200, json=equipment_page(number=page, total=100))
+
+    connector = NexusConnector(settings(), transport=httpx.MockTransport(handler))
+    try:
+        data = connector.read()
+    finally:
+        connector.close()
+    assert data.equipment_total == 100
+    assert len(data.equipment) == 1  # Same ID on both pages is never double counted.
+    assert data.complete is False
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"items": [], "total": "1", "page": 1, "limit": 1},
+        {"items": [{"id": "x"}], "total": 1, "page": 1, "limit": 1},
+        {"items": [], "total": 0, "page": 99, "limit": 1},
+        {"items": [], "total": 0, "page": 1, "limit": 100},
+        {"error": "private-test-value"},
+    ],
+)
+def test_schema_drift_is_an_error_not_an_empty_success(payload):
+    def handler(request):
+        return login_response() if request.method == "POST" else httpx.Response(200, json=payload)
+
+    connector = NexusConnector(settings(), transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(NexusReadError) as caught:
+            connector.read()
+    finally:
+        connector.close()
+    assert "private-test-value" not in str(caught.value)
+
+
+def test_failed_requests_collection_does_not_return_a_complete_equipment_snapshot():
+    def handler(request):
+        if request.method == "POST":
+            return login_response()
+        if request.url.path.endswith("equipos"):
+            return httpx.Response(200, json=equipment_page())
+        return httpx.Response(403)
+
+    connector = NexusConnector(settings(), transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(NexusReadError, match="permiso"):
+            connector.read()
+    finally:
+        connector.close()
+
+
+def test_response_size_limit_and_settings_hide_secrets():
+    def handler(request):
+        if request.method == "POST":
+            return login_response()
+        return httpx.Response(200, content=b"x" * (MAX_RESPONSE_BYTES + 1))
+
+    configuration = settings()
+    assert "private-test-value" not in repr(configuration)
+    connector = NexusConnector(configuration, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(NexusReadError, match="tamaño"):
+            connector.read()
+    finally:
+        connector.close()
+
+
+def test_empty_secret_is_not_configured():
+    configuration = settings()
+    configuration.nexus_password = None
+    connector = NexusConnector(configuration)
+    try:
+        assert connector.configured is False
+    finally:
+        connector.close()
+
+
+def test_nullable_equipment_code_from_observed_sandbox_response():
+    def handler(request):
+        if request.method == "POST":
+            return login_response()
+        if request.url.path.endswith("requests"):
+            return empty_requests()
+        payload = equipment_page()
+        payload["items"][0].update({"clave": None, "no_activo": "fixture:asset-01"})
+        return httpx.Response(200, json=payload)
+
+    connector = NexusConnector(settings(), transport=httpx.MockTransport(handler))
+    try:
+        data = connector.read()
+    finally:
+        connector.close()
+    assert data.equipment[0].clave is None
+    assert data.equipment[0].no_activo == "fixture:asset-01"
+
+
+def test_timeout_and_total_read_budget_are_bounded():
+    from unittest.mock import patch
+
+    def handler(request):
+        raise httpx.ReadTimeout("private-test-value", request=request)
+
+    connector = NexusConnector(settings(), transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(NexusReadError) as caught:
+            connector.read()
+        assert "private-test-value" not in str(caught.value)
+        with patch("app.integrations.nexus.monotonic", side_effect=[0, 30]):
+            with pytest.raises(NexusReadError, match="tiempo permitido"):
+                connector.read()
+    finally:
+        connector.close()

@@ -3,18 +3,27 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 from sqlalchemy import Engine, event
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import URL, make_url
 from sqlmodel import Session, create_engine
 
 
+def normalize_database_url(database_url: str) -> URL:
+    """Select the installed psycopg driver for common managed Postgres URLs."""
+    url = make_url(database_url)
+    if url.drivername in {"postgres", "postgresql"}:
+        return url.set(drivername="postgresql+psycopg")
+    return url
+
+
 def build_engine(database_url: str) -> Engine:
-    backend = make_url(database_url).get_backend_name()
+    url = normalize_database_url(database_url)
+    backend = url.get_backend_name()
     connect_args = {}
     if backend == "sqlite":
         connect_args = {"check_same_thread": False}
     elif backend == "postgresql":
         connect_args = {"connect_timeout": 5}
-    engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
+    engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
     if backend == "sqlite":
 
         @event.listens_for(engine, "connect")
