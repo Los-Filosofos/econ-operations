@@ -6,6 +6,8 @@ Este documento es una síntesis derivada de las fuentes y de la conversación. N
 
 Los enlaces entregados ya corresponden a sandboxes según el documento de accesos. Una API consumida en vivo puede devolver datos sintéticos de esos entornos. Se recomienda usar esa conexión para validar los conectores y casos locales separados para probar situaciones faltantes; no presentar datos simulados o copias antiguas como observaciones actuales. Startrack requiere todavía una API key que la cuenta no pudo consultar (`403` en el detalle propio).
 
+La [guía del problema y navegación](../guia-problema-y-navegacion.md) explica el recorrido para el equipo. La [propuesta de indicadores e ISO](../kpis-y-referencias-iso.md) prioriza alertas de solicitudes y fallas con campos observados, dejando recepción física y métricas históricas condicionadas a evidencia adicional. Sus fórmulas, responsables y metas requieren validación; no hay KPIs implementados ni certificaciones de ECON confirmadas en este material. Las fichas ISO fueron consultadas el 12/09/2026 y se registra el estado de revisión de ISO 9001.
+
 ## Equipo y recursos asignados
 
 | Elemento | Dato confirmado | Fuente |

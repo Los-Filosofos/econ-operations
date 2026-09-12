@@ -4,6 +4,8 @@
 
 ## Por dónde comenzar
 
+Para una explicación inicial con recorrido por las plataformas, usar la [guía del problema y navegación](../guia-problema-y-navegacion.md). La [propuesta de KPIs e ISO](../kpis-y-referencias-iso.md) conecta los datos disponibles con decisiones de los usuarios y distingue referencias normativas de certificaciones.
+
 1. [Contexto para IA](CONTEXTO-IA.md): hechos confirmados, identidad del equipo y límites de lo conocido.
 2. [Brief completo](02-brief-del-reto.md): requisitos, entregables, rúbrica y agenda.
 3. [Diccionario completo](06-diccionario-de-datos/README.md): cuatro hojas, campos, ejemplos y observaciones de calidad.
