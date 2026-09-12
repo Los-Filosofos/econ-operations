@@ -1,5 +1,8 @@
 # Revisión de contexto para iniciar el frontend y ampliar la API
 
+> Continuar desde [contexto-vigente.md](contexto-vigente.md): incorpora los
+> contratos nuevos, las capturas posteriores y la retirada de ejemplos inventados.
+
 > Registro anterior a la migración solicitada a Dash. La arquitectura vigente
 > está en [ADR 0003](adr/0003-python-dash-hub.md). Las observaciones de negocio
 > y los límites de integración se conservan con su fecha original.

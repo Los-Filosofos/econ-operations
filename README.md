@@ -1,8 +1,8 @@
 # ECON · Hub de operaciones
 
 Aplicación **Python con Dash, Plotly y FastAPI** del Equipo 6 — Los Filósofos.
-Relaciona maquinaria, solicitudes, mantenimiento y traslados para consultar
-qué necesita atención, quién debe revisarlo y con qué evidencia.
+Sigue cada solicitud desde el proyecto y la unidad asignada hasta el traslado,
+la llegada y la recepción, mostrando los vínculos y la evidencia que faltan.
 
 La interfaz y la API funcionan en **un mismo proceso y origen**. No hay
 compilación frontend ni instalación de Node.js. La
@@ -36,22 +36,42 @@ volumen PostgreSQL; cambiar la interfaz no migra ni elimina la base.
 
 ## Recorrido
 
-- **Vista general:** solicitudes pendientes con inicio alcanzado, aprobadas sin
-  unidad, fallas activas, estados administrativos, calendario de inicios y asuntos.
-- **Maquinaria y ficha:** búsqueda, filtros, solicitudes, múltiples tareas,
-  mantenimiento, ubicación fechada y procedencia.
-- **Solicitudes, traslados y atención:** tablas ordenables, filtros por columna
-  y evidencia de las condiciones que requieren revisión.
-- **Fuentes:** conexión, corte y cobertura de cada origen.
+- **Resumen:** decisiones por solicitud, evidencia y siguiente paso, sin cards
+  de conteos. Calendario de uso como apoyo y estados en un desplegable.
+  Navegación lateral adaptable a móvil.
+- **Solicitudes:** proyecto, tipo requerido, período, unidad asignada, traslado,
+  destino, llegada, recepción y evidencia pendiente.
+- **Detalle de solicitud:** cadena por IDs, condición de la maquinaria y
+  procedencia de cada dato. No infiere recepción desde el GPS o cierre de tarea.
+- **Operaciones:** prepara y guarda el traslado, consulta su envío, conserva
+  cambios de estado y registra una recepción con responsable y constancia.
+- **Fuentes y cobertura:** diferencia muestras proporcionadas y lecturas live.
+
+Las tablas concentran seis columnas. Procedencia completa, referencias técnicas,
+historial y preparación del traslado se consultan al desplegar su sección.
 
 Seleccionar origen y búsqueda; **Aplicar** actualiza la consulta. **Actualizar**
 vuelve a leerla. La URL conserva origen, búsqueda y filtro.
 
-Los ejemplos son sintéticos locales. `live` está deshabilitado por defecto y
-nunca se sustituye por ejemplos ante un fallo. Nexus tiene un conector de
-lectura acotada; Startrack sigue pendiente de clave API y validación del contrato.
-No hay login propio, sincronización persistente ni historial del hub. La
-interfaz conserva estos límites; una tarea completada no demuestra recepción.
+El modo `fixture` contiene cinco máquinas y dos solicitudes extraídas del OpenAPI
+proporcionado, con sus IDs y valores originales. Se retiraron los casos inventados.
+La muestra no incluye RE-03/PROY-006 ni tareas de Startrack; no tiene un corte
+conjunto y no es una lectura actual. **Todo el caso usa datos sintéticos**:
+`fixture` consulta ejemplos del archivo y `live` consulta su estado actual en el
+sandbox. Un fallo de conexión no sustituye un origen por otro.
+
+FastAPI comparte con Dash el servicio que guarda planes, correspondencias,
+historial y cortes en PostgreSQL. El SDK de Startrack permite crear tareas con
+habilitación explícita; una cola persistente conserva resultados inciertos para
+conciliarlos sin repetir el envío. La sincronización usa consultas periódicas.
+La recepción requiere una declaración explícita; el GPS no la crea.
+
+Para gestionar planes desde el equipo local, configurar
+`ALLOW_LOCAL_MANAGEMENT=true` en `apps/api/.env` y reiniciar. El envío al sandbox
+requiere además las credenciales y flags documentados en la
+[solución y guía operativa](docs/solucion-integracion.md). Los defaults siguen
+permitiendo una demo de consulta sin login. La validación autenticada del envío
+a Startrack permanece pendiente; las pruebas de integración usan HTTP controlado.
 
 ## Verificar y desplegar
 
@@ -68,7 +88,8 @@ La antigua salida estática de Cloudflare fue retirada.
 
 ## Contexto
 
-[Índice](docs/README.md) · [Arquitectura Dash](docs/frontend-architecture.md) ·
+[Contexto vigente](docs/contexto-vigente.md) · [Índice](docs/README.md) · [Arquitectura Dash](docs/frontend-architecture.md) ·
+[Solución y operación](docs/solucion-integracion.md) ·
 [Analítica](docs/analitica-decisiones.md) · [Modelo y matrices](docs/modelo-operativo.md) ·
 [OneDrive](docs/onedrive/README.md) · [Integraciones](docs/integraciones-reales.md).
 

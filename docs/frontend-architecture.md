@@ -1,5 +1,64 @@
 # Interfaz Dash y arquitectura del hub
 
+## Interfaz vigente: sidebar y resumen operativo
+
+La navegación lateral contiene **Resumen**, **Solicitudes**, **Operaciones** y
+**Fuentes** como utilidad secundaria. `/` y `/resumen` muestran decisiones por
+solicitud antes del contexto analítico; `/solicitudes` la lista y
+`/solicitudes/{id}` su detalle.
+`/maquinaria/{id}` conserva una ficha de
+evidencia accesible desde el recorrido. Las pantallas generales anteriores ya no
+forman parte de la navegación ni se renderizan como páginas operativas.
+
+`dashboard/analytics.py` prepara cada fila relacionando `request.machinery_id`
+con `equipment.id` y la tarea con `request.id`, sin coincidencias por nombre.
+`dashboard/views.py` concentra las tablas en seis columnas: proyecto/solicitud,
+maquinaria, período, estado de solicitud, traslado y recepción. El detalle conserva
+destino, llegada y faltantes. No infiere llegada o recepción desde una
+posición o una tarea completada. El detalle conserva mantenimiento como contexto
+de la unidad asignada, y la procedencia conserva los IDs completos. UUIDs,
+referencias de integración, condición mecánica, historial y preparación del
+traslado usan desplegables; las señales necesarias para decidir permanecen visibles.
+
+El sidebar de escritorio usa una columna de 236 píxeles, marca ECON, estado
+activo y acceso inferior a Fuentes. En móvil se abre con Menú y se cierra por
+botón, fondo, Escape o navegación. El foco se lleva al control de cierre y vuelve
+al menú. Las referencias del navegador no habilitan acciones de proveedor.
+
+`decision_priorities.py` deriva una revisión por solicitud, con hecho y siguiente
+paso, sin ranking artificial. `decision_analytics.py` conserva alcance y períodos.
+`decision_views.py` empieza por esa agenda, sin cards ni conteos destacados. El
+calendario de uso aparece debajo y la distribución por estado es desplegable.
+Ambos gráficos Plotly tienen datos alternativos en tabla.
+No hay indicadores de productividad, puntualidad ni series históricas fabricadas.
+Los asuntos y el calendario respetan los filtros compartidos con la lista.
+
+El selector «Muestras proporcionadas» mantiene `mode=fixture` para el contrato.
+Ahora lee las muestras entregadas con OpenAPI, sin casos inventados. La hora de
+observación y `data_as_of` son nulos; `observed_on` registra la fecha documental.
+Fuente, naturaleza y cobertura diferencian estas muestras de lecturas actuales.
+
+Se mantienen FastAPI/Dash, estado por navegador, validación URL/Pydantic, callbacks
+en threadpool, AG Grid Community, foco de teclado, CSS/Inter/logos ECON y el
+desplazamiento horizontal de las tablas. No se incorporan dependencias nuevas.
+`workflow_forms.py`, `workflow_views.py` y `workflow_actions.py` presentan planes,
+historial y recepción. Un store por navegador conserva la proyección tipada
+`WorkflowOverview`; los datos persistidos se consultan mediante `WorkflowService`
+y se relacionan por ID original, origen y entorno. Las acciones de gestión se
+ejecutan en threadpool y vuelven a validar el contexto local del servidor.
+Ningún flag del navegador habilita proveedores. Las credenciales siguen en el backend.
+
+El frontend distingue muestras del archivo y datos actuales del sandbox; ambos
+son sintéticos. Los movimientos guardados alimentan la tabla y el detalle.
+Una tarea enviada, una visita GPS y una constancia de recepción tienen evidencia
+y fechas independientes. Ver [solución implementada](solucion-integracion.md).
+
+Ver [contexto vigente](contexto-vigente.md), [desarrollo](desarrollo.md) y
+[evaluaciones de Astra](evaluaciones-astra.md). Las capturas y referencias de la
+portada con gráficos que siguen son históricas.
+
+## Registro de la implementación anterior
+
 Migración del **12 de septiembre de 2026**, solicitada para desarrollar en
 Python. [ADR 0003](adr/0003-python-dash-hub.md) reemplaza las decisiones de
 interfaz anteriores.

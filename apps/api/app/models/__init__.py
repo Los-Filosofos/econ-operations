@@ -1,7 +1,4 @@
-"""Import future table models here so Alembic can discover them.
-
-Business tables are deliberately deferred until the challenge is known.
-"""
+"""Register table metadata for explicit Alembic migrations, never startup DDL."""
 
 from sqlmodel import SQLModel
 
@@ -14,3 +11,6 @@ SQLModel.metadata.naming_convention = {
 }
 
 metadata = SQLModel.metadata
+
+# Register tables after the naming convention, without importing service code.
+from app.models.operations import Movement, OperationEvent, SourceSnapshot  # noqa: E402, F401

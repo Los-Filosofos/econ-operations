@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy import Engine, event
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, create_engine
 
 
@@ -23,7 +24,8 @@ def build_engine(database_url: str) -> Engine:
         connect_args = {"check_same_thread": False}
     elif backend == "postgresql":
         connect_args = {"connect_timeout": 5}
-    engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
+    pool_options = {"poolclass": StaticPool} if backend == "sqlite" and not url.database else {}
+    engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True, **pool_options)
     if backend == "sqlite":
 
         @event.listens_for(engine, "connect")

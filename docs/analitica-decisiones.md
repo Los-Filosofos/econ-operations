@@ -1,5 +1,70 @@
 # Analítica para decidir sobre la operación
 
+## Criterio vigente tras la revisión de fuentes
+
+El usuario pidió mejorar el sidebar, reducir información poco relevante y
+seleccionar gráficos con criterio analítico. La portada ahora es **Resumen**,
+con acceso lateral a Solicitudes, Operaciones y Fuentes. Se conserva el recorrido
+proyecto, solicitud, unidad asignada, traslado y recepción.
+
+La revisión posterior del usuario retira las cards de conteos. Lo primero que ve
+Gerencia es **qué requiere atención, en qué proyecto, con qué evidencia y cuál
+es el siguiente paso**. Una fila agrupa los asuntos de cada solicitud; no hay
+puntaje de riesgo ni un orden de urgencia sin evidencia. Los enlaces abren el
+registro correspondiente. No se asignan responsables nominales inventados.
+
+Con la muestra actual, CF-03 requiere revisar su asignación porque figura
+`OBSOLETA`, conservando que no hay falla activa ni paro registrados. La solicitud
+pendiente requiere resolver aprobación y asignación. Los faltantes de preparación
+se explican como ausencia de información, no como una entrega fallida.
+
+La jerarquía analítica queda así:
+
+| Visual | Pregunta que responde | Definición y límite |
+| --- | --- | --- |
+| Asuntos por revisar | ¿Qué decisión requiere cada solicitud? | Hecho de origen y siguiente paso; estados, preparación, tarea y recepción siguen separados |
+| Períodos de uso solicitado | ¿En qué fechas se necesita la maquinaria? | Una barra por solicitud con inicio/fin del origen; días inclusivos; no es un compromiso de entrega |
+| Distribución por estado, desplegable | ¿Cuántas solicitudes hay en cada estado? | Contexto secundario; categorías originales y eje desde cero |
+
+Una consulta de operaciones indisponible permanece explícita. No se convierte en
+cero tareas ni en recomendación de duplicar un envío. Los enlaces a movimientos
+respetan solicitud, asignación, procedencia y período vigentes. Un estado de
+envío incierto exige conciliación, no reenvío automático.
+
+Con las muestras suministradas hay **dos solicitudes**: una APROBADA y una
+PENDIENTE. Los períodos son 11–14 y 16–18 de septiembre de 2026. Una solicitud
+no tiene unidad asignada. La información sintética no se amplía para rellenar
+los gráficos. La cobertura describe esa consulta, no la flota completa.
+
+Los gráficos tienen etiquetas en español y tablas alternativas desplegables.
+Los identificadores permanecen en hover o detalle, sin ocupar los ejes. Los
+intervalos se identifican internamente por ID aunque sus etiquetas coincidan.
+Para representar días inclusivos el final dibujado es el día siguiente; el
+tooltip y la tabla conservan las fechas originales.
+
+El conjunto visible proviene del OpenAPI suministrado: cinco equipos y dos
+solicitudes. No incluye tareas, ubicaciones ni recepciones. Tiene fecha documental,
+pero carece de un corte conjunto; por ello no se clasifican atrasos utilizando el
+reloj actual. El rango solicitado de uso tampoco equivale a plazo de entrega.
+
+Los ejemplos inventados que antes alimentaban los gráficos se eliminaron del
+runtime. Los escenarios necesarios para verificar reglas existen únicamente en
+tests aislados. Ninguna cifra histórica de las secciones siguientes describe la
+interfaz actual. Las utilidades de inventario anteriores siguen fuera de la portada.
+
+Las derivaciones actuales viven en `dashboard/decision_analytics.py` y su
+presentación en `dashboard/decision_views.py`; las revisiones por solicitud se
+derivan en `dashboard/decision_priorities.py`. Una fecha con zona se convierte al
+día de El Salvador; una fecha ambigua, inválida o invertida se excluye y se informa.
+No se usa el reloj actual para evaluar documentos sin corte común.
+
+Para añadir otra medición, exigir su población, cobertura, fecha, vínculo
+con la solicitud y evidencia operacional. No publicar puntualidad, recepción o
+utilización sin sus eventos correspondientes. Ver [contexto vigente](contexto-vigente.md)
+y [evaluaciones](evaluaciones-astra.md).
+
+## Registro histórico de la portada anterior
+
 Revisión del **12 de septiembre de 2026**. Esta guía reemplaza el enfoque de la vista general como inventario de widgets. Define qué comunica cada elemento a Gerencia de Logística y Equipos, Mantenimiento y Técnica de Proyectos. Separa el problema empresarial de la evidencia disponible en el prototipo.
 
 ## Qué necesita ECON

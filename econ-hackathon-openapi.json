@@ -1,0 +1,4807 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Prisma (ECON) — API del Sandbox · Entropy Hack",
+    "version": "1.0.0-hackathon",
+    "description": "Superficie pública del sandbox de Prisma para el Entropy Hack.\n\nSolo se documenta lo que el **proxy** expone en `https://econ-key.maic.ai`. El backend no tiene ruta pública."
+  },
+  "servers": [
+    {
+      "url": "https://econ-key.maic.ai",
+      "description": "Sandbox del hackathon"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Autenticación",
+      "description": "Inicio de sesión. La sesión viaja en una cookie HttpOnly, no en un bearer token."
+    },
+    {
+      "name": "Maquinaria",
+      "description": "Inventario de equipos: estado operativo, proyecto asignado, historial y actividad."
+    },
+    {
+      "name": "Solicitudes",
+      "description": "Solicitudes de maquinaria por proyecto y su aprobación."
+    },
+    {
+      "name": "Fallas",
+      "description": "Reportes de falla y mantenimiento correctivo de cada equipo."
+    },
+    {
+      "name": "Operadores",
+      "description": "Registro de motoristas (MOT-xxx)."
+    },
+    {
+      "name": "Proyectos",
+      "description": "Proyectos a los que se asignan maquinaria y solicitudes."
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Iniciar sesión",
+        "description": "Devuelve 200 y fija la cookie de sesión (`Secure; HttpOnly; SameSite=strict`). Guarda la cookie y envíala en todas las llamadas siguientes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                },
+                "example": {
+                  "email": "tu-correo@ejemplo.com",
+                  "password": "tu-password"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sesión iniciada; cookie fijada"
+          },
+          "401": {
+            "description": "Credenciales inválidas"
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Cerrar sesión",
+        "responses": {
+          "200": {
+            "description": "Cookie invalidada"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Usuario de la sesión actual",
+        "description": "Útil para comprobar que la cookie funciona. La respuesta viene anidada bajo `user`.",
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "f2acb132-133c-41f6-9cea-c8da80869f5a"
+                        },
+                        "email": {
+                          "type": "string",
+                          "example": "douglas2beltran@gmail.com"
+                        },
+                        "name": {
+                          "type": "string",
+                          "example": "Douglas Omar Beltrán robles"
+                        },
+                        "role": {
+                          "type": "string",
+                          "example": "user"
+                        },
+                        "primaryRole": {
+                          "type": "string",
+                          "example": "Control de costos"
+                        },
+                        "roles": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "example": "ADMIN"
+                          }
+                        },
+                        "customRoles": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "isSuperAdmin": {
+                          "type": "boolean"
+                        },
+                        "isOrgAdmin": {
+                          "type": "boolean"
+                        },
+                        "allowedApps": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "example": "/projects"
+                          }
+                        },
+                        "projectsOrgId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                        },
+                        "projectsUserId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "f2acb132-133c-41f6-9cea-c8da80869f5a"
+                        },
+                        "orgName": {
+                          "type": "string",
+                          "example": "ECON HACKATHON SANDBOX"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "user": {
+                    "id": "f2acb132-133c-41f6-9cea-c8da80869f5a",
+                    "email": "douglas2beltran@gmail.com",
+                    "name": "Douglas Omar Beltrán robles",
+                    "role": "user",
+                    "primaryRole": "Control de costos",
+                    "roles": [
+                      "ADMIN",
+                      "GERENTE",
+                      "ENCARGADO_MAQUINARIA",
+                      "CONTROL_DE_COSTOS"
+                    ],
+                    "customRoles": [],
+                    "isSuperAdmin": false,
+                    "isOrgAdmin": true,
+                    "allowedApps": [
+                      "/projects",
+                      "/kpis",
+                      "/costs",
+                      "/aprobacion",
+                      "/partidas",
+                      "/cost-management/catalogs",
+                      "/cost-management/entries",
+                      "/maquinaria/equipos",
+                      "/maquinaria/operadores",
+                      "/maquinaria/solicitudes",
+                      "/maquinaria/fallas",
+                      "/team",
+                      "/admin"
+                    ],
+                    "projectsOrgId": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                    "projectsUserId": "f2acb132-133c-41f6-9cea-c8da80869f5a",
+                    "orgName": "ECON HACKATHON SANDBOX"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión"
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos": {
+      "get": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "List Maquinaria",
+        "description": "List machinery with filters. When project_id is set, only machinery assigned to that project. ECON org only.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "empresa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Empresa"
+            }
+          },
+          {
+            "name": "clase_equipo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Clase Equipo"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by project: only machinery assigned to this project",
+              "title": "Project Id"
+            },
+            "description": "Filter by project: only machinery assigned to this project"
+          },
+          {
+            "name": "falla_estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by active failure status or SIN_FALLA",
+              "title": "Falla Estado"
+            },
+            "description": "Filter by active failure status or SIN_FALLA"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "2a49b73e-a139-4ef1-866b-d54ef246fb46"
+                          },
+                          "org_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                          },
+                          "empresa": {
+                            "type": "string",
+                            "example": "Valdocco Studio"
+                          },
+                          "clave": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "example": "-"
+                          },
+                          "no_activo": {
+                            "type": "string",
+                            "example": "CF-01"
+                          },
+                          "nombre": {
+                            "type": "string",
+                            "example": "Cargador frontal 01"
+                          },
+                          "clase_equipo": {
+                            "type": "string",
+                            "example": "Cargador frontal"
+                          },
+                          "marca": {
+                            "type": "null"
+                          },
+                          "modelo": {
+                            "type": "null"
+                          },
+                          "anio": {
+                            "type": "null"
+                          },
+                          "precio_x_hora": {
+                            "type": "null"
+                          },
+                          "minimum_usage_hours": {
+                            "type": "null"
+                          },
+                          "estado": {
+                            "type": "string",
+                            "example": "DISPONIBLE",
+                            "enum": [
+                              "DISPONIBLE",
+                              "OCUPADA",
+                              "OBSOLETA"
+                            ]
+                          },
+                          "project_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                          },
+                          "line_item_id": {
+                            "type": "null"
+                          },
+                          "fecha_inicio_uso": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date",
+                            "example": "2026-09-11"
+                          },
+                          "fecha_fin_uso": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date",
+                            "example": "2026-09-14"
+                          },
+                          "observaciones_asignacion": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "example": "Solicitud aprobada: Cargador frontal"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T00:03:53.714086+00:00"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T19:24:47.929736+00:00"
+                          },
+                          "project_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "example": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                          },
+                          "active_failure_id": {
+                            "type": "null"
+                          },
+                          "active_failure_status": {
+                            "type": "null",
+                            "enum": [
+                              "SIN_REVISAR",
+                              "PENDIENTE_INTERVENCION",
+                              "EN_PROCESO",
+                              "ESPERA_REPUESTOS",
+                              "TRASLADO_STD",
+                              "EN_PRUEBAS",
+                              "FINALIZADO",
+                              "RECHAZADO",
+                              null
+                            ]
+                          },
+                          "active_failure_is_paro": {
+                            "type": "boolean"
+                          },
+                          "assigned_personnel": {
+                            "type": "null"
+                          },
+                          "assigned_line_item": {
+                            "type": "null"
+                          },
+                          "fallas_count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "2a49b73e-a139-4ef1-866b-d54ef246fb46",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "empresa": "Valdocco Studio",
+                      "clave": "-",
+                      "no_activo": "CF-01",
+                      "nombre": "Cargador frontal 01",
+                      "clase_equipo": "Cargador frontal",
+                      "marca": null,
+                      "modelo": null,
+                      "anio": null,
+                      "precio_x_hora": null,
+                      "minimum_usage_hours": null,
+                      "estado": "DISPONIBLE",
+                      "project_id": null,
+                      "line_item_id": null,
+                      "fecha_inicio_uso": null,
+                      "fecha_fin_uso": null,
+                      "observaciones_asignacion": null,
+                      "created_at": "2026-09-12T00:03:53.714086+00:00",
+                      "updated_at": "2026-09-12T19:24:47.929736+00:00",
+                      "project_name": null,
+                      "active_failure_id": null,
+                      "active_failure_status": null,
+                      "active_failure_is_paro": false,
+                      "assigned_personnel": null,
+                      "assigned_line_item": null,
+                      "fallas_count": 0
+                    },
+                    {
+                      "id": "7328e8f3-7ada-4f6f-88a1-58cc4ddfd862",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "empresa": "Truers",
+                      "clave": "200",
+                      "no_activo": "CF-02",
+                      "nombre": "Cargador frontal 02",
+                      "clase_equipo": "Cargador frontal",
+                      "marca": null,
+                      "modelo": null,
+                      "anio": null,
+                      "precio_x_hora": null,
+                      "minimum_usage_hours": null,
+                      "estado": "DISPONIBLE",
+                      "project_id": null,
+                      "line_item_id": null,
+                      "fecha_inicio_uso": null,
+                      "fecha_fin_uso": null,
+                      "observaciones_asignacion": null,
+                      "created_at": "2026-09-12T00:04:21.506026+00:00",
+                      "updated_at": "2026-09-12T19:42:46.040642+00:00",
+                      "project_name": null,
+                      "active_failure_id": null,
+                      "active_failure_status": null,
+                      "active_failure_is_paro": false,
+                      "assigned_personnel": null,
+                      "assigned_line_item": null,
+                      "fallas_count": 0
+                    },
+                    {
+                      "id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "empresa": "The Hub",
+                      "clave": null,
+                      "no_activo": "CF-03",
+                      "nombre": "Cargador frontal 03",
+                      "clase_equipo": "Cargador frontal",
+                      "marca": null,
+                      "modelo": null,
+                      "anio": null,
+                      "precio_x_hora": null,
+                      "minimum_usage_hours": null,
+                      "estado": "OBSOLETA",
+                      "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                      "line_item_id": null,
+                      "fecha_inicio_uso": "2026-09-11",
+                      "fecha_fin_uso": "2026-09-14",
+                      "observaciones_asignacion": "Solicitud aprobada: Cargador frontal",
+                      "created_at": "2026-09-12T00:05:09.853492+00:00",
+                      "updated_at": "2026-09-12T16:04:16.407630+00:00",
+                      "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión",
+                      "active_failure_id": null,
+                      "active_failure_status": null,
+                      "active_failure_is_paro": false,
+                      "assigned_personnel": null,
+                      "assigned_line_item": null,
+                      "fallas_count": 0
+                    },
+                    {
+                      "id": "96519214-2337-4015-8e7c-ab3fdc112f06",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "empresa": "Aventra",
+                      "clave": null,
+                      "no_activo": "EXC-01",
+                      "nombre": "Excavadora 01",
+                      "clase_equipo": "Excavadora",
+                      "marca": null,
+                      "modelo": null,
+                      "anio": null,
+                      "precio_x_hora": null,
+                      "minimum_usage_hours": null,
+                      "estado": "DISPONIBLE",
+                      "project_id": null,
+                      "line_item_id": null,
+                      "fecha_inicio_uso": null,
+                      "fecha_fin_uso": null,
+                      "observaciones_asignacion": null,
+                      "created_at": "2026-09-11T23:58:12.491812+00:00",
+                      "updated_at": "2026-09-11T23:58:12.491812+00:00",
+                      "project_name": null,
+                      "active_failure_id": null,
+                      "active_failure_status": null,
+                      "active_failure_is_paro": false,
+                      "assigned_personnel": null,
+                      "assigned_line_item": null,
+                      "fallas_count": 0
+                    },
+                    {
+                      "id": "30f98953-96e6-469e-92a5-19cd3431dd5c",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "empresa": "DAURUS",
+                      "clave": null,
+                      "no_activo": "EXC-02",
+                      "nombre": "Excavadora 02",
+                      "clase_equipo": "Excavadora",
+                      "marca": null,
+                      "modelo": null,
+                      "anio": null,
+                      "precio_x_hora": null,
+                      "minimum_usage_hours": null,
+                      "estado": "DISPONIBLE",
+                      "project_id": null,
+                      "line_item_id": null,
+                      "fecha_inicio_uso": null,
+                      "fecha_fin_uso": null,
+                      "observaciones_asignacion": null,
+                      "created_at": "2026-09-11T23:58:48.742930+00:00",
+                      "updated_at": "2026-09-11T23:58:59.062360+00:00",
+                      "project_name": null,
+                      "active_failure_id": null,
+                      "active_failure_status": null,
+                      "active_failure_is_paro": false,
+                      "assigned_personnel": null,
+                      "assigned_line_item": null,
+                      "fallas_count": 0
+                    }
+                  ],
+                  "total": 15,
+                  "page": 1,
+                  "limit": 5
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Create Maquinaria",
+        "description": "Create new machinery. Estado defaults to DISPONIBLE.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaquinariaCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/counts": {
+      "get": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Get Counts",
+        "description": "Get counts by estado for summary cards.",
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "DISPONIBLE": {
+                      "type": "integer"
+                    },
+                    "OBSOLETA": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "total": 15,
+                  "DISPONIBLE": 14,
+                  "OBSOLETA": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/filters": {
+      "get": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Get Filter Options",
+        "description": "Get empresa and clase_equipo options for filter dropdowns.",
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "empresas": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Aventra"
+                      }
+                    },
+                    "clases_equipo": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Cargador frontal"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "empresas": [
+                    "Aventra",
+                    "DAURUS",
+                    "EconHackers",
+                    "FASI",
+                    "Goat Goating Goats",
+                    "Los Filósofos",
+                    "MechaBytes",
+                    "Negentropy",
+                    "Sync Masters",
+                    "The Hub",
+                    "Tralaleritos",
+                    "Truers",
+                    "UTECOps",
+                    "Valdocco Studio"
+                  ],
+                  "clases_equipo": [
+                    "Cargador frontal",
+                    "Excavadora",
+                    "Minicargador",
+                    "Motoniveladora",
+                    "Retroexcavadora",
+                    "Retroexcavadoras"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/tipos-disponibles": {
+      "get": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Get Available Type Options",
+        "description": "Get distinct clase_equipo values only from available machinery.",
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "clases_equipo": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Cargador frontal"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "clases_equipo": [
+                    "Cargador frontal",
+                    "Excavadora",
+                    "Minicargador",
+                    "Motoniveladora",
+                    "Retroexcavadora",
+                    "Retroexcavadoras"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/{id}": {
+      "get": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Get Maquinaria",
+        "description": "Get single machinery by id.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "66faacde-728c-4378-8b46-dbfb38254e03"
+                    },
+                    "org_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                    },
+                    "empresa": {
+                      "type": "string",
+                      "example": "The Hub"
+                    },
+                    "clave": {
+                      "type": "null"
+                    },
+                    "no_activo": {
+                      "type": "string",
+                      "example": "CF-03"
+                    },
+                    "nombre": {
+                      "type": "string",
+                      "example": "Cargador frontal 03"
+                    },
+                    "clase_equipo": {
+                      "type": "string",
+                      "example": "Cargador frontal"
+                    },
+                    "marca": {
+                      "type": "null"
+                    },
+                    "modelo": {
+                      "type": "null"
+                    },
+                    "anio": {
+                      "type": "null"
+                    },
+                    "precio_x_hora": {
+                      "type": "null"
+                    },
+                    "minimum_usage_hours": {
+                      "type": "null"
+                    },
+                    "estado": {
+                      "type": "string",
+                      "example": "OBSOLETA",
+                      "enum": [
+                        "DISPONIBLE",
+                        "OCUPADA",
+                        "OBSOLETA"
+                      ]
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                    },
+                    "line_item_id": {
+                      "type": "null"
+                    },
+                    "fecha_inicio_uso": {
+                      "type": "string",
+                      "format": "date",
+                      "example": "2026-09-11"
+                    },
+                    "fecha_fin_uso": {
+                      "type": "string",
+                      "format": "date",
+                      "example": "2026-09-14"
+                    },
+                    "observaciones_asignacion": {
+                      "type": "string",
+                      "example": "Solicitud aprobada: Cargador frontal"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-09-12T00:05:09.853492+00:00"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-09-12T16:04:16.407630+00:00"
+                    },
+                    "project_name": {
+                      "type": "string",
+                      "example": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                    },
+                    "project_client_name": {
+                      "type": "string",
+                      "example": "Hackathon"
+                    },
+                    "project_manager_name": {
+                      "type": "string",
+                      "example": "Hackaton Admin"
+                    },
+                    "assigned_line_item": {
+                      "type": "null"
+                    },
+                    "motivo_baja": {
+                      "type": "null"
+                    },
+                    "fecha_baja": {
+                      "type": "null"
+                    },
+                    "mantenimiento_fecha_inicio": {
+                      "type": "null"
+                    },
+                    "mantenimiento_fecha_fin": {
+                      "type": "null"
+                    },
+                    "mantenimiento_notas": {
+                      "type": "null"
+                    },
+                    "occupied_without_project": {
+                      "type": "boolean"
+                    },
+                    "associated_operators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "7753f3fe-cffc-4032-9d3e-b77c3b04ca00"
+                          },
+                          "nombre": {
+                            "type": "string",
+                            "example": "Carlos Herrera"
+                          },
+                          "cod_trabajador": {
+                            "type": "string",
+                            "example": "MOT-015"
+                          },
+                          "is_active": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "catalog_precio_x_hora": {
+                      "type": "null"
+                    },
+                    "current_project_rate": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "c2e42914-364f-482b-a52f-973b0f86609c"
+                        },
+                        "org_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                        },
+                        "maquinaria_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "66faacde-728c-4378-8b46-dbfb38254e03"
+                        },
+                        "project_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                        },
+                        "precio_x_hora": {
+                          "type": "integer"
+                        },
+                        "effective_from": {
+                          "type": "string",
+                          "format": "date",
+                          "example": "2026-09-11"
+                        },
+                        "effective_to": {
+                          "type": "null"
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "example": "2026-09-12T01:00:01.535958+00:00"
+                        },
+                        "notes": {
+                          "type": "string",
+                          "example": "Tarifa al asignar proyecto"
+                        }
+                      }
+                    },
+                    "project_rates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "c2e42914-364f-482b-a52f-973b0f86609c"
+                          },
+                          "org_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                          },
+                          "maquinaria_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "66faacde-728c-4378-8b46-dbfb38254e03"
+                          },
+                          "project_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                          },
+                          "precio_x_hora": {
+                            "type": "integer"
+                          },
+                          "effective_from": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-09-11"
+                          },
+                          "effective_to": {
+                            "type": "null"
+                          },
+                          "created_by": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T01:00:01.535958+00:00"
+                          },
+                          "notes": {
+                            "type": "string",
+                            "example": "Tarifa al asignar proyecto"
+                          },
+                          "project_name": {
+                            "type": "string",
+                            "example": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                          }
+                        }
+                      }
+                    },
+                    "effective_precio_x_hora": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                  "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                  "empresa": "The Hub",
+                  "clave": null,
+                  "no_activo": "CF-03",
+                  "nombre": "Cargador frontal 03",
+                  "clase_equipo": "Cargador frontal",
+                  "marca": null,
+                  "modelo": null,
+                  "anio": null,
+                  "precio_x_hora": null,
+                  "minimum_usage_hours": null,
+                  "estado": "OBSOLETA",
+                  "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                  "line_item_id": null,
+                  "fecha_inicio_uso": "2026-09-11",
+                  "fecha_fin_uso": "2026-09-14",
+                  "observaciones_asignacion": "Solicitud aprobada: Cargador frontal",
+                  "created_at": "2026-09-12T00:05:09.853492+00:00",
+                  "updated_at": "2026-09-12T16:04:16.407630+00:00",
+                  "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión",
+                  "project_client_name": "Hackathon",
+                  "project_manager_name": "Hackaton Admin",
+                  "assigned_line_item": null,
+                  "motivo_baja": null,
+                  "fecha_baja": null,
+                  "mantenimiento_fecha_inicio": null,
+                  "mantenimiento_fecha_fin": null,
+                  "mantenimiento_notas": null,
+                  "occupied_without_project": false,
+                  "associated_operators": [
+                    {
+                      "id": "7753f3fe-cffc-4032-9d3e-b77c3b04ca00",
+                      "nombre": "Carlos Herrera",
+                      "cod_trabajador": "MOT-015",
+                      "is_active": true
+                    }
+                  ],
+                  "catalog_precio_x_hora": null,
+                  "current_project_rate": {
+                    "id": "c2e42914-364f-482b-a52f-973b0f86609c",
+                    "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                    "maquinaria_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                    "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                    "precio_x_hora": 45,
+                    "effective_from": "2026-09-11",
+                    "effective_to": null,
+                    "created_by": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                    "created_at": "2026-09-12T01:00:01.535958+00:00",
+                    "notes": "Tarifa al asignar proyecto"
+                  },
+                  "project_rates": [
+                    {
+                      "id": "c2e42914-364f-482b-a52f-973b0f86609c",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "maquinaria_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                      "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                      "precio_x_hora": 45,
+                      "effective_from": "2026-09-11",
+                      "effective_to": null,
+                      "created_by": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "created_at": "2026-09-12T01:00:01.535958+00:00",
+                      "notes": "Tarifa al asignar proyecto",
+                      "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                    }
+                  ],
+                  "effective_precio_x_hora": 45
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Update Maquinaria",
+        "description": "Update machinery.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaquinariaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Delete Maquinaria",
+        "description": "Delete machinery.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/{id}/actividad": {
+      "get": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Get Maquinaria Actividad",
+        "description": "Get activity log for machinery.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "7d276d5b-5c58-454b-a3a5-573151ecf800"
+                          },
+                          "tipo": {
+                            "type": "string",
+                            "example": "CAMBIO_ESTADO"
+                          },
+                          "titulo": {
+                            "type": "string",
+                            "example": "Cambio de estado a Obsoleta"
+                          },
+                          "descripcion": {
+                            "type": "string",
+                            "example": "mtto correctivo - faja"
+                          },
+                          "user_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T16:04:16.407630+00:00"
+                          },
+                          "user_name": {
+                            "type": "string",
+                            "example": "María José López Ramírez"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "7d276d5b-5c58-454b-a3a5-573151ecf800",
+                      "tipo": "CAMBIO_ESTADO",
+                      "titulo": "Cambio de estado a Obsoleta",
+                      "descripcion": "mtto correctivo - faja",
+                      "user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "created_at": "2026-09-12T16:04:16.407630+00:00",
+                      "user_name": "María José López Ramírez"
+                    },
+                    {
+                      "id": "d40f9da4-7c15-476b-9d76-32f317f99899",
+                      "tipo": "CAMBIO_ESTADO",
+                      "titulo": "Cambio de estado a Ocupada",
+                      "descripcion": "Solicitud aprobada: Cargador frontal",
+                      "user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "created_at": "2026-09-12T01:00:01.535958+00:00",
+                      "user_name": "María José López Ramírez"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/{id}/estado": {
+      "patch": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Update Maquinaria Estado",
+        "description": "Update machinery status and assignment/maintenance/obsoleta details.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaquinariaEstadoUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/{id}/history": {
+      "get": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Get Machinery History",
+        "description": "Return the product-facing machinery timeline for one machine.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "5a153cf3-1b0b-4d2d-afac-1cba7b491e37"
+                          },
+                          "org_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                          },
+                          "project_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                          },
+                          "machinery_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "66faacde-728c-4378-8b46-dbfb38254e03"
+                          },
+                          "event_type": {
+                            "type": "string",
+                            "example": "STATUS_CHANGED"
+                          },
+                          "event_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T16:04:16.407630+00:00"
+                          },
+                          "actor_user_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                          },
+                          "personnel_id": {
+                            "type": "null"
+                          },
+                          "source_type": {
+                            "type": "null"
+                          },
+                          "source_id": {
+                            "type": "null"
+                          },
+                          "title": {
+                            "type": "string",
+                            "example": "Estado actualizado"
+                          },
+                          "description": {
+                            "type": "string",
+                            "example": "Estado actualizado a OBSOLETA"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "properties": {
+                              "comment": {
+                                "type": "null"
+                              },
+                              "next_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "example": "OBSOLETA"
+                              },
+                              "previous_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "example": "OCUPADA"
+                              },
+                              "deactivated_operator_ids": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {}
+                              },
+                              "occupied_without_project": {
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
+                              },
+                              "mark_operator_unavailable": {
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
+                              },
+                              "source": {},
+                              "rate_id": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "uuid",
+                                "example": "c2e42914-364f-482b-a52f-973b0f86609c"
+                              },
+                              "project_id": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "uuid",
+                                "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                              },
+                              "precio_x_hora": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "effective_from": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date",
+                                "example": "2026-09-11"
+                              },
+                              "next_precio_x_hora": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "previous_project_id": {
+                                "type": "null"
+                              },
+                              "previous_precio_x_hora": {
+                                "type": "null"
+                              },
+                              "next_operator_id": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "uuid",
+                                "example": "7753f3fe-cffc-4032-9d3e-b77c3b04ca00"
+                              },
+                              "next_operator_code": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "example": "MOT-015"
+                              },
+                              "next_operator_name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "example": "Carlos Herrera"
+                              },
+                              "previous_operator_id": {
+                                "type": "null"
+                              },
+                              "previous_operator_code": {
+                                "type": "null"
+                              },
+                              "previous_operator_name": {
+                                "type": "null"
+                              }
+                            }
+                          },
+                          "gps_latitude": {
+                            "type": "null"
+                          },
+                          "gps_longitude": {
+                            "type": "null"
+                          },
+                          "gps_accuracy_meters": {
+                            "type": "null"
+                          },
+                          "gps_captured_at": {
+                            "type": "null"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T16:04:16.407630+00:00"
+                          },
+                          "personnel_name": {
+                            "type": "null"
+                          },
+                          "personnel_code": {
+                            "type": "null"
+                          },
+                          "actor_name": {
+                            "type": "string",
+                            "example": "María José López Ramírez"
+                          },
+                          "project_name": {
+                            "type": "string",
+                            "example": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "5a153cf3-1b0b-4d2d-afac-1cba7b491e37",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                      "machinery_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                      "event_type": "STATUS_CHANGED",
+                      "event_at": "2026-09-12T16:04:16.407630+00:00",
+                      "actor_user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "personnel_id": null,
+                      "source_type": null,
+                      "source_id": null,
+                      "title": "Estado actualizado",
+                      "description": "Estado actualizado a OBSOLETA",
+                      "metadata": {
+                        "comment": null,
+                        "next_status": "OBSOLETA",
+                        "previous_status": "OCUPADA",
+                        "deactivated_operator_ids": [],
+                        "occupied_without_project": false,
+                        "mark_operator_unavailable": false
+                      },
+                      "gps_latitude": null,
+                      "gps_longitude": null,
+                      "gps_accuracy_meters": null,
+                      "gps_captured_at": null,
+                      "created_at": "2026-09-12T16:04:16.407630+00:00",
+                      "personnel_name": null,
+                      "personnel_code": null,
+                      "actor_name": "María José López Ramírez",
+                      "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                    },
+                    {
+                      "id": "300be20b-45ed-4ec3-8355-22d77050310a",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                      "machinery_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                      "event_type": "RATE_CHANGED",
+                      "event_at": "2026-09-12T01:00:01.535958+00:00",
+                      "actor_user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "personnel_id": null,
+                      "source_type": null,
+                      "source_id": null,
+                      "title": "Tarifa de proyecto actualizada",
+                      "description": "Tarifa vigente $45.00/h desde 2026-09-11",
+                      "metadata": {
+                        "source": "machinery_request_approve",
+                        "rate_id": "c2e42914-364f-482b-a52f-973b0f86609c",
+                        "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                        "precio_x_hora": 45,
+                        "effective_from": "2026-09-11",
+                        "next_precio_x_hora": 45,
+                        "previous_project_id": null,
+                        "previous_precio_x_hora": null
+                      },
+                      "gps_latitude": null,
+                      "gps_longitude": null,
+                      "gps_accuracy_meters": null,
+                      "gps_captured_at": null,
+                      "created_at": "2026-09-12T01:00:01.535958+00:00",
+                      "personnel_name": null,
+                      "personnel_code": null,
+                      "actor_name": "María José López Ramírez",
+                      "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                    },
+                    {
+                      "id": "443a105e-3f1d-4014-8194-57f2d221ff6c",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                      "machinery_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                      "event_type": "OPERATOR_ASSIGNED",
+                      "event_at": "2026-09-12T01:00:01.535958+00:00",
+                      "actor_user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "personnel_id": null,
+                      "source_type": null,
+                      "source_id": null,
+                      "title": "Operador asignado",
+                      "description": "Operador asignado: Carlos Herrera",
+                      "metadata": {
+                        "source": "machinery_request_approve",
+                        "next_operator_id": "7753f3fe-cffc-4032-9d3e-b77c3b04ca00",
+                        "next_operator_code": "MOT-015",
+                        "next_operator_name": "Carlos Herrera",
+                        "previous_operator_id": null,
+                        "previous_operator_code": null,
+                        "previous_operator_name": null
+                      },
+                      "gps_latitude": null,
+                      "gps_longitude": null,
+                      "gps_accuracy_meters": null,
+                      "gps_captured_at": null,
+                      "created_at": "2026-09-12T01:00:01.535958+00:00",
+                      "personnel_name": null,
+                      "personnel_code": null,
+                      "actor_name": "María José López Ramírez",
+                      "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/{id}/partida": {
+      "patch": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Update Maquinaria Partida",
+        "description": "Update only the current partida associated to a maquinaria row.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaquinariaLineItemUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/equipos/{id}/usage-trend": {
+      "get": {
+        "tags": [
+          "Maquinaria"
+        ],
+        "summary": "Get Machinery Usage Trend",
+        "description": "Return daily machinery usage hours compared to its optional baseline.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 90,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "minimum_usage_hours": {
+                      "type": "null"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  }
+                },
+                "example": {
+                  "minimum_usage_hours": null,
+                  "items": []
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/fallas": {
+      "get": {
+        "tags": [
+          "Fallas"
+        ],
+        "summary": "List Failure Reports",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "empresa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Empresa"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria"
+            }
+          },
+          {
+            "name": "fecha_desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fecha Desde"
+            }
+          },
+          {
+            "name": "fecha_hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fecha Hasta"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "Reporte de falla. Derivado del SELECT del backend; el sandbox aún no tiene fallas cargadas, por eso no lleva ejemplo.",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "project_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid"
+                          },
+                          "maquinaria_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "personnel_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid"
+                          },
+                          "tipo_incidente": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "descripcion": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "observaciones": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "cod_trabajador": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Código del motorista, p. ej. MOT-014"
+                          },
+                          "operator_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "operativa": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "is_paro": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ],
+                            "description": "true = la falla detiene la operación"
+                          },
+                          "hour_meter": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "estado": {
+                            "type": "string",
+                            "enum": [
+                              "SIN_REVISAR",
+                              "PENDIENTE_INTERVENCION",
+                              "EN_PROCESO",
+                              "ESPERA_REPUESTOS",
+                              "TRASLADO_STD",
+                              "EN_PRUEBAS",
+                              "FINALIZADO",
+                              "RECHAZADO"
+                            ],
+                            "description": "Estado vigente, derivado del último evento de workflow. Por defecto SIN_REVISAR."
+                          },
+                          "categoria_falla": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "approver_comment": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "approver_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "empresa": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "clave": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "maquinaria_nombre": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "clase_equipo": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "ubicacion": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Nombre del proyecto"
+                          },
+                          "project_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "items": [],
+                  "total": 0,
+                  "page": 1,
+                  "limit": 5
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/fallas/counts": {
+      "get": {
+        "tags": [
+          "Fallas"
+        ],
+        "summary": "Get Failure Counts",
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "SIN_REVISAR": {
+                      "type": "integer"
+                    },
+                    "PENDIENTE_INTERVENCION": {
+                      "type": "integer"
+                    },
+                    "EN_PROCESO": {
+                      "type": "integer"
+                    },
+                    "ESPERA_REPUESTOS": {
+                      "type": "integer"
+                    },
+                    "TRASLADO_STD": {
+                      "type": "integer"
+                    },
+                    "EN_PRUEBAS": {
+                      "type": "integer"
+                    },
+                    "FINALIZADO": {
+                      "type": "integer"
+                    },
+                    "RECHAZADO": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "SIN_REVISAR": 0,
+                  "PENDIENTE_INTERVENCION": 0,
+                  "EN_PROCESO": 0,
+                  "ESPERA_REPUESTOS": 0,
+                  "TRASLADO_STD": 0,
+                  "EN_PRUEBAS": 0,
+                  "FINALIZADO": 0,
+                  "RECHAZADO": 0,
+                  "total": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/fallas/filters": {
+      "get": {
+        "tags": [
+          "Fallas"
+        ],
+        "summary": "Get Failure Filter Options",
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "empresas": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Aventra"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "empresas": [
+                    "Aventra",
+                    "DAURUS",
+                    "EconHackers",
+                    "FASI",
+                    "Goat Goating Goats",
+                    "Los Filósofos",
+                    "MechaBytes",
+                    "Negentropy",
+                    "Sync Masters",
+                    "The Hub",
+                    "Tralaleritos",
+                    "Truers",
+                    "UTECOps",
+                    "Valdocco Studio"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/fallas/{id}": {
+      "get": {
+        "tags": [
+          "Fallas"
+        ],
+        "summary": "Get Failure Report",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Failure Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Reporte de falla. Derivado del SELECT del backend; el sandbox aún no tiene fallas cargadas, por eso no lleva ejemplo.",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "project_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "maquinaria_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "personnel_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "tipo_incidente": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "descripcion": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "observaciones": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "cod_trabajador": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Código del motorista, p. ej. MOT-014"
+                    },
+                    "operator_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "operativa": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "is_paro": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "true = la falla detiene la operación"
+                    },
+                    "hour_meter": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "estado": {
+                      "type": "string",
+                      "enum": [
+                        "SIN_REVISAR",
+                        "PENDIENTE_INTERVENCION",
+                        "EN_PROCESO",
+                        "ESPERA_REPUESTOS",
+                        "TRASLADO_STD",
+                        "EN_PRUEBAS",
+                        "FINALIZADO",
+                        "RECHAZADO"
+                      ],
+                      "description": "Estado vigente, derivado del último evento de workflow. Por defecto SIN_REVISAR."
+                    },
+                    "categoria_falla": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "approver_comment": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "approver_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "empresa": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "clave": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "maquinaria_nombre": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "clase_equipo": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ubicacion": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Nombre del proyecto"
+                    },
+                    "project_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Fallas"
+        ],
+        "summary": "Actualizar una falla (approve / reject / status / finalize / paro)",
+        "description": "El proxy agrupa cinco endpoints del backend en un solo PATCH. La acción se elige con el parámetro de query `action`; el cuerpo depende de la acción. Sin un `action` válido devuelve **400 Acción no válida**.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "approve",
+                "reject",
+                "status",
+                "finalize",
+                "paro"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Falla actualizada"
+          },
+          "400": {
+            "description": "Acción no válida"
+          },
+          "403": {
+            "description": "Sin permiso"
+          },
+          "404": {
+            "description": "No encontrada"
+          }
+        }
+      }
+    },
+    "/api/maquinaria/operadores": {
+      "get": {
+        "tags": [
+          "Operadores"
+        ],
+        "summary": "List Operators",
+        "description": "List machinery operators for the current org. Omit is_active to return all.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "c5157688-3cea-45b0-87e0-4ec6a1ee86d9"
+                          },
+                          "org_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                          },
+                          "cod_trabajador": {
+                            "type": "string",
+                            "example": "MOT-014"
+                          },
+                          "nombre": {
+                            "type": "string",
+                            "example": "Adriana  Steiner"
+                          },
+                          "proveedor": {
+                            "type": "string",
+                            "example": "asteiner"
+                          },
+                          "is_active": {
+                            "type": "boolean"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T00:12:55.151992+00:00"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T00:12:55.151992+00:00"
+                          },
+                          "active_assignment_count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "c5157688-3cea-45b0-87e0-4ec6a1ee86d9",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "cod_trabajador": "MOT-014",
+                      "nombre": "Adriana  Steiner",
+                      "proveedor": "asteiner",
+                      "is_active": true,
+                      "created_at": "2026-09-12T00:12:55.151992+00:00",
+                      "updated_at": "2026-09-12T00:12:55.151992+00:00",
+                      "active_assignment_count": 0
+                    },
+                    {
+                      "id": "3a323fdc-c8ff-422a-b821-3b2e72456833",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "cod_trabajador": "MOT-016",
+                      "nombre": "Americo Diaz",
+                      "proveedor": "adiaz",
+                      "is_active": true,
+                      "created_at": "2026-09-12T00:13:26.379555+00:00",
+                      "updated_at": "2026-09-12T00:13:26.379555+00:00",
+                      "active_assignment_count": 0
+                    },
+                    {
+                      "id": "7753f3fe-cffc-4032-9d3e-b77c3b04ca00",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "cod_trabajador": "MOT-015",
+                      "nombre": "Carlos Herrera",
+                      "proveedor": "cherrera",
+                      "is_active": true,
+                      "created_at": "2026-09-12T00:13:09.755618+00:00",
+                      "updated_at": "2026-09-12T00:13:09.755618+00:00",
+                      "active_assignment_count": 1
+                    },
+                    {
+                      "id": "32d09df1-605b-4222-b1ba-17c13d1f9f6e",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "cod_trabajador": "MOT-012",
+                      "nombre": "Diego Nolasco Zamora",
+                      "proveedor": "Valdocco Studio",
+                      "is_active": true,
+                      "created_at": "2026-09-12T00:11:22.729558+00:00",
+                      "updated_at": "2026-09-12T00:11:22.729558+00:00",
+                      "active_assignment_count": 0
+                    },
+                    {
+                      "id": "b17effaa-1cb5-483c-9def-aa8343e7c2f3",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "cod_trabajador": "MOT-013",
+                      "nombre": "Douglas Omar Beltrán Robles",
+                      "proveedor": "Truers",
+                      "is_active": true,
+                      "created_at": "2026-09-12T00:12:20.318804+00:00",
+                      "updated_at": "2026-09-12T00:12:20.318804+00:00",
+                      "active_assignment_count": 0
+                    }
+                  ],
+                  "total": 16,
+                  "page": 1,
+                  "limit": 5
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Operadores"
+        ],
+        "summary": "Create Operator",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperatorCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/operadores/{id}": {
+      "patch": {
+        "tags": [
+          "Operadores"
+        ],
+        "summary": "Update Operator",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Operator Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperatorUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/operadores/{id}/active": {
+      "patch": {
+        "tags": [
+          "Operadores"
+        ],
+        "summary": "Set Operator Active",
+        "description": "Soft-deactivate or reactivate an operator. History is preserved.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Operator Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperatorActiveBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/requests": {
+      "get": {
+        "tags": [
+          "Solicitudes"
+        ],
+        "summary": "List Maquinaria Requests",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "0cbbbd77-4593-4791-9be5-afd46b06c888"
+                          },
+                          "org_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                          },
+                          "project_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                          },
+                          "requested_by_user_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                          },
+                          "tipo": {
+                            "type": "string",
+                            "example": "Cargador frontal"
+                          },
+                          "fecha_inicio": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-09-16"
+                          },
+                          "fecha_fin": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-09-18"
+                          },
+                          "comentarios": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "example": "Solicito un Cargador Frontal en el Proyecto 14 - The Hub"
+                          },
+                          "status": {
+                            "type": "string",
+                            "example": "PENDIENTE",
+                            "enum": [
+                              "PENDIENTE",
+                              "APROBADA",
+                              "RECHAZADA"
+                            ]
+                          },
+                          "approved_by_user_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                          },
+                          "approved_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "example": "2026-09-12T01:00:01.535958+00:00"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T16:02:06.141170+00:00"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-12T16:02:06.141170+00:00"
+                          },
+                          "project_name": {
+                            "type": "string",
+                            "example": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                          },
+                          "requested_by_name": {
+                            "type": "string",
+                            "example": "María José López Ramírez"
+                          },
+                          "approved_by_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "example": "María José López Ramírez"
+                          },
+                          "maquinaria_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "example": "66faacde-728c-4378-8b46-dbfb38254e03"
+                          },
+                          "maquinaria_no_activo": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "example": "CF-03"
+                          },
+                          "maquinaria_nombre": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "example": "Cargador frontal 03"
+                          },
+                          "maquinaria_clave": {
+                            "type": "null"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "0cbbbd77-4593-4791-9be5-afd46b06c888",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                      "requested_by_user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "tipo": "Cargador frontal",
+                      "fecha_inicio": "2026-09-16",
+                      "fecha_fin": "2026-09-18",
+                      "comentarios": null,
+                      "status": "PENDIENTE",
+                      "approved_by_user_id": null,
+                      "approved_at": null,
+                      "created_at": "2026-09-12T16:02:06.141170+00:00",
+                      "updated_at": "2026-09-12T16:02:06.141170+00:00",
+                      "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión",
+                      "requested_by_name": "María José López Ramírez",
+                      "approved_by_name": null,
+                      "maquinaria_id": null,
+                      "maquinaria_no_activo": null,
+                      "maquinaria_nombre": null,
+                      "maquinaria_clave": null
+                    },
+                    {
+                      "id": "46d2573e-08d3-4855-971d-2fbf9564e135",
+                      "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                      "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                      "requested_by_user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "tipo": "Cargador frontal",
+                      "fecha_inicio": "2026-09-11",
+                      "fecha_fin": "2026-09-14",
+                      "comentarios": "Solicito un Cargador Frontal en el Proyecto 14 - The Hub",
+                      "status": "APROBADA",
+                      "approved_by_user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                      "approved_at": "2026-09-12T01:00:01.535958+00:00",
+                      "created_at": "2026-09-12T00:59:19.326175+00:00",
+                      "updated_at": "2026-09-12T01:00:01.535958+00:00",
+                      "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión",
+                      "requested_by_name": "María José López Ramírez",
+                      "approved_by_name": "María José López Ramírez",
+                      "maquinaria_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                      "maquinaria_no_activo": "CF-03",
+                      "maquinaria_nombre": "Cargador frontal 03",
+                      "maquinaria_clave": null
+                    }
+                  ],
+                  "total": 2,
+                  "page": 1,
+                  "limit": 5
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/requests/{id}": {
+      "get": {
+        "tags": [
+          "Solicitudes"
+        ],
+        "summary": "Get Maquinaria Request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "46d2573e-08d3-4855-971d-2fbf9564e135"
+                    },
+                    "org_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                    },
+                    "requested_by_user_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                    },
+                    "tipo": {
+                      "type": "string",
+                      "example": "Cargador frontal"
+                    },
+                    "fecha_inicio": {
+                      "type": "string",
+                      "format": "date",
+                      "example": "2026-09-11"
+                    },
+                    "fecha_fin": {
+                      "type": "string",
+                      "format": "date",
+                      "example": "2026-09-14"
+                    },
+                    "comentarios": {
+                      "type": "string",
+                      "example": "Solicito un Cargador Frontal en el Proyecto 14 - The Hub"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "APROBADA",
+                      "enum": [
+                        "PENDIENTE",
+                        "APROBADA",
+                        "RECHAZADA"
+                      ]
+                    },
+                    "approved_by_user_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                    },
+                    "approved_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-09-12T01:00:01.535958+00:00"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-09-12T00:59:19.326175+00:00"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-09-12T01:00:01.535958+00:00"
+                    },
+                    "project_name": {
+                      "type": "string",
+                      "example": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                    },
+                    "requested_by_name": {
+                      "type": "string",
+                      "example": "María José López Ramírez"
+                    },
+                    "approved_by_name": {
+                      "type": "string",
+                      "example": "María José López Ramírez"
+                    },
+                    "maquinaria_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "66faacde-728c-4378-8b46-dbfb38254e03"
+                    },
+                    "maquinaria_no_activo": {
+                      "type": "string",
+                      "example": "CF-03"
+                    },
+                    "maquinaria_nombre": {
+                      "type": "string",
+                      "example": "Cargador frontal 03"
+                    },
+                    "maquinaria_clave": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "46d2573e-08d3-4855-971d-2fbf9564e135",
+                  "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                  "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                  "requested_by_user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                  "tipo": "Cargador frontal",
+                  "fecha_inicio": "2026-09-11",
+                  "fecha_fin": "2026-09-14",
+                  "comentarios": "Solicito un Cargador Frontal en el Proyecto 14 - The Hub",
+                  "status": "APROBADA",
+                  "approved_by_user_id": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                  "approved_at": "2026-09-12T01:00:01.535958+00:00",
+                  "created_at": "2026-09-12T00:59:19.326175+00:00",
+                  "updated_at": "2026-09-12T01:00:01.535958+00:00",
+                  "project_name": "PROY-014 - The Hub - Proyecto Xi - La Unión",
+                  "requested_by_name": "María José López Ramírez",
+                  "approved_by_name": "María José López Ramírez",
+                  "maquinaria_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+                  "maquinaria_no_activo": "CF-03",
+                  "maquinaria_nombre": "Cargador frontal 03",
+                  "maquinaria_clave": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maquinaria/requests/{id}/approve": {
+      "patch": {
+        "tags": [
+          "Solicitudes"
+        ],
+        "summary": "Approve Maquinaria Request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaquinariaRequestApprove"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "tags": [
+          "Proyectos"
+        ],
+        "summary": "List Projects",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "managerId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Managerid"
+            }
+          },
+          {
+            "name": "activeOnly",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Activeonly"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                          },
+                          "client_name": {
+                            "type": "string",
+                            "example": "Hackathon"
+                          },
+                          "description": {
+                            "type": "string",
+                            "example": "La Unión"
+                          },
+                          "notes": {
+                            "type": "string",
+                            "example": ""
+                          },
+                          "start_date": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-09-11"
+                          },
+                          "end_date": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-09-14"
+                          },
+                          "status": {
+                            "type": "string",
+                            "example": "CREADO"
+                          },
+                          "archived_at": {
+                            "type": "null"
+                          },
+                          "project_manager_user_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "4a70cb92-19c7-4af8-800b-216454202960"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-11T23:34:44.014294+00:00"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2026-09-11T23:34:44.014294+00:00"
+                          },
+                          "kpi_apply_iva": {
+                            "type": "boolean"
+                          },
+                          "kpi_iva_rate": {
+                            "type": "number"
+                          },
+                          "kpi_utility_rate": {
+                            "type": "null"
+                          },
+                          "manager_name": {
+                            "type": "string",
+                            "example": "Hackaton Admin"
+                          },
+                          "progress_pct": {
+                            "type": "integer"
+                          },
+                          "total_budget": {
+                            "type": "integer"
+                          },
+                          "used_budget": {
+                            "type": "integer"
+                          },
+                          "collaborators_count": {
+                            "type": "integer"
+                          },
+                          "kpi_breakdown": {
+                            "type": "object",
+                            "properties": {
+                              "direct_cost": {
+                                "type": "integer"
+                              },
+                              "indirect_cost": {
+                                "type": "integer"
+                              },
+                              "utility_rate": {
+                                "type": "null"
+                              },
+                              "utility_amount": {
+                                "type": "integer"
+                              },
+                              "iva_applied": {
+                                "type": "boolean"
+                              },
+                              "iva_rate": {
+                                "type": "number"
+                              },
+                              "iva_amount": {
+                                "type": "integer"
+                              },
+                              "total_budget": {
+                                "type": "integer"
+                              },
+                              "used_budget": {
+                                "type": "integer"
+                              },
+                              "progress_pct": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                      "name": "PROY-014 - The Hub - Proyecto Xi - La Unión",
+                      "client_name": "Hackathon",
+                      "description": "La Unión",
+                      "notes": "",
+                      "start_date": "2026-09-11",
+                      "end_date": "2026-09-14",
+                      "status": "CREADO",
+                      "archived_at": null,
+                      "project_manager_user_id": "4a70cb92-19c7-4af8-800b-216454202960",
+                      "created_at": "2026-09-11T23:34:44.014294+00:00",
+                      "updated_at": "2026-09-11T23:34:44.014294+00:00",
+                      "kpi_apply_iva": false,
+                      "kpi_iva_rate": 0.13,
+                      "kpi_utility_rate": null,
+                      "manager_name": "Hackaton Admin",
+                      "progress_pct": 0,
+                      "total_budget": 0,
+                      "used_budget": 0,
+                      "collaborators_count": 0,
+                      "kpi_breakdown": {
+                        "direct_cost": 0,
+                        "indirect_cost": 0,
+                        "utility_rate": null,
+                        "utility_amount": 0,
+                        "iva_applied": false,
+                        "iva_rate": 0.13,
+                        "iva_amount": 0,
+                        "total_budget": 0,
+                        "used_budget": 0,
+                        "progress_pct": 0
+                      }
+                    },
+                    {
+                      "id": "866173ea-4bd2-47a8-b555-e17da79f61ad",
+                      "name": "PROY-013 - Truers - Proyecto Nu - Morazán",
+                      "client_name": "Hackathon",
+                      "description": "Morazán",
+                      "notes": "",
+                      "start_date": "2026-09-11",
+                      "end_date": "2026-09-14",
+                      "status": "CREADO",
+                      "archived_at": null,
+                      "project_manager_user_id": "4a70cb92-19c7-4af8-800b-216454202960",
+                      "created_at": "2026-09-11T23:33:59.208046+00:00",
+                      "updated_at": "2026-09-11T23:33:59.208046+00:00",
+                      "kpi_apply_iva": false,
+                      "kpi_iva_rate": 0.13,
+                      "kpi_utility_rate": null,
+                      "manager_name": "Hackaton Admin",
+                      "progress_pct": 0,
+                      "total_budget": 0,
+                      "used_budget": 0,
+                      "collaborators_count": 0,
+                      "kpi_breakdown": {
+                        "direct_cost": 0,
+                        "indirect_cost": 0,
+                        "utility_rate": null,
+                        "utility_amount": 0,
+                        "iva_applied": false,
+                        "iva_rate": 0.13,
+                        "iva_amount": 0,
+                        "total_budget": 0,
+                        "used_budget": 0,
+                        "progress_pct": 0
+                      }
+                    },
+                    {
+                      "id": "f4b817ea-a89c-482a-b3b2-6914543c75dc",
+                      "name": "PROY-012 - Valdocco Studio - Proyecto Mu - San Miguel",
+                      "client_name": "Hackathon",
+                      "description": "San Miguel",
+                      "notes": "",
+                      "start_date": "2026-09-11",
+                      "end_date": "2026-09-14",
+                      "status": "CREADO",
+                      "archived_at": null,
+                      "project_manager_user_id": "8a2b273b-cb22-4e6c-bd2f-efb7f204c7a3",
+                      "created_at": "2026-09-11T23:31:36.081113+00:00",
+                      "updated_at": "2026-09-11T23:31:36.081113+00:00",
+                      "kpi_apply_iva": false,
+                      "kpi_iva_rate": 0.13,
+                      "kpi_utility_rate": null,
+                      "manager_name": "Diego Nolasco Zamora",
+                      "progress_pct": 0,
+                      "total_budget": 0,
+                      "used_budget": 0,
+                      "collaborators_count": 0,
+                      "kpi_breakdown": {
+                        "direct_cost": 0,
+                        "indirect_cost": 0,
+                        "utility_rate": null,
+                        "utility_amount": 0,
+                        "iva_applied": false,
+                        "iva_rate": 0.13,
+                        "iva_amount": 0,
+                        "total_budget": 0,
+                        "used_budget": 0,
+                        "progress_pct": 0
+                      }
+                    },
+                    {
+                      "id": "ce21d533-6c01-4435-98c8-88108a281163",
+                      "name": "PROY-011 - UTECOps - Proyecto Lambda - Usulután",
+                      "client_name": "Hackathon",
+                      "description": "Usulután",
+                      "notes": "",
+                      "start_date": "2026-09-11",
+                      "end_date": "2026-09-14",
+                      "status": "CREADO",
+                      "archived_at": null,
+                      "project_manager_user_id": "be895d74-6ac4-4855-ae8e-a5f42dcee9b8",
+                      "created_at": "2026-09-11T23:30:59.739847+00:00",
+                      "updated_at": "2026-09-11T23:30:59.739847+00:00",
+                      "kpi_apply_iva": false,
+                      "kpi_iva_rate": 0.13,
+                      "kpi_utility_rate": null,
+                      "manager_name": "Miguel Alexander Valle Burgos",
+                      "progress_pct": 0,
+                      "total_budget": 0,
+                      "used_budget": 0,
+                      "collaborators_count": 0,
+                      "kpi_breakdown": {
+                        "direct_cost": 0,
+                        "indirect_cost": 0,
+                        "utility_rate": null,
+                        "utility_amount": 0,
+                        "iva_applied": false,
+                        "iva_rate": 0.13,
+                        "iva_amount": 0,
+                        "total_budget": 0,
+                        "used_budget": 0,
+                        "progress_pct": 0
+                      }
+                    },
+                    {
+                      "id": "7d337ce3-0d01-46a4-8fcf-c9cdfe2e5569",
+                      "name": "PROY-010 - Tralaleritos - Proyecto Kappa - San Vicente",
+                      "client_name": "Hackathon",
+                      "description": "San Vicente",
+                      "notes": "",
+                      "start_date": "2026-09-11",
+                      "end_date": "2026-09-14",
+                      "status": "CREADO",
+                      "archived_at": null,
+                      "project_manager_user_id": "752bd3ba-d015-4261-837c-1fe8f694703a",
+                      "created_at": "2026-09-11T23:30:25.068464+00:00",
+                      "updated_at": "2026-09-11T23:30:25.068464+00:00",
+                      "kpi_apply_iva": false,
+                      "kpi_iva_rate": 0.13,
+                      "kpi_utility_rate": null,
+                      "manager_name": "Leví Guerra",
+                      "progress_pct": 0,
+                      "total_budget": 0,
+                      "used_budget": 0,
+                      "collaborators_count": 0,
+                      "kpi_breakdown": {
+                        "direct_cost": 0,
+                        "indirect_cost": 0,
+                        "utility_rate": null,
+                        "utility_amount": 0,
+                        "iva_applied": false,
+                        "iva_rate": 0.13,
+                        "iva_amount": 0,
+                        "total_budget": 0,
+                        "used_budget": 0,
+                        "progress_pct": 0
+                      }
+                    }
+                  ],
+                  "page": 1,
+                  "limit": 5
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{id}": {
+      "get": {
+        "tags": [
+          "Proyectos"
+        ],
+        "summary": "Get Project",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta verificada contra el sandbox el 2026-09-12.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "39723f32-8bb5-4158-a415-2a3d49b0993b"
+                    },
+                    "org_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "a6d0c330-d298-4c30-9bc0-970a6909a4ef"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "PROY-014 - The Hub - Proyecto Xi - La Unión"
+                    },
+                    "client_name": {
+                      "type": "string",
+                      "example": "Hackathon"
+                    },
+                    "description": {
+                      "type": "string",
+                      "example": "La Unión"
+                    },
+                    "notes": {
+                      "type": "string",
+                      "example": ""
+                    },
+                    "start_date": {
+                      "type": "string",
+                      "format": "date",
+                      "example": "2026-09-11"
+                    },
+                    "end_date": {
+                      "type": "string",
+                      "format": "date",
+                      "example": "2026-09-14"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "CREADO"
+                    },
+                    "project_manager_user_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "4a70cb92-19c7-4af8-800b-216454202960"
+                    },
+                    "created_by": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-09-11T23:34:44.014294+00:00"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-09-11T23:34:44.014294+00:00"
+                    },
+                    "archived_at": {
+                      "type": "null"
+                    },
+                    "kpi_apply_iva": {
+                      "type": "boolean"
+                    },
+                    "kpi_iva_rate": {
+                      "type": "number"
+                    },
+                    "kpi_utility_rate": {
+                      "type": "null"
+                    },
+                    "manager_name": {
+                      "type": "string",
+                      "example": "Hackaton Admin"
+                    },
+                    "progress_pct": {
+                      "type": "integer"
+                    },
+                    "total_budget": {
+                      "type": "integer"
+                    },
+                    "used_budget": {
+                      "type": "integer"
+                    },
+                    "collaborators_count": {
+                      "type": "integer"
+                    },
+                    "days_remaining": {
+                      "type": "integer"
+                    },
+                    "kpi_breakdown": {
+                      "type": "object",
+                      "properties": {
+                        "direct_cost": {
+                          "type": "integer"
+                        },
+                        "indirect_cost": {
+                          "type": "integer"
+                        },
+                        "utility_rate": {
+                          "type": "null"
+                        },
+                        "utility_amount": {
+                          "type": "integer"
+                        },
+                        "iva_applied": {
+                          "type": "boolean"
+                        },
+                        "iva_rate": {
+                          "type": "number"
+                        },
+                        "iva_amount": {
+                          "type": "integer"
+                        },
+                        "total_budget": {
+                          "type": "integer"
+                        },
+                        "used_budget": {
+                          "type": "integer"
+                        },
+                        "progress_pct": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+                  "org_id": "a6d0c330-d298-4c30-9bc0-970a6909a4ef",
+                  "name": "PROY-014 - The Hub - Proyecto Xi - La Unión",
+                  "client_name": "Hackathon",
+                  "description": "La Unión",
+                  "notes": "",
+                  "start_date": "2026-09-11",
+                  "end_date": "2026-09-14",
+                  "status": "CREADO",
+                  "project_manager_user_id": "4a70cb92-19c7-4af8-800b-216454202960",
+                  "created_by": "98bf9d4d-fb00-4680-9883-6a72cf0bae0e",
+                  "created_at": "2026-09-11T23:34:44.014294+00:00",
+                  "updated_at": "2026-09-11T23:34:44.014294+00:00",
+                  "archived_at": null,
+                  "kpi_apply_iva": false,
+                  "kpi_iva_rate": 0.13,
+                  "kpi_utility_rate": null,
+                  "manager_name": "Hackaton Admin",
+                  "progress_pct": 0,
+                  "total_budget": 0,
+                  "used_budget": 0,
+                  "collaborators_count": 0,
+                  "days_remaining": 2,
+                  "kpi_breakdown": {
+                    "direct_cost": 0,
+                    "indirect_cost": 0,
+                    "utility_rate": null,
+                    "utility_amount": 0,
+                    "iva_applied": false,
+                    "iva_rate": 0.13,
+                    "iva_amount": 0,
+                    "total_budget": 0,
+                    "used_budget": 0,
+                    "progress_pct": 0
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MachineryUsageTrendItem": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "actual_hours": {
+            "type": "number",
+            "title": "Actual Hours"
+          },
+          "minimum_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Hours"
+          },
+          "entries_count": {
+            "type": "integer",
+            "title": "Entries Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "label",
+          "actual_hours",
+          "entries_count"
+        ],
+        "title": "MachineryUsageTrendItem"
+      },
+      "MachineryUsageTrendResponse": {
+        "properties": {
+          "minimum_usage_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Usage Hours"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MachineryUsageTrendItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "MachineryUsageTrendResponse"
+      },
+      "MaquinariaCreate": {
+        "properties": {
+          "empresa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empresa"
+          },
+          "clave": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clave"
+          },
+          "no_activo": {
+            "type": "string",
+            "title": "No Activo"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "clase_equipo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clase Equipo"
+          },
+          "marca": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marca"
+          },
+          "modelo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelo"
+          },
+          "anio": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anio"
+          },
+          "precio_x_hora": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio X Hora"
+          },
+          "minimum_usage_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Usage Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "no_activo",
+          "nombre"
+        ],
+        "title": "MaquinariaCreate"
+      },
+      "MaquinariaEstadoUpdate": {
+        "properties": {
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "fecha_inicio_uso": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Inicio Uso"
+          },
+          "fecha_fin_uso": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Fin Uso"
+          },
+          "observaciones_asignacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observaciones Asignacion"
+          },
+          "motivo_baja": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Baja"
+          },
+          "fecha_baja": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Baja"
+          },
+          "mantenimiento_fecha_inicio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mantenimiento Fecha Inicio"
+          },
+          "mantenimiento_fecha_fin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mantenimiento Fecha Fin"
+          },
+          "mantenimiento_notas": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mantenimiento Notas"
+          },
+          "mark_operator_unavailable": {
+            "type": "boolean",
+            "title": "Mark Operator Unavailable",
+            "default": false
+          },
+          "precio_x_hora": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio X Hora"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado"
+        ],
+        "title": "MaquinariaEstadoUpdate"
+      },
+      "MaquinariaLineItemUpdate": {
+        "properties": {
+          "line_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Item Id"
+          }
+        },
+        "type": "object",
+        "title": "MaquinariaLineItemUpdate"
+      },
+      "MaquinariaRequestApprove": {
+        "properties": {
+          "maquinaria_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Maquinaria Id"
+          },
+          "fecha_inicio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Inicio"
+          },
+          "fecha_fin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Fin"
+          },
+          "operator_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator Id"
+          },
+          "precio_x_hora": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio X Hora"
+          }
+        },
+        "type": "object",
+        "required": [
+          "maquinaria_id"
+        ],
+        "title": "MaquinariaRequestApprove"
+      },
+      "MaquinariaUpdate": {
+        "properties": {
+          "empresa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empresa"
+          },
+          "clave": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clave"
+          },
+          "no_activo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Activo"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "clase_equipo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clase Equipo"
+          },
+          "marca": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marca"
+          },
+          "modelo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelo"
+          },
+          "anio": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anio"
+          },
+          "precio_x_hora": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio X Hora"
+          },
+          "minimum_usage_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Usage Hours"
+          }
+        },
+        "type": "object",
+        "title": "MaquinariaUpdate"
+      },
+      "OperatorActiveBody": {
+        "properties": {
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_active"
+        ],
+        "title": "OperatorActiveBody"
+      },
+      "OperatorCreate": {
+        "properties": {
+          "cod_trabajador": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Cod Trabajador"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Nombre"
+          },
+          "proveedor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proveedor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cod_trabajador",
+          "nombre"
+        ],
+        "title": "OperatorCreate"
+      },
+      "OperatorUpdate": {
+        "properties": {
+          "cod_trabajador": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cod Trabajador"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "proveedor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proveedor"
+          }
+        },
+        "type": "object",
+        "title": "OperatorUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session",
+        "description": "Cookie de sesión fijada por POST /api/auth/login (Secure, HttpOnly, SameSite=strict)."
+      }
+    }
+  },
+  "security": [
+    {
+      "cookieAuth": []
+    }
+  ]
+}

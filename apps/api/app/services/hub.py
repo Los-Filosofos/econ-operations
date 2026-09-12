@@ -1,7 +1,13 @@
 from datetime import UTC, date, datetime, timedelta, timezone
 
 from app.core.config import Settings
-from app.integrations.fixtures import FIXTURE_AS_OF, fixture_records
+from app.integrations.fixtures import (
+    FIXTURE_AS_OF,
+    FIXTURE_EQUIPMENT_TOTAL,
+    FIXTURE_OBSERVED_ON,
+    FIXTURE_REQUESTS_TOTAL,
+    fixture_records,
+)
 from app.integrations.nexus import NexusConnector, NexusReadError, NexusSnapshot
 from app.models.hub import (
     AlertRecord,
@@ -34,7 +40,7 @@ def _plan_date(value: str | None) -> date | None:
 
 
 def evaluate_alerts(
-    equipment: list[EquipmentRecord], requests: list[RequestRecord], as_of: datetime
+    equipment: list[EquipmentRecord], requests: list[RequestRecord], as_of: datetime | None
 ) -> list[AlertRecord]:
     alerts = []
     for item in equipment:
@@ -89,7 +95,7 @@ def evaluate_alerts(
     for item in requests:
         status = item.status.upper()
         starts_on = _plan_date(item.starts_on)
-        if status in {"PENDIENTE", "PENDING"} and starts_on is not None:
+        if status in {"PENDIENTE", "PENDING"} and starts_on is not None and as_of is not None:
             if starts_on <= as_of.astimezone(BUSINESS_TIMEZONE).date():
                 alerts.append(
                     AlertRecord(
@@ -146,6 +152,14 @@ def _map_live(
             machinery_id=f"nexus:equipment:{item.maquinaria_id}" if item.maquinaria_id else None,
             status=item.status,
             starts_on=item.fecha_inicio,
+            ends_on=item.fecha_fin,
+            machinery_type=item.tipo,
+            requested_by=item.requested_by_name,
+            requested_by_id=item.requested_by_user_id,
+            comments=item.comentarios,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            approved_at=item.approved_at,
             provenance=provenance(item.id),
         )
         for item in snapshot.requests
@@ -157,6 +171,7 @@ def _map_live(
             asset_number=item.no_activo,
             name=item.nombre,
             company=item.empresa,
+            equipment_class=item.clase_equipo,
             project_id=item.project_id,
             project_name=item.project_name,
             machinery_status=item.estado,
@@ -170,6 +185,8 @@ def _map_live(
                 "se relacionan solo por maquinaria_id exacto; no prueban asignación vigente."
             ),
             provenance=provenance(item.id),
+            created_at=item.created_at,
+            updated_at=item.updated_at,
         )
         for item in snapshot.equipment
     ]
@@ -208,7 +225,6 @@ def read_hub(
     """Shared read projection for HTTP and Dash; never fall back between data modes."""
     if mode not in {"fixture", "live"} or len(search) > 100:
         raise ValueError("Consulta inválida: comprueba el origen y la búsqueda.")
-    generated_at = datetime.now(UTC)
     search = search.strip()
     equipment: list[EquipmentRecord] = []
     requests: list[RequestRecord] = []
@@ -219,18 +235,27 @@ def read_hub(
     if mode == "fixture":
         equipment, requests = fixture_records()
         observed_at = FIXTURE_AS_OF
-        equipment_total, requests_total = len(equipment), len(requests)
-        complete = available = True
+        equipment_total, requests_total = FIXTURE_EQUIPMENT_TOTAL, FIXTURE_REQUESTS_TOTAL
+        available = True
         sources = [
             SourceStatus(
-                id=source,
-                label=label,
+                id="nexus",
+                label="Prisma / Nexus",
                 status="fixture",
-                environment="local",
-                observed_at=observed_at,
-                message="Casos sintéticos locales; no son lecturas ni copias del sandbox.",
-            )
-            for source, label in [("nexus", "Prisma / Nexus"), ("startrack", "Startrack")]
+                environment="sandbox",
+                observed_on=FIXTURE_OBSERVED_ON,
+                message=(
+                    "Muestras sintéticas del OpenAPI proporcionado, documentadas el 12/09/2026. "
+                    "No tienen un corte conjunto ni acreditan el estado actual del sandbox."
+                ),
+            ),
+            SourceStatus(
+                id="startrack",
+                label="Startrack",
+                status="not_configured",
+                environment="sandbox",
+                message="Las muestras proporcionadas no incluyen tareas ni evidencia de recepción.",
+            ),
         ]
     else:
         nexus_status = "disabled"
@@ -275,7 +300,7 @@ def read_hub(
             ),
         ]
     equipment, requests = _filter_records(equipment, requests, search)
-    alerts = evaluate_alerts(equipment, requests, observed_at or generated_at)
+    alerts = evaluate_alerts(equipment, requests, observed_at)
     summary = HubSummary()
     if available:
         summary = HubSummary(
@@ -303,6 +328,7 @@ def read_hub(
             description=(
                 "Los conteos describen únicamente los registros devueltos y el filtro local. "
                 "No son KPIs globales, disponibilidad física ni tendencias históricas. "
+                "Las muestras del contrato tienen cobertura parcial, sin corte conjunto. "
                 "En vivo se consultan páginas acotadas y Startrack permanece pendiente."
             ),
         ),

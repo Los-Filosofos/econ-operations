@@ -5,7 +5,14 @@ from urllib.parse import parse_qs, quote, urlencode
 
 from app.models.hub import DataMode
 
-FILTERS = {"all", "pending_started", "approved_unassigned", "active_failures", "unlinked"}
+FILTERS = {
+    "all",
+    "pending_started",
+    "approved_unassigned",
+    "unassigned",
+    "active_failures",
+    "unlinked",
+}
 
 
 @dataclass(frozen=True)
@@ -29,6 +36,12 @@ class QueryContext:
     def equipment_href(self, identifier: str) -> str:
         return self.href(f"/maquinaria/{quote(identifier, safe='')}")
 
+    def request_href(self, identifier: str) -> str:
+        return self.href(f"/solicitudes/{quote(identifier, safe='')}")
+
+    def movement_href(self, identifier: str) -> str:
+        return self.href(f"/operaciones/{quote(identifier, safe='')}")
+
 
 def parse_context(search: str | None) -> QueryContext:
     try:
@@ -41,7 +54,7 @@ def parse_context(search: str | None) -> QueryContext:
     query = params.get("q", [""])[0].strip()
     selected_filter = params.get("filter", ["all"])[0]
     if mode not in {"fixture", "live"}:
-        raise ValueError("El origen debe ser ejemplos locales o sandbox en vivo.")
+        raise ValueError("El origen debe ser muestras proporcionadas o sandbox actual sintético.")
     if len(query) > 100:
         raise ValueError("La búsqueda admite hasta 100 caracteres.")
     if selected_filter not in FILTERS:

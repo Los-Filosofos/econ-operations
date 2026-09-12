@@ -1,11 +1,12 @@
 """Presentation aggregates over one bounded hub read; no duplicated alert rules."""
 
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import plotly.graph_objects as go
 
-from app.models.hub import EquipmentRecord, HubResponse
+from app.models.hub import EquipmentRecord, HubResponse, RequestRecord, TransferRecord
 from app.services.hub import BUSINESS_TIMEZONE, _plan_date
 
 BLUE = "#144f81"
@@ -41,6 +42,63 @@ def requests_for(hub: HubResponse, filter: str):
         return hub.requests
     identifiers = {alert.request_id for alert in hub.alerts if alert.code == code}
     return [request for request in hub.requests if request.id in identifiers]
+
+
+@dataclass(frozen=True)
+class RequestOperation:
+    """Display one request without filling gaps in its source relationships."""
+
+    request: RequestRecord
+    equipment: EquipmentRecord | None
+    transfers: tuple[TransferRecord, ...]
+
+    @property
+    def missing(self) -> list[str]:
+        missing = []
+        if not self.request.project_id:
+            missing.append("ID de proyecto")
+        if not self.request.starts_on:
+            missing.append("Inicio solicitado")
+        if not self.request.ends_on:
+            missing.append("Fin solicitado")
+        if not self.request.machinery_id:
+            missing.append("Unidad asignada")
+        elif self.equipment is None:
+            missing.append("Registro de la unidad asignada")
+        if not self.transfers:
+            missing.append("Traslado vinculado")
+        elif self.equipment and self.equipment.relation_status != "confirmed":
+            missing.append("Validación del vínculo con Startrack")
+        for task in self.transfers:
+            if not task.destination_project_id:
+                missing.append("ID del destino del traslado")
+            elif task.destination_project_id != self.request.project_id:
+                missing.append("Conciliación del destino del traslado")
+        # The read contract has no arrival event or accepted receipt evidence.
+        # A completed task, location label or geofence is not either of these records.
+        missing.extend(["Evidencia de llegada", "Recepción física"])
+        return list(dict.fromkeys(missing))
+
+
+def request_operation(hub: HubResponse, request: RequestRecord) -> RequestOperation:
+    item = next((item for item in hub.equipment if item.id == request.machinery_id), None)
+    tasks = tuple(task for task in item.transfers if task.request_id == request.id) if item else ()
+    return RequestOperation(request, item, tasks)
+
+
+def operations_for(hub: HubResponse, filter: str = "all") -> list[RequestOperation]:
+    operations = [request_operation(hub, item) for item in requests_for(hub, filter)]
+    if filter == "active_failures":
+        return [
+            item for item in operations if item.equipment and item.equipment.maintenance_failure_id
+        ]
+    if filter == "unlinked":
+        return [
+            item
+            for item in operations
+            if not item.transfers or item.equipment.relation_status != "confirmed"
+        ]
+    return operations
 
 
 def exception_groups(hub: HubResponse) -> list[dict]:

@@ -1,6 +1,6 @@
 """Public read models: source states are intentionally not collapsed into one status."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -11,10 +11,13 @@ SourceId = Literal["nexus", "startrack"]
 
 class Provenance(BaseModel):
     source: SourceId
-    source_id: str
+    source_id: str | None
     environment: Literal["local", "sandbox"]
-    observed_at: datetime
+    observed_at: datetime | None
     is_synthetic: bool
+    evidence_kind: Literal["live_read", "provided_sample", "test_case"] = "live_read"
+    source_reference: str | None = None
+    observed_on: date | None = None
 
 
 class SourceStatus(BaseModel):
@@ -23,6 +26,7 @@ class SourceStatus(BaseModel):
     status: Literal["fixture", "connected", "partial", "not_configured", "disabled", "error"]
     environment: Literal["local", "sandbox"]
     observed_at: datetime | None = None
+    observed_on: date | None = None
     message: str
 
 
@@ -49,6 +53,7 @@ class EquipmentRecord(BaseModel):
     asset_number: str | None = None
     name: str
     company: str | None = None
+    equipment_class: str | None = None
     project_id: str | None = None
     project_name: str | None = None
     driver: str | None = None
@@ -62,6 +67,8 @@ class EquipmentRecord(BaseModel):
     relation_status: Literal["confirmed", "candidate", "unlinked"]
     relation_note: str
     provenance: Provenance
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class RequestRecord(BaseModel):
@@ -71,6 +78,14 @@ class RequestRecord(BaseModel):
     machinery_id: str | None = None
     status: str
     starts_on: str | None = None
+    ends_on: str | None = None
+    machinery_type: str | None = None
+    requested_by: str | None = None
+    requested_by_id: str | None = None
+    comments: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    approved_at: datetime | None = None
     provenance: Provenance
 
 

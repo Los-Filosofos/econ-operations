@@ -1,5 +1,21 @@
 # Documentación de ECON
 
+Comenzar por el [contexto vigente de solicitud, traslado y recepción](contexto-vigente.md).
+Conserva las fuentes nuevas y la decisión del usuario de retirar ejemplos inventados
+y pantallas ajenas al flujo, manteniendo documentos y código útil.
+Las [evaluaciones de Astra](evaluaciones-astra.md) registran la revisión de datos,
+integración e interfaz y los límites pendientes.
+
+La [solución de integración y guía operativa](solucion-integracion.md) describe
+lo implementado en frontend y backend: planes persistidos, cola de envío,
+sincronización por consultas y recepción explícita. Todo el caso usa datos
+sintéticos; muestras del archivo y lecturas actuales del sandbox se distinguen
+por su procedencia, no por ser datos de producción.
+
+La [matriz de equivalencias Prisma → Startrack](equivalencias-prisma-startrack.md)
+explica qué campos se conservan, cuáles se transforman, qué información se pide
+al preparar el traslado y qué campos del formulario no tienen correspondencia.
+
 La implementación vigente es **Dash y FastAPI en un servicio Python**. Comenzar por [desarrollo local](desarrollo.md), [ADR 0003](adr/0003-python-dash-hub.md) y [arquitectura del dashboard](frontend-architecture.md). La migración retira `apps/web` y su despliegue estático; conserva los conectores, contratos y límites de datos.
 
 La [guía de analítica para decisiones](analitica-decisiones.md) define qué medir, qué gráfico corresponde, qué acción permite y qué evidencia falta para hablar de tendencias. El [modelo operativo](modelo-operativo.md) documenta el inventario de campos, mapeo por fuente, responsabilidades propuestas y señales medibles.
