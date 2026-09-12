@@ -4,6 +4,8 @@ El contexto completo del reto entregado por el usuario está en [onedrive/README
 
 La carpeta `onedrive` contiene conversiones de los documentos originales, el diccionario completo, transcripciones visuales, la propuesta del usuario y su análisis. Se comparte en el repositorio privado del equipo con las contraseñas del sandbox omitidas. Los originales completos y los intermediarios permanecen locales en `.context-work/`, excluida de Git.
 
+La [exploración de las integraciones reales](integraciones-reales.md) registra el acceso por Chrome a Nexus y Startrack, las consultas HTTP probadas, autenticación, límites y la arquitectura recomendada. Distingue observaciones del entorno de contratos documentados y puntos pendientes.
+
 Los documentos anteriores al kit siguen disponibles:
 
 - [Evaluación inicial de FastAPI](architecture.md).

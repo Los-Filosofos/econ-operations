@@ -9,6 +9,7 @@
 3. [Diccionario completo](06-diccionario-de-datos/README.md): cuatro hojas, campos, ejemplos y observaciones de calidad.
 4. [Análisis de la propuesta](08-analisis-propuesta.md): ajustes necesarios, reglas operativas y prioridades.
 5. [Contexto de la conversación](09-contexto-conversacion.md): backend y GitHub preparados, decisiones e incertidumbres.
+6. [Exploración de integraciones reales](../integraciones-reales.md): revisión posterior por Chrome y HTTP, con autorización expresa del usuario.
 
 ## Documentos convertidos
 

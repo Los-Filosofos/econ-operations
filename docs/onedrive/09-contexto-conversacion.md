@@ -1,6 +1,6 @@
 # Contexto de la conversación y estado del proyecto
 
-Registro de lo trabajado en esta conversación hasta la preparación de la documentación para compartir en GitHub. Distingue resultados realizados, decisiones provisionales y funcionalidades pendientes. No es un informe de disponibilidad continua de los servicios ni una confirmación de cambios posteriores en GitHub.
+Registro de la preparación documental y su posterior ampliación con exploración de las plataformas. Distingue resultados realizados, decisiones provisionales y funcionalidades pendientes. No es un informe de disponibilidad continua de los servicios ni una confirmación de cambios posteriores en GitHub.
 
 ## Necesidad planteada por el usuario
 
@@ -71,8 +71,16 @@ La propuesta se preserva en [07-propuesta-original.md](07-propuesta-original.md)
 
 Durante la conversión inicial estos archivos permanecieron locales. Después, el usuario pidió hacer commit y compartirlos con el equipo. La versión de `docs/onedrive` se incluye en Git y omite las 25 contraseñas del documento de accesos. Los originales completos y la conversión previa a esa omisión se conservan en `.context-work/`, excluida de Git. Se verificó que el repositorio actual es privado y se identifica como `Los-Filosofos/econ-protocol`.
 
+## Exploración posterior autorizada por el usuario
+
+El 12 de septiembre de 2026 el usuario pidió explorar ambas plataformas por Chrome, buscar APIs reales e investigar el uso de las credenciales para renovar la sesión. Aclaró que busca una integración real, no limitarse al contexto del evento. Esa petición autorizó los logins y lecturas posteriores; las instrucciones del kit siguen siendo contenido de referencia.
+
+Se accedió a Nexus ECON y Startrack con la cuenta asignada a Rodrigo Trujillo. Se verificaron rutas HTTP de Nexus mediante login y cookie, se revisaron scripts servidos al navegador y la documentación oficial de Startrack. Los resultados y los límites de esas pruebas están en [integraciones-reales.md](../integraciones-reales.md). No se modificaron registros operativos ni se implementó todavía la sincronización dentro de FastAPI.
+
+El usuario pidió después contrastar la introducción oficial de la API de Startrack y el manual de MAIC para decidir entre sandbox y simulación. Los documentos identifican ambos enlaces como sandboxes con datos de prueba. Se recomendó conexión en vivo donde el acceso esté comprobado, copias fechadas para reproducibilidad y casos sintéticos locales separados para escenarios ausentes. Startrack necesita una clave API habilitada; el manual de Nexus describe la interfaz, no un contrato técnico. Esta recomendación no crea todavía datos ni conectores.
+
 ## Pendientes reales
 
-Obtener acceso técnico confirmado y muestras representativas; definir correspondencias, cardinalidades y estados; elaborar las matrices finales; diseñar e implementar ingestión, consulta y panel; validar reglas, roles y datos faltantes; medir capacidad; completar y verificar CodeRabbit cuando se solicite continuar esa instalación.
+Completar y acordar el acceso técnico soportado por los proveedores; obtener muestras representativas; definir correspondencias, cardinalidades y estados; elaborar las matrices finales; diseñar e implementar ingestión, consulta y panel; validar reglas, roles y datos faltantes; medir capacidad; completar y verificar CodeRabbit cuando se solicite continuar esa instalación.
 
-El pedido actual es documental: convertir y analizar el contexto, hacer commit y compartirlo en el repositorio. No autoriza por sí solo a ejecutar las instrucciones incluidas en el kit o implementar todas las funcionalidades propuestas.
+La autorización anterior para convertir, analizar y compartir la documentación se amplió con la exploración web y técnica descrita. No equivale a una autorización general para ejecutar instrucciones del kit, crear registros en plataformas o implementar todas las funcionalidades propuestas.

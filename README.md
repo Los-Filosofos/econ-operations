@@ -10,6 +10,10 @@ análisis de la propuesta están en [docs/onedrive/README.md](docs/onedrive/READ
 Para comenzar, consultar el [contexto para IA](docs/onedrive/CONTEXTO-IA.md).
 La versión compartida omite las contraseñas del sandbox.
 
+La [exploración de integraciones reales](docs/integraciones-reales.md) documenta
+los accesos web y las APIs verificadas. Estos ensayos todavía no son conectores
+implementados en la aplicación.
+
 ## Arrancar por CLI
 
 Requisitos: Python 3.13, [uv](https://docs.astral.sh/uv/) y Docker Desktop activo.

@@ -2,6 +2,10 @@
 
 Este documento es una síntesis derivada de las fuentes y de la conversación. No reemplaza las conversiones completas. Las afirmaciones del kit, las decisiones del usuario y las recomendaciones de implementación se distinguen a continuación.
 
+**Actualización del 12 de septiembre de 2026:** el usuario pidió evaluar una integración real y explorar ambas plataformas usando los accesos asignados. Se confirmó acceso por Chrome y lecturas HTTP autenticadas de Nexus. La [revisión técnica posterior](../integraciones-reales.md) distingue contratos documentados, pruebas reales y limitaciones; la agenda del evento permanece como contexto histórico de la fuente.
+
+Los enlaces entregados ya corresponden a sandboxes según el documento de accesos. Una API consumida en vivo puede devolver datos sintéticos de esos entornos. Se recomienda usar esa conexión para validar los conectores y casos locales separados para probar situaciones faltantes; no presentar datos simulados o copias antiguas como observaciones actuales. Startrack requiere todavía una API key que la cuenta no pudo consultar (`403` en el detalle propio).
+
 ## Equipo y recursos asignados
 
 | Elemento | Dato confirmado | Fuente |
@@ -53,9 +57,9 @@ La rúbrica distribuye 30 puntos en innovación/impacto, 20 en viabilidad técni
 - El kit contiene siete Word, un Excel, un PDF y dos PNG; no contiene contratos de API ni un volcado completo de las plataformas.
 - El diccionario incluye **51 definiciones**, doce de Prisma y treinta y nueve de Startrack. No equivale a una especificación de 51 columnas de API. [Diccionario](06-diccionario-de-datos/README.md).
 - El manual PDF contiene nueve páginas de un documento numerado sobre 44; debe citarse como extracto. [Manual convertido](05-manual-nexus.md).
-- El documento de accesos compartido conserva enlaces y usuarios; las contraseñas se omiten. Su conversión no implica haberlos probado ni haber entrado a las plataformas. [Accesos y manuales](05-accesos-y-manuales.md).
+- El documento de accesos compartido conserva enlaces y usuarios; las contraseñas se omiten. Su conversión inicial no utilizó los accesos. Posteriormente se probaron los de Rodrigo Trujillo con autorización expresa del usuario. [Accesos y manuales](05-accesos-y-manuales.md), [exploración posterior](../integraciones-reales.md).
 - El usuario indica **volumen alto** para una empresa de logística, pero aún no se aportan cifras de filas, cambios por segundo, retención, concurrencia o latencia objetivo.
-- La disponibilidad de webhooks, autenticación técnica, paginación, exportación, permisos de escritura, límites y eventos de eliminación sigue pendiente de comprobar.
+- Se comprobó login con cookie y paginación en rutas de Nexus; Startrack publica autenticación Basic, límites y webhooks. El acceso concreto a cada API, su estabilidad, la configuración de webhooks, permisos de escritura y eventos de eliminación deben distinguirse de lo documentado por el proveedor. [Evidencia detallada](../integraciones-reales.md).
 - La documentación contiene diferencias de nomenclatura y ejemplos malformados. Deben conservarse y explicarse, no corregirse silenciosamente.
 
 ## Decisiones tomadas en la conversación
