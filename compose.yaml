@@ -1,0 +1,23 @@
+name: econ-backend
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: econ
+      POSTGRES_USER: econ
+      # Development credentials; this service is only exposed on loopback.
+      POSTGRES_PASSWORD: econ_local_only
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - postgres18_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U econ -d econ"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres18_data:
