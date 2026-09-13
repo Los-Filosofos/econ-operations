@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Rodillo compactador">
+  <path fill="#dce8f0" d="M23 26h23l8 13v10H23zm6 5v8h16l-5-8zM7 39h14v12H7z"/>
+  <circle cx="14" cy="49" r="10" fill="#dce8f0"/><circle cx="45" cy="50" r="7" fill="#dce8f0"/>
+  <circle cx="45" cy="50" r="3" fill="#111820"/><path fill="#68aee8" d="M32 18h4v9h-4z"/>
+</svg>

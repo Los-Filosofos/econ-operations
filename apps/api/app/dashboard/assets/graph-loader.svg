@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Cargador">
+  <path fill="#dce8f0" d="M7 42h9l5-18h19l9 18h4v7H7zm19-13-3 13h19l-6-13z"/>
+  <path fill="#68aee8" d="M3 33h9l5 9H7zm45 5h10l3 9H49z"/>
+  <circle cx="19" cy="51" r="7" fill="#dce8f0"/><circle cx="45" cy="51" r="7" fill="#dce8f0"/>
+  <circle cx="19" cy="51" r="3" fill="#111820"/><circle cx="45" cy="51" r="3" fill="#111820"/>
+</svg>

@@ -1,9 +1,9 @@
 # Analítica para decidir sobre la operación
 
-La portada **Resumen** muestra qué requiere revisión, en qué proyecto, con qué
-evidencia y cuál es el siguiente paso. El recorrido es proyecto → solicitud →
-unidad asignada → traslado → recepción. Las definiciones siguientes corresponden
-a la implementación vigente; el contexto de negocio está en
+La portada muestra el recorrido proyecto → unidad asignada → traslado →
+recepción como un grafo operativo. No convierte conteos ni ausencias en KPI y
+mantiene el detalle documental bajo interacción. Las definiciones siguientes
+corresponden a la implementación vigente; el contexto de negocio está en
 [contexto vigente](contexto-vigente.md).
 
 ## Población y evidencia
@@ -26,23 +26,24 @@ clasificar atrasos con el reloj actual. `generated_at` es el momento de armar la
 respuesta, no una fecha de actualización de las fuentes.
 
 Los límites de la muestra y la evidencia necesaria para otras mediciones están
-en [contexto vigente](contexto-vigente.md#límites-de-los-datos). Junto a los
-gráficos se muestran solicitudes de la vista, filas devueltas, total informado
-por el origen antes de búsqueda, procedencia y corte conocido. El calendario
-declara cuántos períodos son representables sobre las solicitudes de la vista.
+en [contexto vigente](contexto-vigente.md#límites-de-los-datos). El indicador
+discreto del lienzo declara modo, cobertura, corte o fecha documental y momento
+de consulta. El detalle de cada nodo conserva procedencia y antigüedad.
 
 La búsqueda y los filtros usan la misma población en Resumen y Solicitudes.
 Una consulta sin registros, una cobertura parcial y una fuente indisponible son
 resultados distintos. No encontrar una tarea en una lectura incompleta no prueba
 que no exista; tampoco una ausencia de alertas demuestra ausencia de riesgo.
 
-## Presentación implementada
+## Presentación del grafo
 
-| Elemento | Decisión que apoya | Definición y límite |
+| Elemento | Regla de representación | Definición y límite |
 | --- | --- | --- |
-| Asuntos por revisar | Qué revisar y dónde continuar | Como máximo un asunto por solicitud, con hecho de origen y enlace al registro; orden estable por ID, sin puntajes de urgencia |
-| Períodos de uso solicitado | En qué fechas se necesita maquinaria | Una barra por solicitud con inicio y fin originales; días inclusivos; no equivale a compromiso de entrega |
-| Distribución por estado, desplegable | Cómo se distribuyen las solicitudes consultadas | Conteo por categoría original con eje desde cero; contexto secundario |
+| Proyecto / obra | Un nodo por `project_id` | El nombre sólo etiqueta; nunca une identidades y una contradicción de nombres queda visible |
+| Maquinaria | Un nodo por ID normalizado | La silueta específica requiere `equipment_class`; sin esa evidencia se usa el tipo genérico |
+| Asignación | Segmento recto y fino | Sólo existe con `maquinaria_id` y `project_id` exactos, ya sea en la solicitud o la maquinaria normalizada |
+| Traslado confirmado | Segmento recto dirigido | Sólo promueve una relación cuya evidencia ya coincide por IDs, entorno, asignación y período vigentes |
+| Detalle contextual | Hechos y faltantes del nodo seleccionado | Expone fuente, observación, asignación, traslado, responsable disponible, incidentes, recepción, historia y contradicciones sin completar campos ausentes |
 
 Las incidencias de envío se atienden antes de sugerir otro movimiento. Un envío
 incierto requiere conciliación; una consulta del registro indisponible no se
@@ -60,25 +61,28 @@ describen hechos distintos. Una tarea completada o una visita de geocerca no
 acredita recepción. Los planes y eventos guardados se muestran con su evidencia,
 sin ampliar las muestras documentales ni presentarlos como observaciones actuales.
 
-Los gráficos tienen etiquetas en español y datos alternativos en tablas. Los
-IDs están en el detalle o tooltip; las barras se identifican internamente por ID
-aunque sus etiquetas coincidan. Para incluir el último día solicitado, el final
-dibujado es el día siguiente; tooltip y tabla conservan las fechas originales.
+La geometría del grafo no representa coordenadas, distancia, avance ni tiempo.
+Una máquina en traslado aparece una sola vez y la actividad de la línea expresa
+estado, no posición. Sin una estimación existente se muestra «Tiempo no
+disponible». Una geocerca del transportista, una tarea completada o una línea
+visualmente corta no acreditan llegada o recepción.
 
 Las fechas sin hora conservan el día calendario. Los instantes con zona se
-convierten a `America/El_Salvador`. Los períodos ausentes, ambiguos, inválidos o
-invertidos se excluyen del gráfico y se informan con su motivo. El calendario
-describe planificación; no reconstruye cambios históricos de estado.
+convierten a `America/El_Salvador`; `generated_at` sólo fecha la consulta. Los
+períodos ausentes, ambiguos, inválidos o invertidos no se completan ni se usan
+para inferir relaciones.
 
 ## Responsabilidad del código y futuras mediciones
 
-`app/dashboard/decision_priorities.py` deriva los asuntos por solicitud;
-`decision_analytics.py` selecciona la población y prepara los gráficos;
-`views.py` (`overview`) los presenta con el template Plotly `econ` de
-`theme.py`, que colorea cada estado con la paleta cualitativa compartida. Las
-reglas del contrato compartido permanecen
-en `app/services/hub.py`. Los cambios deben mantener alineados los modelos
-Pydantic y sus consumidores Dash; ver [arquitectura de interfaz](frontend-architecture.md).
+`app/dashboard/operations_graph.py` transforma `HubResponse` y
+`WorkflowOverview` en nodos, aristas y detalle sin consultar proveedores.
+`views.py` presenta esa proyección y el asset local `operations-graph.js` sólo
+gestiona zoom, pan y selección. Las reglas del contrato y de la evidencia
+permanecen en `app/services/hub.py` y `app/services/evidence.py`. Los módulos
+analíticos anteriores se conservan para otras vistas o evolución posterior,
+pero la portada ya no muestra cards, gráficos ni tablas. Los cambios deben
+mantener alineados los modelos Pydantic y sus consumidores Dash; ver
+[arquitectura de interfaz](frontend-architecture.md).
 
 Antes de añadir una medición, documentar población, unidad, fórmula, fuente,
 cobertura, fecha y acción que permite. La persistencia de planes, cortes y eventos

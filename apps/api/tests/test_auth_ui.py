@@ -208,8 +208,8 @@ def test_signed_in_user_gets_the_shell_with_identity_and_login_redirects_home(ap
         assert route(client, "/", "?mode=fixture", view="app") == {}
         assert route(client, "/login")["root"]["children"]["props"]["href"] == "/"
         page = rendered(client, "/")
-        assert "Qué requiere atención" in text(page["content"]["children"])
-        assert page["scope"]["children"] is not None
+        assert "operations-graph-world" in text(page["content"]["children"])
+        assert page["scope"]["children"] is None
 
 
 def test_read_role_sees_no_action_forms_and_no_administration(app):

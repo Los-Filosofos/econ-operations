@@ -36,11 +36,12 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
   y no se recrean ([ADR 0003](adr/0003-python-dash-hub.md)).
 - Todo el caso usa **datos sintéticos**. `fixture` son ejemplos del archivo;
   `live` es una lectura actual del sandbox. Nunca se sustituyen entre sí.
-- La portada empieza por decisiones (proyecto, revisión necesaria, evidencia y
-  siguiente paso), sin cards de conteos, badges ni prioridad inventada. Sidebar
-  con Resumen, Solicitudes, Maquinaria, Operaciones y Fuentes (y Administración
-  para `admin`); tablas de seis columnas con detalles desplegables. Gráficos
-  elegidos con criterio de analista ([analítica](analitica-decisiones.md)).
+- La portada es un grafo operativo a pantalla completa, sin cabecera, sidebar,
+  buscador, métricas ni panel permanente. Proyectos y lugares identificados son
+  nodos grandes; la maquinaria usa nodos menores y una única representación.
+  Las aristas nacen sólo de IDs y correspondencias verificadas. El resto de rutas
+  conserva su navegación, tablas y detalles operativos
+  ([arquitectura](frontend-architecture.md)).
 - Interfaz con dash-mantine-components, iconos Tabler locales y AG Grid
   Community. El color codifica información, no decoración: el azul ECON es
   marca y acción; los estados usan una paleta cualitativa propia; magnitudes,
@@ -136,7 +137,10 @@ recepción declarada en PostgreSQL ([ADR 0004](adr/0004-persistent-transfer-work
 worker explícito por CLI con avance durable de revisión; cobertura visible del
 registro (`WorkflowOverview.complete`); proyección de evidencia persistida en el
 hub; inicio de sesión, roles y administración de usuarios (`/login`,
-`/administracion`, `/api/v1/auth`, `/api/v1/users`).
+`/administracion`, `/api/v1/auth`, `/api/v1/users`); y grafo principal con
+posiciones deterministas, selección, zoom/pan y SVG locales. La muestra actual
+permite dibujar PROY-014, cinco máquinas y una asignación exacta; no contiene
+bases, talleres, ubicación física, tareas Startrack ni recepción.
 
 Pendiente: validación autenticada de Startrack (clave, catálogos y codificación
 de listas en creación); cotejo individual de las 51 definiciones para RF-02;
