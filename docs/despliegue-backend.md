@@ -40,18 +40,19 @@ en un despliegue remoto la dirección loopback del Compose local.
 ## Variables de una demostración pública
 
 Configurar variables durante la ejecución, no al construir assets. Una
-demostración pública conserva exclusivamente muestras y las cuatro
-habilitaciones desactivadas, con independencia de la autenticación de usuarios:
-
-<!-- TODO(auth): documentar aquí las variables de autenticación y roles (secreto de sesión, usuario administrador inicial) cuando la fase de login las defina. -->
+demostración pública conserva exclusivamente muestras y las habilitaciones de
+proveedores desactivadas; el inicio de sesión es obligatorio:
 
 | Variable | Valor o criterio |
 | --- | --- |
 | `DATABASE_URL` | URL de PostgreSQL accesible desde el servicio, conservada como secreto del entorno |
 | `PORT` | Puerto entregado por la plataforma; si se omite, `8000` |
-| `CORS_ORIGINS` | `[]` para Dash y API en el mismo origen |
+| `AUTH_REQUIRED` | `true` (valor por defecto). `false` es solo para desarrollo local |
+| `SESSION_SECRET` | Obligatorio; sin él la aplicación no arranca. Generar con `python -c "import secrets; print(secrets.token_urlsafe(32))"` y guardarlo como secreto. Rotarlo cierra todas las sesiones |
+| `SESSION_HTTPS_ONLY` | `true` en cuanto el servicio se sirva tras TLS; la cookie no viaja por HTTP plano |
+| `SESSION_MAX_AGE_SECONDS` | Caducidad de la sesión; `28800` (ocho horas) por defecto |
 | `ALLOW_LIVE_READS` | `false` |
-| `ALLOW_LOCAL_MANAGEMENT` | `false` |
+| `ALLOW_LOCAL_MANAGEMENT` | `false` (solo cuenta con `AUTH_REQUIRED=false`) |
 | `ALLOW_LIVE_WRITES` | `false` |
 | `AUTO_QUEUE_TRANSFERS` | `false` |
 | `NEXUS_EMAIL`, `NEXUS_PASSWORD` | Omitidas en la demostración pública |
@@ -59,12 +60,29 @@ habilitaciones desactivadas, con independencia de la autenticación de usuarios:
 
 `postgresql+psycopg://` indica el controlador instalado. La aplicación y Alembic
 también normalizan `postgres://` y `postgresql://` a ese controlador sin cambiar
-usuario, contraseña, host, base o parámetros de conexión.
+usuario, contraseña, host, base o parámetros de conexión. La variable
+`CORS_ORIGINS` ya no existe: Dash y API comparten origen y la cookie de sesión
+`SameSite=lax` no requiere CORS.
 
 No poner secretos en URLs del navegador, código, capturas ni registros.
-CORS no controla por sí solo quién puede consultar una API pública.
-La gestión HTTP está limitada a peticiones locales con validación de origen:
-publicar un proxy no crea un sistema de permisos ni autoriza live.
+La autoridad de gestión viene del rol de la sesión
+([ADR 0005](adr/0005-session-auth-and-roles.md)); publicar un proxy no autoriza
+live ni sustituye las habilitaciones del servidor.
+
+## Usuario administrador inicial
+
+Después de migrar y antes de abrir el servicio al jurado, crear el primer
+`admin` dentro de la imagen (la contraseña se pide por terminal o se lee de la
+entrada estándar; nunca va como argumento):
+
+```sh
+.venv/bin/python -m app.cli.create_user --email admin@example.com --role admin --name "Administración"
+printf '%s\n' "$ADMIN_PASSWORD" | .venv/bin/python -m app.cli.create_user --email admin@example.com --role admin --password-stdin
+```
+
+Mínimo 12 caracteres. El resto de usuarios se crea desde `/administracion` o
+`POST /api/v1/users`. Desactivar un usuario o cambiar su contraseña cierra sus
+sesiones de inmediato; el sistema nunca permite desactivar al último `admin`.
 
 ## Migración y persistencia
 
@@ -75,8 +93,10 @@ Con las variables de conexión disponibles, ejecutar dentro de la imagen:
 .venv/bin/alembic current
 ```
 
-La migración `0001_operations` crea movimientos, eventos y cortes. La cola reside
-en los movimientos y se reclama transaccionalmente antes de enviar al proveedor.
+`upgrade head` aplica `0001_operations` (movimientos, eventos y cortes),
+`0002_review_schedule` (revisión programada) y `0003_users` (usuarios y roles).
+La cola reside en los movimientos y se reclama transaccionalmente antes de
+enviar al proveedor.
 No se ejecutan migraciones durante la construcción de la imagen ni en cada
 arranque del servicio. Los cambios futuros de esquema requieren planificar
 respaldo, recuperación y compatibilidad con los procesos que siguen activos.
@@ -100,8 +120,9 @@ Sin `--watch` ejecuta un solo ciclo. La CLI admite intervalos entre 60 y 3600
 segundos. Ejecutar un único worker: los límites externos pueden ser compartidos
 por IP, mientras el limitador local funciona por proceso.
 
-El proceso requiere habilitación de gestión local; las consultas remotas y la
-creación de tareas tienen controles independientes. Un envío incierto permanece
+El worker no tiene sesión de usuario: actúa con autoridad de proceso sobre la
+base configurada; las consultas remotas y la creación de tareas tienen
+controles independientes. Un envío incierto permanece
 en conciliación y no genera un segundo POST automático. La existencia del SDK,
 cola e historial no acredita todavía la creación autenticada en la cuenta
 Startrack, cuya validación sigue pendiente.
@@ -116,11 +137,14 @@ Configurar `/health/ready` para comprobar conexión con PostgreSQL.
 `/health/live` acredita únicamente que el proceso responde; ninguno valida
 credenciales ni conectividad de Prisma o Startrack.
 
-Revisar `/?mode=fixture`, `/solicitudes?mode=fixture`,
-`/operaciones?mode=fixture`, `/api/v1/hub?mode=fixture` y
+Comprobar que `/` sin sesión redirige a `/login` y que `/api/v1/hub` responde
+`401`. Iniciar sesión y revisar `/?mode=fixture`, `/solicitudes?mode=fixture`,
+`/operaciones?mode=fixture`, `/administracion`, `/api/v1/hub?mode=fixture` y
 `/api/v1/operations?mode=fixture`. Confirmar que el registro está disponible tras
-la migración, que los callbacks funcionan y que recargar una ruta interna conserva
-estilos, modo y búsqueda. Las muestras muestran cinco equipos y dos solicitudes,
+la migración, que los callbacks funcionan, que la cookie lleva `Secure` tras
+TLS y que recargar una ruta interna conserva estilos, modo y búsqueda. Los
+iconos Tabler se descargan de `api.iconify.design`; sin salida a internet
+desde el navegador se ve el texto sin icono. Las muestras muestran cinco equipos y dos solicitudes,
 con cobertura parcial, sin inventar tareas, GPS o recepciones.
 
 Antes de dimensionar una operación continua faltan mediciones de carga,

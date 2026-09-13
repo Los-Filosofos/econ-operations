@@ -1,121 +1,159 @@
 # Interfaz Dash y arquitectura del hub
 
-La interfaz y la API se ejecutan en **un servicio Python** en `apps/api`: Dash,
-Plotly y AG Grid Community sobre FastAPI. SQLModel, Alembic y PostgreSQL conservan
-la operación. Las decisiones aceptadas están en
-[ADR 0003](adr/0003-python-dash-hub.md) y
-[ADR 0004](adr/0004-persistent-transfer-workflow.md).
-No hay aplicación React, `apps/web` ni compilación o despliegue web separado.
+La interfaz y la API se ejecutan en **un servicio Python** en `apps/api`: Dash
+con componentes **dash-mantine-components 2.8** (Mantine v8), iconos Tabler por
+**dash-iconify**, tablas **AG Grid Community** (dash-ag-grid) y gráficos Plotly
+sobre FastAPI. SQLModel, Alembic y PostgreSQL conservan la operación. Las
+decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
+[ADR 0004](adr/0004-persistent-transfer-workflow.md) y
+[ADR 0005](adr/0005-session-auth-and-roles.md). No hay aplicación React,
+`apps/web` ni compilación o despliegue web separado.
 
-## Navegación y presentación
+## Rutas y acceso
 
-| Ruta | Contenido |
-| --- | --- |
-| `/` y `/resumen` | Asuntos por revisar por solicitud, calendario de uso solicitado y distribución por estado desplegable |
-| `/solicitudes` | Proyecto/solicitud, maquinaria, período, estado, traslado y recepción en seis columnas |
-| `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento |
-| `/maquinaria` | Inventario consultado, incluidos equipos sin solicitud, con filtros y acceso por ID |
-| `/maquinaria/{id}` | Comparación de evidencia por fuente, interpretación de estados y ubicación fechada |
-| `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción |
-| `/fuentes` | Procedencia, alcance y estado de las consultas |
+| Ruta | Contenido | Acceso |
+| --- | --- | --- |
+| `/login` | Formulario de inicio de sesión; `?next=` devuelve a la ruta pedida | Pública |
+| `/` y `/resumen` | Asuntos por revisar por solicitud, calendario de uso solicitado y distribución por estado | `read` |
+| `/solicitudes` | Proyecto/solicitud, maquinaria, período, estado, traslado y recepción | `read` |
+| `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento | `read`; guardar plan exige `manage_transfers` |
+| `/maquinaria` | Inventario consultado, incluidos equipos sin solicitud, con filtros y acceso por ID | `read` |
+| `/maquinaria/{id}` | Comparación de evidencia por fuente, interpretación de estados y ubicación fechada | `read` |
+| `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción | `read`; cola y sincronización exigen `manage_transfers`, recepción `declare_reception` |
+| `/fuentes` | Procedencia, alcance y estado de las consultas | `read` |
+| `/administracion` | Alta, rol, activación y contraseña de usuarios | `manage_users` (solo `admin`) |
 
-El sidebar contiene Resumen, Solicitudes, Maquinaria y Operaciones, con Fuentes como utilidad
-secundaria. En móvil se abre con Menú y se cierra por botón, fondo, Escape o
-navegación; conserva el foco dentro del menú abierto y lo devuelve al control.
+Sin sesión, las páginas redirigen a `/login`; `/api/v1/*` y los callbacks de
+Dash responden 401. Con sesión sin permiso, la acción responde 403 y la
+interfaz no muestra el control. Los roles y permisos están en
+[ADR 0005](adr/0005-session-auth-and-roles.md); el usuario y el cierre de
+sesión aparecen en la cabecera (`header-user`). Con `AUTH_REQUIRED=false`
+(solo desarrollo) no hay login y la gestión vuelve a depender de
+`ALLOW_LOCAL_MANAGEMENT` desde loopback.
+
+Las páginas se registran en la tabla `PAGES` de `dashboard/views.py` (ruta,
+etiqueta, icono Tabler, función de lista y función de detalle). La navegación
+lateral, el cajón móvil y `render_page` se derivan de esa tabla; `Fuentes` es
+utilidad secundaria. Añadir una vista es añadir una fila.
+
+## Presentación y paleta
 
 La portada empieza por proyecto, revisión, evidencia y siguiente paso. No usa
-cards de conteos, badges ni prioridad inventada. Los detalles técnicos, IDs
-completos, mantenimiento, historial y preparación usan desplegables. Los estados
-se presentan como texto, conservando las diferencias entre administración,
+cards de conteos, badges ni prioridad inventada. IDs completos, mantenimiento,
+historial y preparación usan `Accordion`. Los estados se presentan como texto
+con un punto de color y conservan las diferencias entre administración,
 mantenimiento, tarea, ubicación y recepción.
 
-La identidad usa Inter local, azul ECON `#144f81`, superficies claras y bordes
-rectos. Se mantienen salto al contenido, foco visible, etiquetas, encabezados,
-teclado de AG Grid y desplazamiento horizontal de tablas. Los gráficos Plotly
-tienen tablas alternativas; ver [definiciones analíticas](analitica-decisiones.md).
+`dashboard/theme.py` es la única fuente de color, compartida por Mantine, AG
+Grid y el template Plotly `econ`:
 
-Los iconos SVG locales acompañan texto en navegación y acciones, con tamaño y
-trazo coherentes; no codifican estados ni sustituyen etiquetas. Los contenedores
-anidados se reducen sin ocultar campos ni evidencia.
+| Uso | Valores | Regla |
+| --- | --- | --- |
+| Marca y acciones primarias | Azul ECON `#144f81` (`primaryColor: econ`, tono 7) | Solo identidad, enlaces y botón principal; **el azul no codifica estado** |
+| Estados (cualitativa) | `pending #eb6834`, `active #199e70`, `busy #4a3aa7`, `issue #d03b3b`, `neutral #868e96` | `state_family` mapea `PENDIENTE/QUEUED/SENDING…`, `APROBADA/DISPONIBLE/SENT/COMPLETADA…`, `OCUPADA/ASIGNADA`, `FAILED/BLOCKED/RECHAZADA/UNKNOWN`; lo no reconocido es `neutral`. `issue` siempre va con icono y texto |
+| Magnitudes | Secuencial azul `#86b6ef → #0d366b` (`SEQUENTIAL`) | Un solo tono; más oscuro es más |
+| Desviación frente a meta | Divergente `#0d366b … #f0efec … #b3261e` (`DIVERGING`) | Neutro `#f0efec` en el cero; azul por debajo, rojo por encima |
 
-<!-- TODO(ui): actualizar identidad visual, paleta y capturas cuando termine el rediseño de la interfaz. -->
+Tipografía Inter (OFL) servida localmente; radios pequeños, superficies claras
+y `focusRing: auto`. Los gráficos Plotly usan `figure()` del tema (sin zoom,
+ejes fijos, leyenda por texto) y siempre tienen una tabla alternativa; ver
+[definiciones analíticas](analitica-decisiones.md).
+
+Los iconos son Tabler (`tabler:*`) cargados por el navegador desde
+`api.iconify.design`. Acompañan texto en navegación y acciones y nunca son el
+único portador de significado. **Límite:** en clientes sin salida a internet
+los iconos no se descargan; el texto y la operación se conservan.
 
 ## Servicios y módulos
 
 FastAPI y Dash llaman al mismo servicio de lectura; no hay HTTP interno.
-`create_app` administra conectores y motor SQL. Las lecturas y acciones bloqueantes
-se ejecutan en threadpool. La función que presenta una página consume las
-proyecciones ya consultadas.
+`create_app` administra conectores, motor SQL, middleware de sesión y
+autorización. Las lecturas y acciones bloqueantes se ejecutan en threadpool.
+La función que presenta una página consume las proyecciones ya consultadas.
 
 | Módulo bajo `apps/api/app` | Responsabilidad |
 | --- | --- |
-| `dashboard/application.py` | Layout, callbacks, consultas, acciones y stores por navegador |
+| `dashboard/application.py` | `MantineProvider`, `AppShell` (cabecera, navbar, `Drawer` móvil), callbacks, consultas, acciones y stores por navegador |
+| `dashboard/theme.py` | Paleta, tema Mantine, tema AG Grid y template Plotly `econ`; `state_family`/`state_color` |
+| `dashboard/components.py` | Bloques reutilizables: `icon`, `heading`, `section`, `notice`, `state_text`, `facts`, `rows_table`, `accordion`, `provenance`, `grid` (AG Grid con locale en español) |
 | `dashboard/context.py` | Parámetros URL validados y enlaces con IDs codificados |
-| `dashboard/analytics.py`, `dashboard/views.py` | Relación solicitud/unidad, tablas, fichas y procedencia |
-| `dashboard/equipment_views.py`, `dashboard/evidence_views.py` | Inventario completo de la consulta y comparación de hechos por origen |
+| `dashboard/views.py` | `PAGES`, navegación, línea de alcance, pestañas de filtro, resumen, solicitudes, maquinaria, fuentes y `render_page` |
+| `dashboard/analytics.py`, `dashboard/decision_analytics.py` | Relación solicitud/unidad, población filtrada, calendario y distribución por estado |
 | `dashboard/decision_priorities.py` | Un asunto con evidencia y siguiente paso por solicitud |
-| `dashboard/decision_analytics.py`, `dashboard/decision_views.py` | Población filtrada, calendario y distribución por estado |
-| `dashboard/workflow_forms.py`, `dashboard/workflow_views.py`, `dashboard/workflow_actions.py` | Preparación, registro de movimientos y recepción |
+| `dashboard/evidence_views.py` | Comparación de hechos por origen, interpretación y cronología por solicitud |
+| `dashboard/workflow_forms.py`, `dashboard/workflow_views.py`, `dashboard/workflow_actions.py` | Preparación, registro de movimientos, recepción y ejecución de acciones con permiso |
+| `dashboard/auth_views.py`, `dashboard/admin_views.py` | Página `/login`, identidad en la cabecera, ayudas de permiso y página `/administracion`; las reglas viven en `api/users.py` |
+| `core/auth.py`, `api/auth.py`, `api/users.py` | Roles, permisos, sesión, login/logout/me y administración de usuarios |
 | `services/hub.py` | Proyección de lectura `HubResponse`, compartida con HTTP |
 | `services/evidence.py` | Proyección de evidencia persistida mediante identidades y períodos compatibles |
-| `services/workflow.py`, `services/ledger.py` | Reglas operativas, persistencia, cortes, eventos y cola transaccional |
-| `dashboard/assets` | CSS, Inter con licencia OFL y recursos ECON |
+| `services/workflow.py`, `services/ledger.py` | Reglas operativas, permiso por acción, persistencia, cortes, eventos y cola transaccional |
+| `dashboard/assets` | `style.css` mínimo (skip link, foco, grid, impresión), Inter y logotipos ECON |
+
+Se retiraron `icons.py`, `decision_views.py`, `equipment_views.py`, los SVG
+locales y el menú clientside: Mantine e Iconify cubren esas funciones.
 
 Las relaciones usan IDs originales, fuente, entorno y evidencia compatibles.
 Los movimientos que alimentan las decisiones deben corresponder también a la
 asignación y período vigentes; el detalle conserva la evidencia histórica.
-Una visita GPS o tarea completada no genera recepción. Esta requiere responsable,
-instante con zona y referencia de constancia.
+Una visita GPS o tarea completada no genera recepción. Esta requiere
+responsable, instante con zona y referencia de constancia.
 
 ## Estado, errores y habilitaciones
 
-La URL conserva `mode`, `q` y `filter`. Se rechazan modos desconocidos, parámetros
-duplicados, filtros inválidos y búsquedas mayores de 100 caracteres. Aplicar
-actualiza la URL; Atrás/Adelante sincroniza los controles.
+La URL conserva `mode`, `q` y `filter`. Se rechazan modos desconocidos,
+parámetros duplicados, filtros inválidos y búsquedas mayores de 100 caracteres.
+Aplicar (o Enter en Buscar) y las pestañas de filtro actualizan la URL;
+Atrás/Adelante sincroniza los controles. Abrir un detalle desde una lista
+conserva el modo pero no limita el registro por la búsqueda.
 
 Cada navegador guarda `HubResponse` en `dcc.Store(storage_type="memory")` con
-clave `[modo, búsqueda]`. Cambiar página o filtro visual reutiliza esa lectura;
+clave `[modo, búsqueda]`. Cambiar página o filtro reutiliza esa lectura;
 Actualizar vuelve a consultarla. Un store separado conserva `WorkflowOverview`
-por modo. Los planes, cortes, eventos y recepciones persisten en PostgreSQL:
-el store del navegador es una proyección, no el registro durable.
+por modo. Planes, cortes, eventos y recepciones persisten en PostgreSQL: el
+store del navegador es una proyección, no el registro durable.
 
 `WorkflowOverview.available` indica si se pudo leer el registro y `complete`
-si todos los movimientos de ese modo/solicitud caben en la primera página.
-Coincide con `coverage.is_complete`; el contrato incluye total y paginación HTTP
-mediante `page` y `page_size` (hasta 500). Dash consulta la primera página de 100
-movimientos y muestra su cobertura; todavía no tiene controles para otras páginas.
-Un resultado parcial conserva los movimientos observados, pero no acredita la
-ausencia de otros ni habilita recomendaciones que presuponen ese conocimiento.
-Esto es independiente de la cobertura integrada de `HubResponse.scope`.
+si todos los movimientos de ese modo/solicitud caben en la primera página
+(100 movimientos; HTTP admite `page` y `page_size` hasta 500). Un resultado
+parcial conserva lo observado, pero no acredita la ausencia de otros
+movimientos. Esto es independiente de `HubResponse.scope`.
 
 Pydantic valida las proyecciones antes de presentarlas. Una respuesta de otro
 modo o búsqueda se oculta; un fallo de lectura no sirve el resultado anterior
-como si fuera actual. Errores, fuentes no disponibles y cobertura parcial quedan
-visibles. Las respuestas de API y callbacks usan `Cache-Control: no-store`;
-mensajes de error omiten credenciales y cuerpos privados del proveedor.
+como si fuera actual. Errores, fuentes no disponibles y cobertura parcial
+quedan visibles. Las respuestas de API y callbacks usan `Cache-Control:
+no-store`; los mensajes omiten credenciales y cuerpos privados del proveedor.
 
 `fixture` usa los cinco equipos y dos solicitudes del archivo suministrado;
 `live` consulta datos actuales del sandbox. Ambos son sintéticos y no hay
-fallback entre modos. La fecha documental no inventa un instante de observación,
-tareas, GPS o recepciones.
+fallback entre modos. Las lecturas remotas, escrituras remotas y encolado
+automático siguen deshabilitados por defecto y solo los habilita el servidor;
+un rol o un flag del navegador no los encienden. El worker se inicia por CLI;
+navegar por el panel no lo inicia.
 
-<!-- TODO(auth): describir aquí el flujo de inicio de sesión, los roles y qué rutas exigen cada rol. -->
-La autenticación y los roles se administran en la aplicación. Las lecturas
-remotas, escrituras remotas y gestión local están deshabilitadas por defecto.
-La gestión exige habilitación del servidor; los flags del navegador no
-otorgan permisos. Las credenciales permanecen en el backend. La ejecución
-periódica requiere iniciar el worker por CLI; navegar por el panel no lo inicia.
+## Accesibilidad
+
+- Enlace «Saltar al contenido» hacia `main#content` (`tabIndex=-1`), foco
+  visible con `:focus-visible` y anillo de Mantine.
+- `AppShell` con `nav[aria-label]`; el `Drawer` móvil se abre con el botón
+  `burger` (`aria-controls`, `aria-expanded`), atrapa el foco, cierra con
+  Escape, fondo o navegación y devuelve el foco al control.
+- Todos los controles tienen etiqueta visible; pestañas de filtro con
+  `aria-label`; mensajes de acción en una región `aria-live="polite"`.
+- AG Grid con teclado, locale en español y desplazamiento horizontal; las
+  tablas no ocultan columnas de negocio en móvil (390 px).
+- `prefers-reduced-motion` desactiva animaciones.
 
 ## Desarrollo y verificación
 
 Los comandos vigentes están en [desarrollo](desarrollo.md),
 [servicio Python](../apps/api/README.md) y
-[guía operativa](solucion-integracion.md). Ejecutar `scripts/check.sh` (o `check.ps1`) para
-cambios de aplicación y `--container`/`-Container` para validar la imagen. Los cambios de
-interfaz requieren revisar escritorio, móvil, navegación por teclado, estados
-vacío/error y preservación de filtros. Las capturas de versiones anteriores no
-son evidencia visual de la portada actual.
+[guía operativa](solucion-integracion.md). Ejecutar `scripts/check.sh` (o
+`check.ps1`) para cambios de aplicación y `--container`/`-Container` para
+validar la imagen. Los cambios de interfaz requieren revisar escritorio
+(1280 px), móvil (390 px), teclado, estados vacío/error, preservación de
+filtros y la vista con y sin permisos de gestión.
 
 El CSS se registra con versión por contenido para servir estilos en rutas
-internas desde el primer arranque. Dash distribuye los componentes del navegador;
-el equipo mantiene los módulos Python y sus assets locales.
+internas desde el primer arranque. Dash distribuye los componentes del
+navegador; el equipo mantiene los módulos Python y sus assets locales.

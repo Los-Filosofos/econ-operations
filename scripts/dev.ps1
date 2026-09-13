@@ -1,3 +1,5 @@
+# Local Dash + FastAPI server with reload. Needs SESSION_SECRET in apps/api/.env
+# (or AUTH_REQUIRED=false for development only).
 param([int]$Port = 8050)
 $ErrorActionPreference = 'Stop'
 $projectPath = Join-Path $PSScriptRoot '..\apps\api'

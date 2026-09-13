@@ -74,7 +74,9 @@ describe planificación; no reconstruye cambios históricos de estado.
 
 `app/dashboard/decision_priorities.py` deriva los asuntos por solicitud;
 `decision_analytics.py` selecciona la población y prepara los gráficos;
-`decision_views.py` los presenta. Las reglas del contrato compartido permanecen
+`views.py` (`overview`) los presenta con el template Plotly `econ` de
+`theme.py`, que colorea cada estado con la paleta cualitativa compartida. Las
+reglas del contrato compartido permanecen
 en `app/services/hub.py`. Los cambios deben mantener alineados los modelos
 Pydantic y sus consumidores Dash; ver [arquitectura de interfaz](frontend-architecture.md).
 

@@ -38,14 +38,25 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
   `live` es una lectura actual del sandbox. Nunca se sustituyen entre sí.
 - La portada empieza por decisiones (proyecto, revisión necesaria, evidencia y
   siguiente paso), sin cards de conteos, badges ni prioridad inventada. Sidebar
-  con Resumen, Solicitudes, Maquinaria, Operaciones y Fuentes; tablas de seis
-  columnas con detalles desplegables. Gráficos elegidos con criterio de analista
-  ([analítica](analitica-decisiones.md)). El color codifica información, no
-  decoración.
+  con Resumen, Solicitudes, Maquinaria, Operaciones y Fuentes (y Administración
+  para `admin`); tablas de seis columnas con detalles desplegables. Gráficos
+  elegidos con criterio de analista ([analítica](analitica-decisiones.md)).
+- Interfaz con dash-mantine-components, iconos Tabler (dash-iconify) y AG Grid
+  Community. El color codifica información, no decoración: el azul ECON es
+  marca y acción; los estados usan una paleta cualitativa propia; magnitudes,
+  escala secuencial; desviaciones frente a meta, escala divergente
+  ([arquitectura](frontend-architecture.md)).
 - Credenciales solo en el servidor; lecturas y escrituras remotas deshabilitadas
   por defecto; no publicar acceso live sin protección.
-- La autenticación y los roles de usuario se administran en la aplicación.
-  <!-- TODO(auth): resumir aquí roles, permisos por ruta y su relación con las habilitaciones del servidor. -->
+- La autenticación y los roles se administran en la aplicación
+  ([ADR 0005](adr/0005-session-auth-and-roles.md)): sesión por cookie firmada,
+  `AUTH_REQUIRED=true` por defecto y primer `admin` creado por CLI. `admin`
+  tiene todos los permisos; `logistica` gestiona traslados y declara recepción;
+  `gerencia_proyecto` declara recepción; `mantenimiento`, `control_costos` y
+  `lectura` solo leen. La autoridad de gestión viene del rol; las
+  habilitaciones `ALLOW_LIVE_READS`, `ALLOW_LIVE_WRITES` y
+  `AUTO_QUEUE_TRANSFERS` siguen siendo del servidor y ningún rol las enciende.
+  `ALLOW_LOCAL_MANAGEMENT` solo cuenta en desarrollo con `AUTH_REQUIRED=false`.
 - UI y textos en español; código, commits y PR en inglés.
 
 ## Identidad y muestras
@@ -111,14 +122,17 @@ Implementado: lectura acotada de Prisma; SDK Startrack de lectura y creación co
 habilitación independiente; planes, cortes, eventos, cola transaccional y
 recepción declarada en PostgreSQL ([ADR 0004](adr/0004-persistent-transfer-workflow.md));
 worker explícito por CLI con avance durable de revisión; cobertura visible del
-registro (`WorkflowOverview.complete`); proyección de evidencia persistida en el hub.
+registro (`WorkflowOverview.complete`); proyección de evidencia persistida en el
+hub; inicio de sesión, roles y administración de usuarios (`/login`,
+`/administracion`, `/api/v1/auth`, `/api/v1/users`).
 
 Pendiente: validación autenticada de Startrack (clave, catálogos y codificación
 de listas en creación); cotejo individual de las 51 definiciones para RF-02;
 demostración RF-04/RF-05 con evidencia vinculada de ambas plataformas;
 presentación final de hasta diez diapositivas; reproducción del PDF del manual;
 detección de cambios Prisma posteriores al envío, orden determinista de
-observaciones, cobertura por fuente y bandeja durable de eventos. El backlog con
+observaciones, cobertura por fuente y bandeja durable de eventos; vincular el
+usuario autenticado a la declaración de recepción. El backlog con
 criterios está en [output/auditoria-2026-09-12](../output/auditoria-2026-09-12/README.md).
 Las propuestas de [sincronización y escala](sincronizacion-y-discrepancias.md)
 no están implementadas.

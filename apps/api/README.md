@@ -1,24 +1,44 @@
 # ECON Python Hub
 
-Dash + Plotly + AG Grid Community on FastAPI, with SQLModel + Alembic and PostgreSQL for the integration store. The hub endpoint remains a read projection; the separate operations service persists plans, source snapshots, a dispatch outbox and evidence. An explicit CLI worker performs bounded synchronization. All business data for this project is synthetic sandbox data; file samples and current provider reads remain separate evidence.
+Dash (dash-mantine-components, dash-iconify, Plotly, AG Grid Community) on FastAPI, with SQLModel + Alembic and PostgreSQL for the integration store. The hub endpoint remains a read projection; the separate operations service persists plans, source snapshots, a dispatch outbox and evidence. An explicit CLI worker performs bounded synchronization. All business data for this project is synthetic sandbox data; file samples and current provider reads remain separate evidence.
 
 From the repository root:
 
 ```sh
 [ -f apps/api/.env ] || cp apps/api/.env.example apps/api/.env
+python -c "import secrets; print(secrets.token_urlsafe(32))"   # paste as SESSION_SECRET in apps/api/.env
 docker compose up -d --wait db
 uv sync --project apps/api --locked
 uv run --directory apps/api alembic upgrade head
+uv run --directory apps/api python -m app.cli.create_user --email admin@example.com --role admin --name "Administración"
 ./scripts/dev.sh   # PowerShell: .\scripts\dev.ps1
 ```
 
-Do not overwrite an existing `.env`; retain its database settings. Configuration loads `apps/api/.env` regardless of the working directory. Open `http://localhost:8050` for Dash and `http://localhost:8050/docs` for the typed OpenAPI contract. Both use one server and the shared `app/services/hub.py` read service. UI code and local assets live in `app/dashboard`; the URL carries the origin, search and display filter. Snapshots are scoped to each browser in memory. See [the dashboard architecture](../../docs/frontend-architecture.md).
+Do not overwrite an existing `.env`; retain its database settings. Configuration loads `apps/api/.env` regardless of the working directory. `SESSION_SECRET` is mandatory: the application refuses to start without it unless `AUTH_REQUIRED=false` (development only). `create_user` prompts for the password (or reads it with `--password-stdin`); passwords are never command-line arguments. Open `http://localhost:8050` for Dash (sign in at `/login`) and `http://localhost:8050/docs` for the typed OpenAPI contract. Both use one server and the shared `app/services/hub.py` read service. UI code and local assets live in `app/dashboard`; the URL carries the origin, search and display filter. Snapshots are scoped to each browser in memory. See [the dashboard architecture](../../docs/frontend-architecture.md).
 
 ```sh
 ./scripts/check.sh   # ruff check, ruff format --check, pytest; --container builds the image
 ```
 
-The health tests use temporary SQLite files; normal development uses the existing PostgreSQL Docker service. Schema migrations still run explicitly, never on server startup. `DATABASE_URL` accepts `postgres://`, `postgresql://` and `postgresql+psycopg://`: the first two select the installed psycopg driver without changing credentials, hostname, database or SSL options. Other explicit driver schemes are preserved. CI without a local `.env` must supply `DATABASE_URL` before importing the application.
+Tests set `AUTH_REQUIRED=false` through `conftest.py` (the auth tests enable it explicitly), use `httpx2` for Starlette 1.6's TestClient and fail on any `DeprecationWarning`. The health tests use temporary SQLite files; normal development uses the existing PostgreSQL Docker service. Schema migrations still run explicitly, never on server startup. `DATABASE_URL` accepts `postgres://`, `postgresql://` and `postgresql+psycopg://`: the first two select the installed psycopg driver without changing credentials, hostname, database or SSL options. Other explicit driver schemes are preserved. CI without a local `.env` must supply `DATABASE_URL` before importing the application.
+
+## Session and roles
+
+`app/core/auth.py` owns roles, permissions and the session identity ([ADR 0005](../../docs/adr/0005-session-auth-and-roles.md)). Sessions are a signed `econ_session` cookie (Starlette `SessionMiddleware`; HttpOnly, `SameSite=lax`, `Secure` with `SESSION_HTTPS_ONLY=true`, `SESSION_MAX_AGE_SECONDS` default 28800). Passwords are argon2 hashes through `pwdlib`. The role is read from SQL on every request, so deactivating a user or changing a password ends their sessions immediately.
+
+| Role | `read` | `manage_transfers` | `declare_reception` | `manage_users` |
+| --- | --- | --- | --- | --- |
+| `admin` | yes | yes | yes | yes |
+| `logistica` | yes | yes | yes | |
+| `gerencia_proyecto` | yes | | yes | |
+| `mantenimiento`, `control_costos`, `lectura` | yes | | | |
+
+- `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`.
+- `GET/POST /api/v1/users`, `PATCH /api/v1/users/{id}` (admin only).
+- Without a session: 401 on `/api/*` and Dash callbacks, redirect to `/login?next=` for pages. Without the permission: 403. Ten failed logins per IP in fifteen minutes: 429. Deactivating the last active admin or your own account: 409.
+- Pages `/login` and `/administracion` (admin only).
+
+Live reads are visible to every role once the server enables them; management actions (plans, queue, sync, receipt) require the permission above. With `AUTH_REQUIRED=false` (development only) there is no login and management falls back to `ALLOW_LOCAL_MANAGEMENT` from a loopback, same-origin request. The retired `CORS_ORIGINS` setting is gone: UI and API share one origin.
 
 ## Read contract
 
@@ -47,11 +67,9 @@ Administrative availability is not physical availability. Task completion, GPS/g
 
 ## Nexus live reads
 
-Live mode is disabled until the server operator explicitly sets `ALLOW_LIVE_READS=true` and configures `NEXUS_EMAIL` and `NEXUS_PASSWORD`. Leave live reads disabled on a public fixture deployment. The browser never receives upstream credentials.
+Live mode is disabled until the server operator explicitly sets `ALLOW_LIVE_READS=true` and configures `NEXUS_EMAIL` and `NEXUS_PASSWORD`. Leave live reads disabled on a public fixture deployment. The browser never receives upstream credentials. Every signed-in role can read live data once the server enables it; no role can enable it.
 
-<!-- TODO(auth): document which roles may read live data and manage operations once the login phase lands. -->
-
-The connector contacts only `https://econ-key.maic.ai`. It authenticates through the observed `/api/auth/login` endpoint and keeps the cookie in a process-local HTTP client. The hub reads equipment and requests; the workflow can read exact request/equipment details, and optional methods expose projects and operators. It performs no business writes. Redirects and environment proxies are disabled.
+The connector contacts only `https://econ-key.maic.ai`. It authenticates through the observed `/api/auth/login` endpoint and keeps the cookie in a process-local HTTP client. The hub reads equipment and requests; the workflow can read exact request/equipment details. It performs no business writes. Both connectors share `app/integrations/http.py` (`BoundedClient`): one fixed origin, no redirects, environment proxies ignored, serialized reads under a time budget and a 1 MB cap per response.
 
 The new connector was verified against the assigned account on **2026-09-12 at 19:05 UTC** with one page of one record per collection: equipment returned 1 of a reported 15, and requests returned 1 of a reported 2. It correctly marked that bounded read incomplete. The first strict validation identified a wrong assumption that `clave` was always a string; the real nullable value is now preserved separately from `no_activo`. This small check validates those sampled fields and access, not every record or a supported long-term provider contract. It did not enable live mode permanently or obtain Startrack API access.
 
@@ -61,7 +79,7 @@ A `401` allows one serialized reauthentication and one repeat of that safe GET. 
 
 ## Startrack SDK and local transfer preparation
 
-`app/integrations/startrack.py` implements bounded reads for tasks, geofences, users, vehicles, task statuses/types, visits and form responses. Task creation has an independent server-side write gate and no POST retry. It uses a fixed sandbox origin, server-owned Basic credentials, explicit pagination/size/time limits and sanitized errors. An exhausted page is not a complete integrated snapshot. Authenticated provider validation, including array encoding in task creation, is still pending.
+`app/integrations/startrack.py` implements bounded reads for tasks, geofences, users, vehicles, task statuses/types and visits. Drafts validate explicit dates and unique ID lists with Pydantic types (`ExplicitDate`, `UniqueIds`); the ledger validates observation payloads with `ObservationData`. Task creation has an independent server-side write gate and no POST retry. It uses a fixed sandbox origin, server-owned Basic credentials, explicit pagination/size/time limits and sanitized errors. An exhausted page is not a complete integrated snapshot. Authenticated provider validation, including array encoding in task creation, is still pending.
 
 `app/services/transfers.py` prepares a local task draft from an approved request, its exact machinery record and an explicit mapping of source IDs, destination geofence, assigned Startrack users, movement reference and scheduled date. Missing facts or conflicting IDs prevent draft generation. Supplied examples remain identified as samples. Draft payloads disable contact notifications and never infer delivery, receipt, current availability or unique remote IDs.
 
@@ -77,8 +95,11 @@ An optional `--mapping` local JSON file supplies the explicit mapping for a revi
 
 `services/workflow.py` is shared by Dash actions, `/api/v1/operations` and
 `python -m app.cli.sync_operations`. `services/ledger.py` owns short transactions,
-source snapshots and a durable dispatch claim. Apply `alembic upgrade head`
-explicitly; startup never creates or drops tables.
+source snapshots and a durable dispatch claim. Timestamps go through the
+`UTCDateTime` type in `models/operations.py`, so SQLite and PostgreSQL store
+and return aware UTC instants. Apply `alembic upgrade head` explicitly
+(`0001_operations`, `0002_review_schedule`, `0003_users`); startup never
+creates or drops tables.
 
 - `GET /api/v1/operations?mode=fixture`: movements and execution history.
 - `GET /api/v1/operations/catalogs`: bounded sandbox mapping catalogs.
@@ -87,8 +108,10 @@ explicitly; startup never creates or drops tables.
 - `POST /api/v1/operations/sync`: one bounded synchronization and dispatch cycle.
 - `POST /api/v1/operations/{id}/receipt`: record a receiver, zoned instant and evidence reference.
 
-Management requires `ALLOW_LOCAL_MANAGEMENT=true`, a loopback request and a
-matching origin. Browser flags cannot enable it. Remote creation additionally
+Management requires a session whose role holds `manage_transfers` (receipt:
+`declare_reception`); `WorkflowService` checks the permission per action. Only
+with `AUTH_REQUIRED=false` does `ALLOW_LOCAL_MANAGEMENT=true` plus a loopback,
+same-origin request grant it. Browser flags cannot enable it. Remote creation additionally
 requires `ALLOW_LIVE_READS`, `ALLOW_LIVE_WRITES` and both provider credentials.
 All flags default to false. `AUTO_QUEUE_TRANSFERS` applies only to explicitly
 saved, currently approved and validated plans; it does not invent mappings.

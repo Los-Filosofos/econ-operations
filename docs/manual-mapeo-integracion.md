@@ -165,11 +165,15 @@ crea tablas. **Registro no disponible** exige comprobar conexión y esquema, no
 interpretar cero movimientos. El [manual de operación](solucion-integracion.md)
 detalla instalación, ciclos CLI y límites de cobertura.
 
-`ALLOW_LOCAL_MANAGEMENT` permite gestión local; `ALLOW_LIVE_READS`, lecturas;
-`ALLOW_LIVE_WRITES`, envío; `AUTO_QUEUE_TRANSFERS`, encolado automático de planes
-válidos. Inicialmente son `false`. La UI no concede esos permisos. No se habilitan
-credenciales ni se ejecutan escrituras por seguir este documento. La gestión
-permanece local y live no debe publicarse por defecto.
+La gestión exige iniciar sesión con un rol que la permita (`admin` o
+`logistica` para planes, cola y sincronización; también `gerencia_proyecto`
+para declarar recepción; [ADR 0005](adr/0005-session-auth-and-roles.md)).
+`ALLOW_LIVE_READS` habilita lecturas; `ALLOW_LIVE_WRITES`, envío;
+`AUTO_QUEUE_TRANSFERS`, encolado automático de planes válidos;
+`ALLOW_LOCAL_MANAGEMENT` solo cuenta en desarrollo con `AUTH_REQUIRED=false`.
+Inicialmente son `false`. Ningún rol ni control de la UI enciende esas
+habilitaciones. No se habilitan credenciales ni se ejecutan escrituras por
+seguir este documento; live no debe publicarse por defecto.
 
 La creación autenticada en Startrack continúa pendiente de validar credenciales,
 permisos, IDs y codificación de listas aceptada por la cuenta. Las pruebas locales

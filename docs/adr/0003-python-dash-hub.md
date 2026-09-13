@@ -43,7 +43,9 @@ conserva las versiones anteriores ya versionadas.
 - Cloudflare Static Assets deja de ser el destino de la aplicación dinámica.
 - Estado por navegador; consultas bloqueantes en threadpool.
 - PostgreSQL y su volumen permanecen. No se añade historial, sincronización
-  continua, login ni conexión autenticada a Startrack.
+  continua, login ni conexión autenticada a Startrack. (El login y los roles
+  se incorporaron después en [ADR 0005](0005-session-auth-and-roles.md); la
+  interfaz pasó a dash-mantine-components sin cambiar esta decisión.)
 - Las métricas se limitan a los registros recibidos, con cobertura visible.
 
 La operación futura requiere validar contratos, correspondencias, carga,

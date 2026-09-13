@@ -14,13 +14,20 @@ PostgreSQL local. Desde la raíz:
 ```sh
 uv sync --project apps/api --locked
 [ -f apps/api/.env ] || cp apps/api/.env.example apps/api/.env
+# Poner en apps/api/.env el secreto de sesión (obligatorio):
+python -c "import secrets; print(secrets.token_urlsafe(32))"   # → SESSION_SECRET=
 docker compose up -d --wait db
 uv run --directory apps/api alembic upgrade head
+uv run --directory apps/api python -m app.cli.create_user \
+  --email admin@example.com --role admin --name "Administración"   # pide la contraseña
 ./scripts/dev.sh            # PowerShell: .\scripts\dev.ps1
 ```
 
-Abrir **http://127.0.0.1:8050**. El servicio también expone `/docs`,
-`/api/v1/hub`, `/health/live` y `/health/ready`. Sin scripts:
+Abrir **http://127.0.0.1:8050**, iniciar sesión en `/login` con ese usuario y
+crear el resto en `/administracion`. El servicio también expone `/docs`,
+`/api/v1/hub`, `/health/live` y `/health/ready`. Sin `SESSION_SECRET` la
+aplicación no arranca; `AUTH_REQUIRED=false` desactiva el login **solo para
+desarrollo**. Sin scripts:
 
 ```sh
 uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050 --reload
@@ -41,8 +48,14 @@ PostgreSQL.
 - **Operaciones:** prepara y guarda el traslado, consulta su envío, conserva
   cambios de estado y registra una recepción con responsable y constancia.
 - **Fuentes y cobertura:** diferencia muestras proporcionadas y lecturas live.
+- **Administración** (solo `admin`): usuarios, roles, activación y contraseñas.
 
-<!-- TODO(ui): actualizar este recorrido y añadir capturas cuando termine el rediseño. -->
+La interfaz usa componentes Mantine (dash-mantine-components) con iconos
+Tabler, tablas AG Grid Community y gráficos Plotly. El azul ECON identifica la
+marca y las acciones; los estados usan una paleta cualitativa propia y las
+magnitudes y desviaciones escalas secuencial y divergente
+([arquitectura](docs/frontend-architecture.md)). Los iconos se descargan de
+`api.iconify.design`: sin internet en el cliente se ve el texto sin icono.
 
 El modo `fixture` contiene cinco máquinas y dos solicitudes extraídas del
 OpenAPI proporcionado, con sus IDs y valores originales; no incluye
@@ -54,12 +67,28 @@ declaración explícita; el GPS no la crea.
 FastAPI comparte con Dash el servicio que guarda planes, correspondencias,
 historial y cortes en PostgreSQL. El SDK de Startrack crea tareas solo con
 habilitación explícita; una cola persistente concilia resultados inciertos sin
-repetir el envío. Gestionar planes desde el equipo local requiere
-`ALLOW_LOCAL_MANAGEMENT=true`; el envío al sandbox exige además credenciales y
-flags documentados en la [guía operativa](docs/solucion-integracion.md). Las
+repetir el envío. El envío al sandbox exige credenciales y flags del servidor
+documentados en la [guía operativa](docs/solucion-integracion.md). Las
 lecturas y escrituras remotas están deshabilitadas por defecto.
 
-<!-- TODO(auth): describir el inicio de sesión, los roles y el usuario administrador inicial. -->
+## Sesión y roles
+
+El acceso exige iniciar sesión (cookie firmada `econ_session`, HttpOnly).
+El primer administrador se crea con `app.cli.create_user`; los demás usuarios,
+desde `/administracion` o `POST /api/v1/users`. Roles y permisos:
+
+| Rol | Puede |
+| --- | --- |
+| `admin` | Todo: leer, gestionar traslados, declarar recepción y administrar usuarios |
+| `logistica` | Leer, guardar planes, encolar y sincronizar, declarar recepción |
+| `gerencia_proyecto` | Leer y declarar recepción |
+| `mantenimiento`, `control_costos`, `lectura` | Leer |
+
+Corresponden a la RACI de [equivalencias](docs/equivalencias-prisma-startrack.md).
+Sin sesión la API responde 401 y las páginas redirigen a `/login`; sin permiso,
+403. La autoridad de gestión viene del rol; `ALLOW_LOCAL_MANAGEMENT` solo cuenta
+en desarrollo con `AUTH_REQUIRED=false`. Detalles en
+[ADR 0005](docs/adr/0005-session-auth-and-roles.md).
 
 ## Verificar y desplegar
 
@@ -77,6 +106,7 @@ sirve interfaz y API juntas.
 
 [Índice](docs/README.md) · [Contexto vigente](docs/contexto-vigente.md) ·
 [Arquitectura Dash](docs/frontend-architecture.md) ·
+[Sesión y roles](docs/adr/0005-session-auth-and-roles.md) ·
 [Solución y operación](docs/solucion-integracion.md) ·
 [Analítica](docs/analitica-decisiones.md) ·
 [Mapeo y responsabilidades](docs/equivalencias-prisma-startrack.md) ·

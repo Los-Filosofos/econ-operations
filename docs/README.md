@@ -26,10 +26,14 @@ PDFs en [`output/pdf`](../output/pdf). Backlog con criterios de aceptación en
   [despliegue](despliegue-backend.md).
 - [Guía operativa](solucion-integracion.md): planes, cola, ciclos, conciliación
   y recepción explícita.
-- [Arquitectura de interfaz](frontend-architecture.md), [API en Swagger](api-swagger.md)
+- [Arquitectura de interfaz](frontend-architecture.md) (Mantine, paleta
+  semántica, rutas y acceso), [API en Swagger](api-swagger.md)
   y [README del servicio](../apps/api/README.md).
-- [ADR 0003](adr/0003-python-dash-hub.md) (hub Python) y
-  [ADR 0004](adr/0004-persistent-transfer-workflow.md) (persistencia y traslado).
+- [ADR 0003](adr/0003-python-dash-hub.md) (hub Python),
+  [ADR 0004](adr/0004-persistent-transfer-workflow.md) (persistencia y traslado)
+  y [ADR 0005](adr/0005-session-auth-and-roles.md) (sesión, roles y permisos:
+  `admin`, `gerencia_proyecto`, `logistica`, `mantenimiento`, `control_costos`,
+  `lectura`).
 - [Integraciones observadas](integraciones-reales.md): evidencia fechada de
   acceso y contratos de Prisma y Startrack.
 - [Sincronización, discrepancias y escala](sincronizacion-y-discrepancias.md):
