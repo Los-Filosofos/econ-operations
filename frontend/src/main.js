@@ -1,5 +1,8 @@
 import { Router } from './router.js';
 import { createShell } from './components/shell.js';
+import { renderHubOperationalView } from './views/hub-operational.js';
+import { renderMobilityRouteView } from './views/mobility-route.js';
+import { renderPresentationDeckView } from './views/presentation-deck.js';
 import { renderGraphView } from './views/graph.js';
 import { renderIndicatorsView } from './views/indicators.js';
 import { renderIntegrationView } from './views/integration.js';
@@ -30,6 +33,23 @@ function mountView(path, renderer) {
         currentViewRenderer(content);
       }
     });
+
+    // Attach global search handler
+    const searchInput = shell.querySelector('#global-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const val = searchInput.value.trim().toLowerCase();
+          if (val.includes('proy') || val.includes('solicitud')) {
+            window.location.hash = '#/solicitudes';
+          } else if (val.includes('cf') || val.includes('re') || val.includes('exc') || val.includes('maquinaria')) {
+            window.location.hash = '#/maquinaria';
+          } else {
+            window.location.hash = '#/';
+          }
+        }
+      });
+    }
   }
 
   // Update active sidebar nav
@@ -38,9 +58,10 @@ function mountView(path, renderer) {
     link.classList.toggle('nav-item--active', linkPath === path);
   });
 
-  // Toggle full-screen layout mode for graph
+  // Toggle full-screen layout mode for graph and presentation
   const contentArea = shell.querySelector('#app-content');
-  contentArea.classList.toggle('app-content--full', path === '/');
+  const isFullScreen = path === '/grafo' || path === '/presentacion';
+  contentArea.classList.toggle('app-content--full', isFullScreen);
   contentArea.innerHTML = '';
 
   // Execute view renderer
@@ -48,7 +69,10 @@ function mountView(path, renderer) {
 }
 
 const routes = {
-  '/': () => mountView('/', renderGraphView),
+  '/': () => mountView('/', renderHubOperationalView),
+  '/movilidad': () => mountView('/movilidad', renderMobilityRouteView),
+  '/presentacion': () => mountView('/presentacion', renderPresentationDeckView),
+  '/grafo': () => mountView('/grafo', renderGraphView),
   '/indicadores': () => mountView('/indicadores', renderIndicatorsView),
   '/integracion': () => mountView('/integracion', renderIntegrationView),
   '/operaciones': () => mountView('/operaciones', renderOperationsView),

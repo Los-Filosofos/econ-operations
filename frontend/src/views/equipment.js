@@ -7,7 +7,7 @@ export async function renderEquipmentView(container) {
     <div class="page-header fade-in">
       <div>
         <h1 class="page-header__title">Inventario de Maquinaria</h1>
-        <div class="page-header__subtitle">Flota consultada de Prisma / Nexus, asignaciones activas y estado de mantenimiento</div>
+        <div class="page-header__subtitle">Flota consultada de Prisma, asignaciones activas y estado de mantenimiento</div>
       </div>
     </div>
 

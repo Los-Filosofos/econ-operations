@@ -5,12 +5,15 @@ export function createShell({ currentPath = '/', onNavigate }) {
   shell.className = 'app-shell';
 
   const navLinks = [
-    { path: '/', label: 'Grafo Operativo', icon: 'truck', section: 'Operaciones' },
-    { path: '/indicadores', label: 'Indicadores & SLA', icon: 'chart-bar', section: 'Analítica' },
-    { path: '/integracion', label: 'Traza Integración', icon: 'arrows-exchange', section: 'Analítica' },
-    { path: '/operaciones', label: 'Gestión Traslados', icon: 'clipboard-check', section: 'Gestión' },
-    { path: '/solicitudes', label: 'Solicitudes', icon: 'clipboard-list', section: 'Gestión' },
+    { path: '/', label: 'Vista Operativa', icon: 'layout-dashboard', section: 'Operación' },
+    { path: '/movilidad', label: 'Trazabilidad & Movilidad', icon: 'truck', section: 'Operación' },
+    { path: '/solicitudes', label: 'Proyectos & Solicitudes', icon: 'clipboard-list', section: 'Gestión' },
     { path: '/maquinaria', label: 'Maquinaria', icon: 'bulldozer', section: 'Gestión' },
+    { path: '/operaciones', label: 'Traslados & Despacho', icon: 'clipboard-check', section: 'Gestión' },
+    { path: '/indicadores', label: 'Reportes & SLAs', icon: 'chart-bar', section: 'Analítica' },
+    { path: '/integracion', label: 'Traza Integración', icon: 'arrows-exchange', section: 'Analítica' },
+    { path: '/presentacion', label: 'Presentación Ejecutiva', icon: 'checklist', section: 'Presentación' },
+    { path: '/grafo', label: 'Grafo Topológico 3D', icon: 'database', section: 'Avanzado' },
     { path: '/fuentes', label: 'Fuentes & Cobertura', icon: 'database', section: 'Sistema' },
   ];
 
@@ -38,11 +41,25 @@ export function createShell({ currentPath = '/', onNavigate }) {
         <button class="mobile-toggle" id="mobile-toggle" aria-label="Abrir menú">
           <img src="/icons/menu-2.svg" style="width: 20px; height: 20px;" alt="" />
         </button>
-        <div class="app-header__brand">
+        <a href="#/" class="app-header__brand" style="text-decoration: none;">
           <div class="app-header__brand-icon">E</div>
           <span>ECON Hub</span>
-        </div>
+        </a>
       </div>
+
+      <!-- Slide 4 Header Search & Filter Bar -->
+      <div class="hub-header-controls">
+        <div class="hub-search-wrapper">
+          <img src="/icons/search.svg" class="hub-search-icon" alt="" />
+          <input type="text" id="global-search-input" class="hub-search-input" placeholder="Buscar proyecto, maquinaria o ID..." />
+        </div>
+        <select id="global-filter-type" class="hub-filter-select">
+          <option value="all">Todos</option>
+          <option value="projects">Proyectos</option>
+          <option value="machinery">Maquinaria</option>
+        </select>
+      </div>
+
       <div class="app-header__status">
         <div class="app-header__mode" id="header-mode-badge">
           <span class="app-header__mode-dot"></span>

@@ -520,14 +520,14 @@ export async function renderGraphView(container) {
               <tbody>
                 <tr>
                   <td>2026-09-12 16:04:16 CST</td>
-                  <td>nexus:equipment:66faacde... (CF-03)</td>
+                  <td>prisma:equipment:66faacde... (CF-03)</td>
                   <td>Cambio de Estado ➔ OBSOLETA (Correctivo)</td>
                   <td>Taller Central Prisma</td>
                   <td class="audit-hash">sha256:7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1f...</td>
                 </tr>
                 <tr>
                   <td>2026-09-12 00:05:09 CST</td>
-                  <td>nexus:request:46d2573e... (PROY-014)</td>
+                  <td>prisma:request:46d2573e... (PROY-014)</td>
                   <td>Aprobación Formal de Asignación</td>
                   <td>Jefatura Logística Prisma</td>
                   <td class="audit-hash">sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b...</td>

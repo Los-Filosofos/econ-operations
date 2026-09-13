@@ -7,7 +7,7 @@ export async function renderRequestsView(container) {
     <div class="page-header fade-in">
       <div>
         <h1 class="page-header__title">Solicitudes de Maquinaria</h1>
-        <div class="page-header__subtitle">Requerimientos registrados en Prisma / Nexus y recomendación de unidades candidatas</div>
+        <div class="page-header__subtitle">Requerimientos registrados en Prisma y recomendación de unidades candidatas</div>
       </div>
     </div>
 

@@ -13,12 +13,23 @@
   --brand-glow: rgba(20, 79, 129, 0.25);
 
   /* Dark mode surfaces */
-  --bg-primary: #0f1218;
-  --bg-surface: #161b22;
-  --bg-elevated: #1c2333;
-  --bg-glass: rgba(22, 27, 34, 0.72);
-  --border: #30363d;
-  --border-light: #21262d;
+  --bg-primary: #0b0f17;
+  --bg-surface: #111827;
+  --bg-elevated: #162032;
+  --bg-glass: rgba(17, 24, 39, 0.78);
+  --border: #263348;
+  --border-light: #1b2636;
+
+  /* Source Brand Colors (Prisma & Startrack) */
+  --source-prisma: #6366f1;
+  --source-prisma-hover: #818cf8;
+  --source-prisma-bg: rgba(99, 102, 241, 0.12);
+  --source-prisma-border: rgba(99, 102, 241, 0.35);
+
+  --source-startrack: #ef4444;
+  --source-startrack-hover: #f87171;
+  --source-startrack-bg: rgba(239, 68, 68, 0.12);
+  --source-startrack-border: rgba(239, 68, 68, 0.35);
 
   /* Text */
   --text-primary: #e6edf3;

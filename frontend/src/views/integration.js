@@ -6,7 +6,7 @@ export async function renderIntegrationView(container) {
     <div class="page-header fade-in">
       <div>
         <h1 class="page-header__title">Traza de Integración End-to-End</h1>
-        <div class="page-header__subtitle">Trazabilidad de datos entre Prisma (ERP/Nexus), ECON (Normalización) y Startrack (Telemetría)</div>
+        <div class="page-header__subtitle">Trazabilidad de datos entre Prisma (ERP), ECON (Normalización) y Startrack (Telemetría)</div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
         <label for="request-selector" style="font-size: 0.75rem; color: var(--text-secondary);">Solicitud:</label>
