@@ -1,10 +1,21 @@
 # ECON · Hub de operaciones
 
-Aplicación **Python con Dash, Plotly y FastAPI** del Equipo 6 — Los Filósofos.
+> ### 🏆 ENTREGABLES OFICIALES · HACKATHON GRUPO ECON (DOMINGO 10:00 AM)
+> Todos los entregables obligatorios solicitados en el reto están organizados en la carpeta **[`ENTREGABLES/`](./ENTREGABLES/)**:
+> 1. 📊 **Matriz de Mapeo de Campos**: [`ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.pdf`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.pdf) (Excel: [`1-Matriz-de-Mapeo-de-Campos.xlsx`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.xlsx) | CSV: [`1-Matriz-de-Mapeo-de-Campos.csv`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.csv))
+> 2. 📋 **Matriz de Responsabilidades (RACI)**: [`ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.pdf`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.pdf) (CSV: [`2-Matriz-de-Responsabilidades-RACI.csv`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.csv))
+> 3. 🌐 **Prototipo Navegable & Guía de Demo**: [`ENTREGABLES/3-Prototipo-Navegable-y-Guia-de-Demo.pdf`](./ENTREGABLES/3-Prototipo-Navegable-y-Guia-de-Demo.pdf) (Web en vivo: `http://localhost:5173/` y `http://localhost:8050/docs`)
+> 4. 🖼️ **Diagramas de Arquitectura & Estados**: [`ENTREGABLES/4-Diagrama-de-Arquitectura-y-Dossier-Visual.pdf`](./ENTREGABLES/4-Diagrama-de-Arquitectura-y-Dossier-Visual.pdf)
+> 5. 📄 **Documento de Decisiones Técnicas (2 págs)**: [`ENTREGABLES/5-Documento-de-Decisiones-Tecnicas.pdf`](./ENTREGABLES/5-Documento-de-Decisiones-Tecnicas.pdf)
+> 6. 🎙️ **Presentación Final (10 Slides & Pitch)**: [`ENTREGABLES/6-Presentacion-Final-10-Slides-y-Pitch.pdf`](./ENTREGABLES/6-Presentacion-Final-10-Slides-y-Pitch.pdf)
+> 
+> *Índice detallado y enlaces directos en el [Dossier de Entregables](ENTREGABLES/README.md).*
+
+---
+
+Aplicación **Python con Dash, Plotly y FastAPI** y **Frontend Web SPA (Vite + Canvas 2D + Chart.js)** del Equipo 6 — Los Filósofos.
 Sigue cada solicitud desde el proyecto y la unidad asignada hasta el traslado,
 la llegada y la recepción, mostrando los vínculos y la evidencia que faltan.
-Interfaz y API viven en **un mismo proceso y origen**; no hay compilación
-frontend ni Node.js ([ADR 0003](docs/adr/0003-python-dash-hub.md)).
 
 ## Inicio
 
