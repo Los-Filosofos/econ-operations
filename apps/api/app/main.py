@@ -11,6 +11,7 @@ from app.api.auth import router as auth_router
 from app.api.documentation import API_DESCRIPTION, OPENAPI_TAGS
 from app.api.health import router as health_router
 from app.api.hub import router as hub_router
+from app.api.integration import router as integration_router
 from app.api.users import router as users_router
 from app.api.workflow import router as workflow_router
 from app.core.access import management_scope
@@ -139,6 +140,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(auth_router)
     application.include_router(users_router)
     application.include_router(hub_router)
+    application.include_router(integration_router)
     application.include_router(workflow_router)
     application.state.dashboard = create_dashboard(application)
     return application

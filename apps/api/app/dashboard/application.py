@@ -22,14 +22,22 @@ from app.dashboard.auth_views import (
 )
 from app.dashboard.components import icon, link, loading, notice
 from app.dashboard.context import QueryContext, parse_context
+from app.dashboard.integration_views import (
+    PANEL_PATTERN,
+    SELECT_PATTERN,
+    integration_controls,
+    trace_panel,
+)
 from app.dashboard.theme import BRAND, MANTINE_THEME
 from app.dashboard.views import (
     MODES,
     REQUEST_FILTERS,
     filter_tabs,
     navigation,
+    origin_line,
     render_page,
     scope,
+    searchable,
     workflow_page,
 )
 from app.dashboard.workflow_actions import WorkflowInputError, execute_action
@@ -65,27 +73,38 @@ ACTION_ERROR = (
 )
 
 
-def query_controls():
+# Pattern ids: only the list pages mount the bar, and its callbacks still register.
+SEARCH_ID = {"type": "query-search", "field": "q"}
+MODE_ID = {"type": "query-mode", "field": "mode"}
+APPLY_ID = {"type": "query-apply", "field": "apply"}
+SEARCH_PATTERN = {"type": "query-search", "field": ALL}
+MODE_PATTERN = {"type": "query-mode", "field": ALL}
+APPLY_PATTERN = {"type": "query-apply", "field": ALL}
+
+
+def query_controls(context: QueryContext | None = None):
+    """The full bar: it exists only where `q` narrows what the page lists."""
+    context = context or QueryContext()
     return dmc.Group(
         [
             dmc.TextInput(
-                id="search",
+                id=SEARCH_ID,
                 label="Buscar",
-                value="",
+                value=context.query,
                 placeholder="Proyecto, solicitud o maquinaria…",
                 leftSection=icon("search", 16),
                 autoComplete="off",
                 style={"flex": 1, "minWidth": 220},
             ),
             dmc.Select(
-                id="mode",
+                id=MODE_ID,
                 label="Origen de datos",
-                value="fixture",
+                value=context.mode,
                 data=[{"value": value, "label": label} for value, label in MODES.items()],
                 allowDeselect=False,
                 w={"base": "100%", "xs": 240},
             ),
-            dmc.Button("Aplicar", id="apply", n_clicks=0, style={"alignSelf": "flex-end"}),
+            dmc.Button("Aplicar", id=APPLY_ID, n_clicks=0, style={"alignSelf": "flex-end"}),
         ],
         align="flex-end",
         gap="sm",
@@ -168,7 +187,7 @@ def app_shell(auth_required: bool):
     main = dmc.AppShellMain(
         dmc.Container(
             [
-                query_controls(),
+                html.Div(id="query-controls"),
                 html.Div(id="scope"),
                 html.Div(id="workflow-feedback", **{"aria-live": "polite"}),
                 dcc.Loading(
@@ -219,6 +238,8 @@ def validation_controls():
             action_button("queue", "Poner en cola"),
             action_button("sync", "Sincronizar"),
             filter_tabs(QueryContext(), REQUEST_FILTERS, "Filtros"),
+            query_controls(),
+            *integration_controls(),
             # The signed-in header only exists inside a request; declare its IDs here.
             dmc.MenuItem("Cerrar sesión", id="logout", n_clicks=0),
         ]
@@ -309,43 +330,73 @@ def create_dashboard(server: FastAPI) -> Dash:
         return "true" if opened else "false"
 
     @dashboard.callback(
-        Output("mode", "value"),
-        Output("search", "value"),
-        Input("url", "search"),
+        Output("query-controls", "children"),
+        Input("url", "pathname"),
+        State("url", "search"),
     )
-    def sync_controls(search):
+    def query_bar(path, search):
+        """The bar is mounted only where searching applies; elsewhere the scope line carries
+        the origin. Its ids are patterns, so the callbacks below tolerate its absence."""
+        if not searchable(path):
+            return None
         try:
             context = parse_context(search)
         except ValueError:
-            return no_update, no_update
-        return context.mode, context.query
+            context = QueryContext()
+        return query_controls(context)
+
+    @dashboard.callback(
+        Output(MODE_PATTERN, "value"),
+        Output(SEARCH_PATTERN, "value"),
+        Input("url", "search"),
+        State("url", "pathname"),
+        State(MODE_PATTERN, "id"),
+        State(SEARCH_PATTERN, "id"),
+    )
+    def sync_controls(search, path, modes, searches):
+        unchanged = ([no_update] * len(modes), [no_update] * len(searches))
+        # A search change that leaves a list page also unmounts the bar; do not write to it.
+        if not searchable(path):
+            return unchanged
+        try:
+            context = parse_context(search)
+        except ValueError:
+            return unchanged
+        return [context.mode] * len(modes), [context.query] * len(searches)
 
     @dashboard.callback(
         Output("url", "search"),
-        Input("apply", "n_clicks"),
-        Input("search", "n_submit"),
+        Input(APPLY_PATTERN, "n_clicks"),
+        Input(SEARCH_PATTERN, "n_submit"),
         Input({"type": "filter-tabs", "page": ALL}, "value"),
-        State("mode", "value"),
-        State("search", "value"),
+        State(MODE_PATTERN, "value"),
+        State(SEARCH_PATTERN, "value"),
         State("url", "search"),
         prevent_initial_call=True,
     )
-    def apply_query(clicks, submit, tabs, mode, query, search):
-        # Wildcard callbacks re-run when the shell mounts; only a real click or Enter applies.
-        if not isinstance(ctx.triggered_id, dict) and not (clicks or submit):
+    def apply_query(clicks, submits, tabs, modes, queries, search):
+        trigger = ctx.triggered_id
+        if not isinstance(trigger, dict):
             return no_update
         # The read callback validates these values again before accessing the service.
         try:
             current = parse_context(search)
         except ValueError:
             current = QueryContext()
-        if isinstance(ctx.triggered_id, dict):
+        if trigger.get("type") == "filter-tabs":
             selected_filter = next((value for value in tabs if value), None)
             if not selected_filter or selected_filter == current.filter:
                 return no_update
             params = {"mode": current.mode, "q": current.query, "filter": selected_filter}
         else:
-            params = {"mode": mode or "", "q": (query or "").strip(), "filter": current.filter}
+            # Wildcard callbacks re-run when the bar mounts; only a click or Enter applies.
+            if not any(clicks or []) and not any(submits or []):
+                return no_update
+            params = {
+                "mode": next(iter(modes), "") or "",
+                "q": (next(iter(queries), "") or "").strip(),
+                "filter": current.filter,
+            }
         if params["filter"] == "all":
             del params["filter"]
         return "?" + urlencode(params)
@@ -505,12 +556,16 @@ def create_dashboard(server: FastAPI) -> Dash:
             return notice("Consulta inválida", str(error), error=True), nav, nav, None
         nav = navigation(path, context)
         if path == "/administracion":
-            return admin_page(), nav, nav, None
+            return admin_page(), nav, nav, origin_line(context, path)
         workflow = workflow_from(workflow_snapshot, context.mode)
         # Persisted evidence stays readable when the current provider read is unavailable.
         if path == "/operaciones" or path.startswith("/operaciones/"):
-            mode = dmc.Text(MODES[context.mode], size="xs", fw=500, className="scope-line")
-            return workflow_page(path, workflow, context), nav, nav, mode
+            line = (
+                dmc.Text(MODES[context.mode], size="xs", fw=500, className="scope-line")
+                if searchable(path)
+                else origin_line(context, path)
+            )
+            return workflow_page(path, workflow, context), nav, nav, line
         read_context = context.for_read(path)
         if not isinstance(snapshot, dict) or snapshot.get("key") != read_context.read_key:
             return loading(), nav, nav, None
@@ -524,6 +579,34 @@ def create_dashboard(server: FastAPI) -> Dash:
             message = "Actualiza la consulta para recuperar los datos."
             return notice("Respuesta no válida", message, error=True), nav, nav, None
         page = render_page(path, hub, context, workflow)
-        return page, nav, nav, scope(hub, context, workflow)
+        return page, nav, nav, scope(hub, context, workflow, path)
+
+    @dashboard.callback(
+        Output(PANEL_PATTERN, "children"),
+        Input(SELECT_PATTERN, "value"),
+        State("snapshot", "data"),
+        State("workflow-snapshot", "data"),
+        State("url", "search"),
+        State("url", "pathname"),
+        prevent_initial_call=True,
+    )
+    def show_trace(selected, snapshot, workflow_snapshot, search, path):
+        """Change the followed request without a new provider read; the store already has it."""
+        request_id = next((value for value in selected if value), None)
+        if anonymous() or request_id is None:
+            return [no_update] * len(selected)
+        try:
+            context = parse_context(search)
+            read_context = context.for_read(path)
+        except ValueError:
+            return [no_update] * len(selected)
+        if not isinstance(snapshot, dict) or snapshot.get("key") != read_context.read_key:
+            return [loading()] * len(selected)
+        try:
+            hub = HubResponse.model_validate(snapshot.get("hub"))
+        except (ValidationError, ValueError):
+            return [no_update] * len(selected)
+        workflow = workflow_from(workflow_snapshot, context.mode)
+        return [trace_panel(hub, context, workflow, request_id) for _ in selected]
 
     return dashboard

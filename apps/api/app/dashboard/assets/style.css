@@ -28,6 +28,10 @@ main:focus { outline: none; }
 .mantine-Tabs-list { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
 .mantine-Tabs-tab { white-space: nowrap; }
 .rows-table th { white-space: nowrap; }
+.rows-table td, .rows-table code { overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 47.99em) { .rows-table th { white-space: normal; } }
+.field-map td, .field-map code { overflow-wrap: anywhere; white-space: normal; }
+.field-map td:last-child, .field-map th:last-child { white-space: nowrap; }
 .econ-grid { width: 100%; }
 .econ-grid .ag-cell { line-height: 1.6; padding-top: 12px; padding-bottom: 12px; overflow-wrap: anywhere; }
 .econ-grid .ag-cell p { margin: 0; }
