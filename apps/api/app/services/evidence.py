@@ -15,7 +15,7 @@ from app.models.hub import (
     TransferRecord,
 )
 from app.models.operations import MovementEventRecord, MovementRecord
-from app.services.ledger import LedgerError, OperationsLedger
+from app.services.ledger import LedgerError, OperationsLedger, effective_event_sort_key
 
 MOVEMENT_LIMIT = 100
 
@@ -121,12 +121,7 @@ def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecor
     ]
     latest = max(
         events,
-        key=lambda event: (
-            _instant(event.event_time or event.observed_at),
-            _instant(event.observed_at),
-            _instant(event.recorded_at),
-            event.id,
-        ),
+        key=effective_event_sort_key,
         default=None,
     )
     provenance = (
