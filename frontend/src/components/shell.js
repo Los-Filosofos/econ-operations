@@ -7,6 +7,8 @@ export function createShell({ currentPath = '/', onNavigate }) {
   const navLinks = [
     { path: '/', label: 'Vista Operativa', icon: 'layout-dashboard', section: 'Operación' },
     { path: '/movilidad', label: 'Trazabilidad & Movilidad', icon: 'truck', section: 'Operación' },
+    { path: '/radar-financiero', label: 'Radar Financiero & Fugas', icon: 'bulb', section: 'Diferenciación' },
+    { path: '/requisitos', label: 'Requisitos & Brief (RF)', icon: 'checklist', section: 'Auditoría' },
     { path: '/solicitudes', label: 'Proyectos & Solicitudes', icon: 'clipboard-list', section: 'Gestión' },
     { path: '/maquinaria', label: 'Maquinaria', icon: 'bulldozer', section: 'Gestión' },
     { path: '/operaciones', label: 'Traslados & Despacho', icon: 'clipboard-check', section: 'Gestión' },

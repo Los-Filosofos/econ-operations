@@ -8,6 +8,8 @@ import { renderIndicatorsView } from './views/indicators.js';
 import { renderIntegrationView } from './views/integration.js';
 import { renderOperationsView } from './views/operations.js';
 import { renderRequestsView } from './views/requests.js';
+import { renderRequirementsView } from './views/requirements.js';
+import { renderFinancialRadarView } from './views/financial-radar.js';
 import { renderEquipmentView } from './views/equipment.js';
 import { renderSourcesView } from './views/sources.js';
 
@@ -71,6 +73,8 @@ function mountView(path, renderer) {
 const routes = {
   '/': () => mountView('/', renderHubOperationalView),
   '/movilidad': () => mountView('/movilidad', renderMobilityRouteView),
+  '/radar-financiero': () => mountView('/radar-financiero', renderFinancialRadarView),
+  '/requisitos': () => mountView('/requisitos', renderRequirementsView),
   '/presentacion': () => mountView('/presentacion', renderPresentationDeckView),
   '/grafo': () => mountView('/grafo', renderGraphView),
   '/indicadores': () => mountView('/indicadores', renderIndicatorsView),
