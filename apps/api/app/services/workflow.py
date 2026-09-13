@@ -22,7 +22,7 @@ from app.integrations.startrack import (
 )
 from app.models.hub import DataMode, EquipmentRecord, Provenance, RequestRecord
 from app.models.operations import MovementRecord
-from app.models.workflow import MappingCatalogs, WorkflowOverview
+from app.models.workflow import MappingCatalogs, OperationsCoverage, WorkflowOverview
 from app.services.hub import BUSINESS_TIMEZONE, _map_live, read_hub
 from app.services.ledger import LedgerError, OperationsLedger
 from app.services.transfers import TransferMapping, prepare_transfer
@@ -97,10 +97,25 @@ class WorkflowService:
                 "El envío requiere habilitación y credenciales de ambos proveedores."
             )
 
-    def read(self, mode: DataMode, request_source_id: str | None = None) -> WorkflowOverview:
+    def read(
+        self,
+        mode: DataMode,
+        request_source_id: str | None = None,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> WorkflowOverview:
         try:
             self._mode(mode)
-            movements = self.ledger.list(mode, request_source_id=request_source_id)
+            bounded_page = max(1, page)
+            bounded_size = max(1, min(page_size, 500))
+            offset = (bounded_page - 1) * bounded_size
+            movements, total = self.ledger.list_page(
+                mode,
+                request_source_id=request_source_id,
+                offset=offset,
+                limit=bounded_size,
+            )
             snapshot = self.ledger.last_snapshot(mode)
         except WorkflowError as error:
             return WorkflowOverview(available=False, message=str(error))
@@ -112,6 +127,25 @@ class WorkflowService:
                 ),
             )
         enabled = self.settings.allow_local_management and management_allowed()
+        total_pages = max(1, (total + bounded_size - 1) // bounded_size) if total > 0 else 1
+        has_more = bounded_page < total_pages
+        is_complete = total == len(movements) and bounded_page == 1
+        note = (
+            f"Mostrando {len(movements)} de {total} movimientos registrados "
+            f"(página {bounded_page} de {total_pages})."
+            if total > len(movements)
+            else f"Población completa: {total} movimientos registrados."
+        )
+        coverage = OperationsCoverage(
+            total=total,
+            displayed=len(movements),
+            page=bounded_page,
+            page_size=bounded_size,
+            total_pages=total_pages,
+            has_more=has_more,
+            is_complete=is_complete,
+            note=note,
+        )
         return WorkflowOverview(
             available=True,
             message=(
@@ -123,6 +157,11 @@ class WorkflowService:
             sending_enabled=enabled and mode == "live" and self._send_enabled(),
             movements=movements,
             last_sync_at=snapshot.recorded_at if snapshot else None,
+            total=total,
+            page=bounded_page,
+            page_size=bounded_size,
+            total_pages=total_pages,
+            coverage=coverage,
         )
 
     def _source_records(
@@ -435,18 +474,24 @@ class WorkflowService:
                 ):
                     messages.append("Prisma no respondió; consulta el estado de fuentes.")
                 self.ledger.recover_stale_sending(datetime.now(UTC) - timedelta(minutes=10))
-                # Refresh every saved plan against detail endpoints, so approval
-                # and assignment changes are detected even outside the list page.
-                for movement in self.ledger.list("live"):
-                    if movement.state in {"draft", "blocked"}:
-                        try:
-                            self._fresh_plan(movement)
-                            if self.settings.auto_queue_transfers and self._send_enabled():
-                                self.queue(movement.id)
-                        except (WorkflowError, NexusReadError, StartrackReadError, LedgerError):
-                            messages.append(
-                                "Hay planes que requieren revisar origen o correspondencias."
-                            )
+                # Refresh saved plans via bounded review queue so older plans are not starved
+                # by newer movements and approval/assignment changes are detected.
+                revalidation_candidates = self.ledger.select_for_review(
+                    "live",
+                    ("draft", "blocked"),
+                    limit=self.settings.workflow_revalidation_batch_size,
+                )
+                for movement in revalidation_candidates:
+                    try:
+                        self._fresh_plan(movement)
+                        if self.settings.auto_queue_transfers and self._send_enabled():
+                            self.queue(movement.id)
+                    except (WorkflowError, NexusReadError, StartrackReadError, LedgerError):
+                        messages.append(
+                            "Hay planes que requieren revisar origen o correspondencias."
+                        )
+                    finally:
+                        self.ledger.advance_review(movement.id, "live")
                 if self._send_enabled():
                     for _ in range(10):
                         movement = self.ledger.claim()
@@ -459,13 +504,20 @@ class WorkflowService:
                             item.id: item.workflow_role
                             for item in self.startrack.list_job_statuses().items
                         }
-                        for movement in self.ledger.list("live"):
+                        observation_candidates = self.ledger.select_for_review(
+                            "live",
+                            ("sent", "unknown"),
+                            limit=self.settings.workflow_observation_batch_size,
+                        )
+                        for movement in observation_candidates:
                             try:
                                 self._observe(movement, statuses)
                             except (WorkflowError, StartrackReadError, LedgerError):
                                 messages.append(
                                     "Seguimiento parcial: hay evidencia pendiente de consultar."
                                 )
+                            finally:
+                                self.ledger.advance_review(movement.id, "live")
                     except StartrackReadError:
                         messages.append("Startrack no respondió; el registro previo se conserva.")
                 else:

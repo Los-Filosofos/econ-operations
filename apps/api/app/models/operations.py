@@ -23,6 +23,7 @@ class Movement(SQLModel, table=True):
             name="movement_state",
         ),
         Index("ix_operation_movements_dispatch", "state", "created_at"),
+        Index("ix_operation_movements_review", "mode", "state", "next_review_at"),
     )
 
     id: str = Field(primary_key=True, max_length=36)
@@ -48,6 +49,7 @@ class Movement(SQLModel, table=True):
     reason_code: str | None = Field(default=None, max_length=64)
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     updated_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    next_review_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     queued_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     sending_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     sent_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
@@ -132,6 +134,7 @@ class MovementRecord(BaseModel):
     reason_code: str | None = None
     created_at: datetime
     updated_at: datetime
+    next_review_at: datetime | None = None
     queued_at: datetime | None = None
     sending_at: datetime | None = None
     sent_at: datetime | None = None
