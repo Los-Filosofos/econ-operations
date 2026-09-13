@@ -171,8 +171,13 @@ def test_projection_preserves_multiple_tasks_latest_source_times_and_separate_re
     assert hub.sources[1].observed_at is None
     assert hub.scope.complete is False
     assert ledger.get(first.id, "live").receipt.reference == "constancia-prueba"
-    assert ledger.get(second.id, "live").receipt is None
-    assert "receipt" not in task.model_dump()
+    assert task.receipt is not None
+    assert task.receipt.reference == "constancia-prueba"
+    assert task.receipt.receiver == "Responsable de prueba"
+    assert task.arrival_observed is True
+    second_task = next(item for item in equipment.transfers if item.movement_id == second.id)
+    assert second_task.receipt is None
+    assert second_task.arrival_observed is False
 
 
 def test_creation_acknowledgment_is_not_a_fresh_task_read_or_location(store):

@@ -224,6 +224,19 @@ def source_comparison(
                     "Destino informado",
                     task.destination_project_name or task.destination_project_id or "Sin informar",
                 ),
+                (
+                    "Señal de llegada GPS",
+                    f"Observada en {task.arrival_poi_id} ({instant(task.arrival_event_time)})"
+                    if task.arrival_observed
+                    else "Sin señal de llegada observada",
+                ),
+                (
+                    "Constancia de recepción",
+                    f"Recibió {task.receipt.receiver} · {task.receipt.reference} "
+                    f"({instant(task.receipt.received_at)})"
+                    if task.receipt
+                    else "Sin constancia de recepción",
+                ),
             ],
             link("Abrir movimiento", context.movement_href(task.movement_id))
             if getattr(task, "movement_id", None)
