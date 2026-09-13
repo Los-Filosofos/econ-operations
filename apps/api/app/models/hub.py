@@ -59,7 +59,9 @@ class TransferRecord(BaseModel):
     source_data: dict[str, str | float | int | None] = Field(default_factory=dict)
     provenance: Provenance
     arrival_observed: bool = False
+    # Source fact date of the visit; the read time is kept apart and never stands in for it.
     arrival_event_time: datetime | None = None
+    arrival_observed_at: datetime | None = None
     arrival_poi_id: str | None = None
     arrival_evidence_origin: str | None = None
     receipt: ReceiptSummary | None = None

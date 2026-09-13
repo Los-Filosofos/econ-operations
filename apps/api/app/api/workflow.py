@@ -5,10 +5,12 @@ from fastapi import APIRouter, Body, Path, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.documentation import MODE_DESCRIPTION, PLAN_EXAMPLES, WORKFLOW_CONFLICT
+from app.core.auth import request_actor
 from app.integrations.startrack import Identifier
 from app.models.hub import DataMode
-from app.models.operations import MovementRecord
+from app.models.operations import MovementRecord, TrackedVehicleKind
 from app.models.workflow import MappingCatalogs, WorkflowOverview
+from app.services.ledger import SAFE_REASON_CODES
 from app.services.transfers import TransferMapping
 
 router = APIRouter(prefix="/api/v1/operations", tags=["Traslados"])
@@ -30,6 +32,16 @@ class PlanInput(BaseModel):
         description=(
             "ID explícito del vehículo rastreado en Startrack. Puede ser el transportador; "
             "su presencia GPS no prueba ubicación propia de la maquinaria ni recepción."
+        ),
+    )
+    tracked_vehicle_kind: TrackedVehicleKind | None = Field(
+        default=None,
+        description=(
+            "Declarado por el operador; no verificado (el catálogo de vehículos de Startrack "
+            "no tiene tipo). machine_device: GPS instalado en la máquina; transporter: GPS "
+            "del vehículo que la transporta. Su presencia no prueba ubicación de la máquina "
+            "ni recepción. Requiere tracked_vehicle_id y viaja con la evidencia de llegada "
+            "(tracked_asset_kind)."
         ),
     )
 
@@ -55,6 +67,17 @@ class ReceiptInput(SyncInput):
         description="Referencia de la constancia de recepción; no sube ni verifica un archivo.",
     )
     note: str | None = Field(default=None, max_length=2000, description="Nota de la declaración.")
+
+
+class ResolveInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason_code: str = Field(
+        max_length=64,
+        description=(
+            "Código cerrado del motivo con que el operador cierra el movimiento "
+            f"({', '.join(sorted(SAFE_REASON_CODES))}); no se admite texto libre."
+        ),
+    )
 
 
 MovementIdPath = Annotated[
@@ -135,7 +158,11 @@ def save_plan(
     request: Request, body: Annotated[PlanInput, Body(openapi_examples=PLAN_EXAMPLES)]
 ) -> MovementRecord:
     return request.app.state.workflow.save_plan(
-        body.mode, body.mapping, tracked_vehicle_id=body.tracked_vehicle_id
+        body.mode,
+        body.mapping,
+        tracked_vehicle_id=body.tracked_vehicle_id,
+        tracked_vehicle_kind=body.tracked_vehicle_kind,
+        actor=request_actor(request),
     )
 
 
@@ -152,7 +179,7 @@ def save_plan(
     responses=WORKFLOW_CONFLICT,
 )
 def queue_movement(request: Request, movement_id: MovementIdPath) -> MovementRecord:
-    return request.app.state.workflow.queue(movement_id)
+    return request.app.state.workflow.queue(movement_id, actor=request_actor(request))
 
 
 @router.post(
@@ -182,7 +209,7 @@ def sync_operations(
         ),
     ],
 ) -> WorkflowOverview:
-    return request.app.state.workflow.sync(body.mode)
+    return request.app.state.workflow.sync(body.mode, actor=request_actor(request))
 
 
 @router.post(
@@ -219,4 +246,40 @@ def receive_movement(
         ),
     ],
 ) -> MovementRecord:
-    return request.app.state.workflow.record_receipt(movement_id, **body.model_dump())
+    return request.app.state.workflow.record_receipt(
+        movement_id, **body.model_dump(), actor=request_actor(request)
+    )
+
+
+@router.post(
+    "/{movement_id}/resolve",
+    summary="Resolver un movimiento con resultado incierto",
+    description=(
+        "Requiere permiso manage_transfers y un movimiento live en estado unknown. Lo cierra "
+        "como failed con el código indicado y libera la máquina para un nuevo plan. Es una "
+        "decisión del operador tras comprobar Startrack a mano: no consulta ni modifica el "
+        "proveedor y nunca repite el POST de creación. Si la tarea sí existe, la conciliación "
+        "de la sincronización la vincula por referencia y contenido; no se resuelve. El "
+        "evento resolved conserva actor y motivo; el cuerpo solo admite reason_code porque "
+        "el registro no persiste una nota libre en esta versión."
+    ),
+    responses=WORKFLOW_CONFLICT,
+)
+def resolve_movement(
+    request: Request,
+    movement_id: MovementIdPath,
+    body: Annotated[
+        ResolveInput,
+        Body(
+            openapi_examples={
+                "operator_resolved": {
+                    "summary": "Cierre manual tras verificar que no existe la tarea",
+                    "value": {"reason_code": "operator_resolved"},
+                }
+            }
+        ),
+    ],
+) -> MovementRecord:
+    return request.app.state.workflow.resolve(
+        movement_id, reason_code=body.reason_code, actor=request_actor(request)
+    )

@@ -1,8 +1,9 @@
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from typing import Annotated
 
 from fastapi import Depends, Request
-from sqlalchemy import Engine, event
+from sqlalchemy import Engine, event, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, create_engine
@@ -35,6 +36,59 @@ def build_engine(database_url: str) -> Engine:
             cursor.close()
 
     return engine
+
+
+@contextmanager
+def cycle_lock(engine: Engine, key: str) -> Iterator[bool]:
+    """Cross-process mutual exclusion for one synchronization cycle.
+
+    On PostgreSQL a dedicated connection takes a session-level advisory lock
+    (`pg_try_advisory_lock(hashtext(key))`) without waiting: the caller receives True
+    when it owns the cycle and False when another process holds it. No transaction stays
+    open while the lock is held (the acquiring statement is committed at once), so the
+    caller can talk to providers without an SQL transaction in flight. The lock is
+    released in `finally`; if the body raises, the connection is invalidated so a pooled
+    connection can never keep the lock alive.
+
+    On SQLite (development and tests) this is a documented no-op that yields True:
+    SQLite accredits no cross-process guarantee; only the PostgreSQL tests do.
+    """
+    if engine.dialect.name != "postgresql":
+        yield True
+        return
+    connection = engine.connect()
+    try:
+        owned = bool(
+            connection.execute(
+                text("SELECT pg_try_advisory_lock(hashtext(:key))"), {"key": key}
+            ).scalar_one()
+        )
+        connection.commit()
+    except BaseException:
+        connection.invalidate()
+        connection.close()
+        raise
+    if not owned:
+        connection.close()
+        yield False
+        return
+    try:
+        yield True
+    except BaseException:
+        # The server drops session-level locks with the connection; never return a
+        # connection that may still hold the lock to the pool.
+        connection.invalidate()
+        raise
+    else:
+        try:
+            connection.execute(text("SELECT pg_advisory_unlock(hashtext(:key))"), {"key": key})
+            connection.commit()
+        except Exception:
+            # Closing the DBAPI connection releases the lock server-side; the completed
+            # cycle is not reported as failed because of the release statement.
+            connection.invalidate()
+    finally:
+        connection.close()
 
 
 def get_session(request: Request) -> Generator[Session]:

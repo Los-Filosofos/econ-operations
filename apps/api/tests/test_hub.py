@@ -302,6 +302,106 @@ def test_missing_observation_cut_does_not_turn_sample_dates_into_current_alerts(
     assert evaluate_alerts([], [request], None) == []
 
 
+def approved_pair(first_period, second_period, machinery_id="test:equipment:unit"):
+    """Two approved requests on the same unit; business-rule inputs live only in tests."""
+    provenance = Provenance(
+        source="nexus",
+        source_id="test:request:a",
+        environment="local",
+        observed_at=TEST_AS_OF,
+        is_synthetic=True,
+        evidence_kind="test_case",
+    )
+    first = RequestRecord(
+        id="test:request:a",
+        status="APROBADA",
+        machinery_id=machinery_id,
+        project_id="test-project",
+        starts_on=first_period[0],
+        ends_on=first_period[1],
+        provenance=provenance,
+    )
+    second = first.model_copy(
+        update={
+            "id": "test:request:b",
+            "starts_on": second_period[0],
+            "ends_on": second_period[1],
+            "provenance": provenance.model_copy(update={"source_id": "test:request:b"}),
+        }
+    )
+    return first, second
+
+
+def codes(alerts):
+    return [alert.code for alert in alerts]
+
+
+def test_fixture_has_no_overlap_alert_but_reports_not_verifiable_when_dates_missing():
+    equipment, requests = fixture_records()
+    fixture_alerts = evaluate_alerts(equipment, requests, None)
+    assert "overlapping_approved_requests" not in codes(fixture_alerts)
+    assert "overlap_not_verifiable" not in codes(fixture_alerts)
+
+    first, second = approved_pair(("2026-09-11", "2026-09-14"), ("2026-09-13", "2026-09-16"))
+    alerts = evaluate_alerts([], [first, second], None)
+    assert codes(alerts) == ["overlapping_approved_requests"]
+    alert = alerts[0]
+    assert alert.severity == "warning" and alert.owner == "Logística"
+    assert alert.equipment_id == "test:equipment:unit"
+    assert any(
+        "test:request:a" in line and "2026-09-11 → 2026-09-14" in line for line in alert.evidence
+    )
+    assert any(
+        "test:request:b" in line and "2026-09-13 → 2026-09-16" in line for line in alert.evidence
+    )
+    assert "del 2026-09-13 al 2026-09-14" in alert.description
+    assert "no modifica" in alert.description
+    # Same result with an observation cut: only source dates are compared.
+    assert codes(evaluate_alerts([], [first, second], TEST_AS_OF)) == codes(alerts)
+
+    # Adjacent periods are disjoint; a pending request is not part of the pair rule.
+    _, adjacent = approved_pair(("2026-09-11", "2026-09-14"), ("2026-09-15", "2026-09-16"))
+    assert evaluate_alerts([], [first, adjacent], None) == []
+    pending = second.model_copy(update={"status": "PENDIENTE"})
+    assert "overlapping_approved_requests" not in codes(evaluate_alerts([], [first, pending], None))
+
+    second.ends_on = None
+    unknown = evaluate_alerts([], [first, second], None)
+    assert codes(unknown) == ["overlap_not_verifiable"]
+    assert unknown[0].severity == "info"
+    assert "missing=usage_period.end" in unknown[0].evidence
+    assert any("2026-09-13 → ausente" in line for line in unknown[0].evidence)
+
+
+def test_assignment_window_mismatch_is_signalled_not_blocked():
+    equipment, requests = fixture_records()
+    cf03 = next(item for item in equipment if item.asset_number == "CF-03")
+    request = next(item for item in requests if item.machinery_id == cf03.id)
+    assert (cf03.assignment_starts_on, cf03.assignment_ends_on) == ("2026-09-11", "2026-09-14")
+    assert (request.starts_on, request.ends_on) == ("2026-09-11", "2026-09-14")
+    assert evaluate_alerts([cf03], [request], None) == []
+
+    request.starts_on, request.ends_on = "2026-09-12", "2026-09-15"
+    for as_of in (None, TEST_AS_OF):
+        alerts = evaluate_alerts([cf03], [request], as_of)
+        assert codes(alerts) == ["assignment_window_differs_from_request"]
+        alert = alerts[0]
+        assert alert.severity == "info" and alert.owner == "Logística"
+        assert alert.request_id == request.id and alert.equipment_id == cf03.id
+        assert "vigencia" in alert.description
+        assert any("2026-09-12 → 2026-09-15" in line for line in alert.evidence)
+        assert any("asignación vigente=2026-09-11 → 2026-09-14" in line for line in alert.evidence)
+
+    # Only comparable when the request and the unit refer to the same Prisma project.
+    other_project = request.model_copy(update={"project_id": "test:other-project"})
+    assert evaluate_alerts([cf03], [other_project], None) == []
+
+    cf03.assignment_ends_on = None
+    unknown = evaluate_alerts([cf03], [request], None)
+    assert codes(unknown) == ["overlap_not_verifiable"]
+    assert "missing=assignment_window.end" in unknown[0].evidence
+
+
 def test_supplied_records_do_not_share_mutable_state():
     equipment, requests = fixture_records()
     equipment[2].request_ids.clear()

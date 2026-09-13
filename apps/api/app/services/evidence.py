@@ -135,9 +135,9 @@ def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecor
         default=None,
     )
     arrival_observed = latest_arrival is not None
-    arrival_event_time = (
-        (latest_arrival.event_time or latest_arrival.observed_at) if latest_arrival else None
-    )
+    # The visit's own date is the fact; the read time is reported apart and never replaces it.
+    arrival_event_time = latest_arrival.event_time if latest_arrival else None
+    arrival_observed_at = latest_arrival.observed_at if latest_arrival else None
     arrival_poi_id = latest_arrival.data.get("poi_id") if latest_arrival else None
     arrival_evidence_origin = "visit_observation" if latest_arrival else None
 
@@ -180,6 +180,7 @@ def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecor
         provenance=latest.provenance if latest else provenance,
         arrival_observed=arrival_observed,
         arrival_event_time=arrival_event_time,
+        arrival_observed_at=arrival_observed_at,
         arrival_poi_id=arrival_poi_id,
         arrival_evidence_origin=arrival_evidence_origin,
         receipt=receipt_summary,

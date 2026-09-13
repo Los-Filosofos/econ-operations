@@ -1,0 +1,10 @@
+Decisión o dato,R,A,C,I
+"Proyecto, tipo y período de uso solicitados",Gerencia de Proyecto,Gerencia de Proyecto,Logística y Equipo,Control de Costos
+"Aprobación, unidad, operador y tarifa en Prisma",Logística y Equipo,Gerencia de Logística y Equipo,Gerencia de Proyecto; Mantenimiento,Operador; Control de Costos
+Correspondencias POI/usuario/vehículo y programación del traslado,Logística y Equipo,Gerencia de Logística y Equipo,Responsable del destino; operador; soporte de integración,Gerencia de Proyecto
+"Habilitación técnica, validación de contrato y envío conforme al plan",Soporte de integración,Gerencia de Logística y Equipo,Administrador Startrack; Mantenimiento si hay restricción,Gerencia de Proyecto
+Ejecución y evidencias de la tarea,Operador o motorista confirmado,Gerencia de Logística y Equipo,Responsable del destino,Gerencia de Proyecto
+"Paro, diagnóstico y liberación de mantenimiento",Mantenimiento,Gerencia de Mantenimiento,Logística; operador,Gerencia de Proyecto; Control de Costos
+Recepción de la máquina y constancia,Responsable receptor del proyecto,Gerencia de Proyecto,Logística; operador,Control de Costos
+Validación económica posterior,Control de Costos,Responsable de Control de Costos,Proyecto; Logística,Gerencia correspondiente
+"Consulta: sugerencia ECON de unidad para una solicitud pendiente (GET /api/v1/requests/{id}/suggestions; ECON recomienda, Prisma asigna)",Logística y Equipo,Gerencia de Logística y Equipo,Mantenimiento; Gerencia de Proyecto,Control de Costos

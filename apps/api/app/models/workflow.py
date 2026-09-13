@@ -30,7 +30,14 @@ class WorkflowOverview(BaseModel):
     management_enabled: bool = False
     sending_enabled: bool = False
     movements: list[MovementRecord] = Field(default_factory=list)
-    last_sync_at: datetime | None = None
+    last_sync_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Última lectura del origen guardada para el modo: fecha del último corte o de "
+            "su confirmación posterior sin cambios (max(recorded_at, last_confirmed_at)). "
+            "No es la fecha de actualización de cada tarea."
+        ),
+    )
     total: int = 0
     page: int = 1
     page_size: int = 100

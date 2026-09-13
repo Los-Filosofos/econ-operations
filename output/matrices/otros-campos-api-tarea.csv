@@ -1,0 +1,12 @@
+Campo Startrack,Origen y modelo en ECON,Estado / equivalencia
+id,Retorno de Startrack → StartrackJob.id → Movement.job_id.,Lectura implementada; no se envía el ID Prisma como ID de tarea.
+client_id,Cuenta propietaria Startrack.,Sin equivalente con Solicitud.org_id; fuera del DTO mínimo.
+created_by,Autor Startrack.,No es requested_by_user_id ni approved_by_user_id; fuera del DTO mínimo.
+creation_date,StartrackJob.creation_date.,Lectura implementada; no copia Solicitud.created_at.
+changed_date,StartrackJob.changed_date; evidencia de cambio remota.,Lectura implementada; ECON no la escribe. No equivale a Solicitud.updated_at.
+closed_date,StartrackJob.closed_date; conservada en la observación.,Lectura implementada; cierre no acredita recepción.
+last_status_change_date,StartrackJob.last_status_change_date; conservada en la observación.,"Lectura implementada; fecha de estado de tarea, no fecha de aprobación."
+assigned_user_remote_ids,No utilizado; la preparación exige IDs técnicos Startrack.,"Documentado, no soportado. No suponer que contiene códigos MOT o UUID Prisma."
+job_type_remote_id,No utilizado; se acepta job_type_id.,"Documentado, no soportado."
+poi_name,Nombre remoto de geocerca.,"Documentado, fuera del DTO de Job. El catálogo conserva StartrackPoi.name; no se envía para resolver un nombre ambiguo."
+custom_fields,Sin esquema de cuenta acordado ni modelo normalizado.,"Documentado, no soportado. No usarlo como contenedor arbitrario para suplir todas las lagunas del formulario."

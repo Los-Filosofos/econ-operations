@@ -34,20 +34,28 @@ def receipt_fields():
 def test_blank_optional_plan_fields_remain_optional():
     service = Mock()
     execute_action(service, "save", "fixture", plan_fields(), "")
-    mode, mapping, tracked_vehicle = service.save_plan.call_args.args
+    mode, mapping = service.save_plan.call_args.args
+    options = service.save_plan.call_args.kwargs
     assert mode == "fixture"
     assert mapping.scheduled_time is None
     assert mapping.assigned_user_ids == ("test-user-1", "test-user-2")
-    assert tracked_vehicle is None
+    assert options["tracked_vehicle_id"] is None
+    # The form does not ask for the device kind: it is left undeclared, never guessed.
+    assert options["tracked_vehicle_kind"] is None
+    # Outside a Dash request there is no session, so no actor is invented here.
+    assert options["actor"] is None
 
 
 def test_blank_optional_receipt_note_does_not_discard_valid_receipt():
     service = Mock()
     execute_action(service, "receipt", "live", receipt_fields(), "test-movement")
-    args = service.record_receipt.call_args.args
-    assert args[0:3] == ("test-movement", "live", "Persona de prueba")
-    assert args[3].isoformat() == "2026-09-15T10:35:00-06:00"
-    assert args[4:] == ("test-receipt", None)
+    call = service.record_receipt.call_args
+    assert call.args == ("test-movement", "live")
+    assert call.kwargs["receiver"] == "Persona de prueba"
+    assert call.kwargs["received_at"].isoformat() == "2026-09-15T10:35:00-06:00"
+    assert call.kwargs["reference"] == "test-receipt"
+    assert call.kwargs["note"] is None
+    assert call.kwargs["actor"] is None
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,6 @@
+Información de Startrack,Implementado,Límite
+"Tareas y catálogos de POI, usuarios, vehículos, tipos/estados",Lecturas acotadas en SDK. La fachada ofrece los catálogos necesarios para el mapeo.,"Que un ID exista no demuestra equivalencia de negocio, permisos completos ni vigencia de un vínculo entre sistemas."
+Visitas,"SDK y worker; correlación exacta de vehículo elegido, POI y tiempo.",El reporte no proporciona un job_id que certifique causalidad. El worker mira como máximo los últimos siete días y no reconstruye toda la historia.
+Formularios respondidos,No implementado: la lectura del SDK se retiró por no tener uso.,"Falta elegir formulario, preguntas y criterio de recepción antes de reintroducirla."
+Actividad y adjuntos completos de tarea,No implementados.,"El historial de ECON conserva sus eventos, no promete ser una copia de la pestaña Actividad."
+Webhooks,No implementados.,"El contrato Prisma no publica aprobación por webhook. La documentación Startrack consultada reenvía información de vehículos, no acredita un callback de aprobación o cierre de Job."

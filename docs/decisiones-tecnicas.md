@@ -1,6 +1,6 @@
 # Decisiones técnicas para la entrega
 
-12 de septiembre de 2026. Este resumen se exporta a un PDF independiente de
+13 de septiembre de 2026. Este resumen se exporta a un PDF independiente de
 **dos páginas**. Describe el prototipo actual y separa las ampliaciones propuestas.
 
 ## Página 1: alcance y correspondencias
@@ -16,7 +16,7 @@ sus correspondencias y evidencia. El caso usa exclusivamente datos sintéticos.
 | Mapeo selectivo | Unidad/proyecto/solicitud conservan identidad; título y descripción se derivan; geocerca, usuarios y programación requieren correspondencias revisadas. |
 | Estados separados | Estado administrativo, mantenimiento, tarea, ubicación y recepción describen hechos distintos. Ocupada y Completada pueden coexistir. |
 | Campos fuera del envío actual | No se inventan equivalencias para origen, plazo de entrega, ventana horaria, artículos ni restricción de completar dentro de geocerca. La matriz completa distingue contrato y soporte del hub. |
-| Tecnología vigente | Dash, Plotly, AG Grid Community y FastAPI en Python; SQLModel/Alembic y PostgreSQL para movimientos, eventos y cortes. |
+| Tecnología vigente | Dash, Plotly, AG Grid Community y FastAPI en Python; SQLModel/Alembic y PostgreSQL como única infraestructura de estado (cola, bloqueos, historial append-only; ADR 0006), sin Redis ni firmas. |
 
 La muestra suministrada contiene cinco equipos de un total declarado de quince y
 dos solicitudes. Ambas solicitudes pertenecen a PROY-014; una está aprobada con
@@ -53,7 +53,7 @@ Startrack en esta cuenta sigue pendiente.
 | Cambio después del envío | Proponer comparación del origen con la versión enviada, incidencia y revisión; no modificar proveedores ciegamente. |
 | Volumen masivo | Propuesta de recepción desacoplada, Kafka, trabajadores paralelos e histórico analítico separado. No está desplegada ni tiene capacidad demostrada. |
 | Tiempo muerto | Requiere jornada, intervalos y causas confirmadas, mantenimiento y señal adecuada al tipo de equipo. Velocidad cero no acredita inactividad. |
-| Responsabilidades | RACI propuesta para Mantenimiento, Logística y Técnica de Proyectos; necesita validación empresarial. No implementa permisos de usuarios. |
+| Responsabilidades | RACI propuesta para Mantenimiento, Logística y Técnica de Proyectos. Roles y permisos de sesión implementados (ADR 0005); el actor autenticado queda vinculado a planes, cola y recepción desde la migración 0004; la RACI empresarial sigue pendiente de validación. |
 
 La validación funcional se ejecuta con `scripts/check.sh` o `scripts/check.ps1`
 (Ruff, formato, pytest y contenedor). Esta entrega visual verifica fuentes,

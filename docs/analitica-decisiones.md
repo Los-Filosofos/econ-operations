@@ -96,10 +96,19 @@ Antes de añadir una medición, documentar población, unidad, fórmula, fuente,
 cobertura, fecha y acción que permite. La persistencia de planes, cortes y eventos
 existe, pero por sí sola no acredita una serie histórica completa o comparable.
 
+El indicador RF-06 (tiempo fuera de geocerca sin justificación) se define una
+sola vez en [entregables visuales](entregables-visuales.md#rf-06-indicador-definido-sin-valor-inventado);
+este documento no repite su fórmula. Los indicadores que sí se calculan hoy, por
+fila y sin promedios, están en [indicadores calculables](indicadores-calculables.md)
+(`GET /api/v1/indicators`); el grafo tipado de la misma lectura, en
+`GET /api/v1/graph`, y las candidatas para una solicitud pendiente, en
+`GET /api/v1/requests/{id}/suggestions`. Ninguna de esas lecturas tiene página
+Dash propia ni añade gráficos.
+
 | Medición propuesta | Evidencia necesaria antes de publicarla |
 | --- | --- |
 | Evolución de solicitudes | Eventos o cortes comparables, población conocida y frecuencia de captura |
-| Tiempo de aprobación o asignación | Fechas validadas, cambios de decisión y tratamiento de pendientes |
+| Tiempo de aprobación o asignación | Fechas validadas, cambios de decisión y tratamiento de pendientes. Hoy `approval_time` publica `approved_at − created_at` por solicitud (una fila evaluable en fixture), sin mediana ni p90 |
 | Puntualidad de recepción | Compromiso de entrega, recepción aceptada y reglas de reprogramación/cancelación |
 | Utilización o tiempo fuera de operación | Horas de uso, inicio/fin de paros y calendario operativo acordado |
 | Comparación entre proyectos | IDs estables, cobertura comparable y denominadores pertinentes |

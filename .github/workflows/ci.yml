@@ -16,9 +16,30 @@ jobs:
   hub:
     name: Python hub checks and container
     runs-on: ubuntu-latest
+    # Test-only PostgreSQL so tests/test_postgres_*.py run instead of being skipped.
+    # compose.yaml (local development) uses postgres:18 with a password and a durable
+    # volume; CI uses postgres:16 with trust authentication because the databases are
+    # disposable and the tests connect without a password (see apps/api/tests/conftest.py).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: econ
+          POSTGRES_DB: econ_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U econ -d econ_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       DATABASE_URL: sqlite://
       ALLOW_LIVE_READS: 'false'
+      # With these variables defined, conftest fails (never skips) if PostgreSQL is down.
+      ECON_TEST_POSTGRES_URL: postgresql+psycopg://econ@127.0.0.1:54329/econ_test
+      ECON_TEST_POSTGRES_MIGRATIONS_URL: postgresql+psycopg://econ@127.0.0.1:54329/econ_test_migrations
     defaults:
       run:
         working-directory: apps/api
@@ -33,7 +54,37 @@ jobs:
           enable-cache: true
           cache-dependency-glob: apps/api/uv.lock
       - run: uv sync --locked
+      - name: Wait for PostgreSQL and create the migrations database
+        # psycopg is a project dependency; the second database is dedicated to the
+        # upgrade/downgrade round trips so they never share a schema with the other tests.
+        run: |
+          uv run python - <<'PY'
+          import time
+          import psycopg
+
+          dsn = "host=127.0.0.1 port=54329 user=econ dbname=econ_test"
+          for attempt in range(30):
+              try:
+                  connection = psycopg.connect(dsn, autocommit=True, connect_timeout=3)
+                  break
+              except psycopg.OperationalError as error:
+                  print(f"PostgreSQL not ready ({attempt + 1}/30): {error}")
+                  time.sleep(2)
+          else:
+              raise SystemExit("PostgreSQL de pruebas no respondió en CI")
+          with connection:
+              exists = connection.execute(
+                  "SELECT 1 FROM pg_database WHERE datname = 'econ_test_migrations'"
+              ).fetchone()
+              if not exists:
+                  connection.execute("CREATE DATABASE econ_test_migrations")
+              print("PostgreSQL listo: econ_test y econ_test_migrations")
+          PY
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest
+      - name: RF-01 dictionary matches the declared models
+        run: uv run python ../../scripts/docs/generar_diccionario.py --check
+      - name: RNF-02 CSV/XLSX matrices match the Markdown source
+        run: uv run --no-project --with openpyxl==3.1.5 python ../../scripts/docs/exportar_matrices.py --check
       - run: docker build -t econ-hub:ci .

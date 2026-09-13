@@ -117,3 +117,65 @@ def test_server_default_disables_management_and_live_without_sample_fallback(tmp
         assert live["movements"] == []
         assert client.get("/api/v1/operations/catalogs").status_code == 409
         assert client.post("/api/v1/operations/sync", json={"mode": "live"}).status_code == 409
+
+
+def test_local_dev_mode_records_actor_kind_without_user(app):
+    with TestClient(app, base_url="http://localhost", client=("127.0.0.1", 5500)) as client:
+        metadata.create_all(app.state.engine)
+        saved = client.post("/api/v1/operations/plans", json=plan())
+        assert saved.status_code == 201, saved.text
+        (created,) = saved.json()["events"]
+        assert created["kind"] == "created"
+        # Loopback development without a login: the kind is recorded, no user is invented.
+        assert created["actor_kind"] == "local_dev"
+        assert created["actor_user_id"] is None and created["actor_role"] is None
+        synced = client.post("/api/v1/operations/sync", json={"mode": "fixture"})
+        assert synced.status_code == 200, synced.text
+
+
+def test_plan_contract_accepts_a_declared_tracked_vehicle_kind(app):
+    with TestClient(app, base_url="http://localhost", client=("127.0.0.1", 5500)) as client:
+        metadata.create_all(app.state.engine)
+        declared = {**plan(), "tracked_vehicle_id": "test-vehicle"}
+        declared["tracked_vehicle_kind"] = "transporter"
+        saved = client.post("/api/v1/operations/plans", json=declared)
+        assert saved.status_code == 201, saved.text
+        assert saved.json()["tracked_vehicle_kind"] == "transporter"
+        assert saved.json()["tracked_vehicle_id"] == "test-vehicle"
+        # The same declaration resolves to the same movement; another kind is another identity.
+        assert (
+            client.post("/api/v1/operations/plans", json=declared).json()["id"]
+            == (saved.json()["id"])
+        )
+        other = {**declared, "tracked_vehicle_kind": "machine_device"}
+        assert client.post("/api/v1/operations/plans", json=other).status_code == 409
+        # The kind describes a tracked device: without the device it is rejected.
+        orphan = {**plan(), "tracked_vehicle_kind": "transporter"}
+        orphan["mapping"] = {**orphan["mapping"], "movement_reference": "test-api-orphan"}
+        assert client.post("/api/v1/operations/plans", json=orphan).status_code == 409
+        invalid = {**declared, "tracked_vehicle_kind": "trailer"}
+        assert client.post("/api/v1/operations/plans", json=invalid).status_code == 422
+        schema = client.get("/openapi.json").json()
+        field = schema["components"]["schemas"]["PlanInput"]["properties"]["tracked_vehicle_kind"]
+        assert "no verificado" in field["description"]
+
+
+def test_resolve_route_is_documented_and_only_acts_on_live_unknown_movements(app):
+    with TestClient(app, base_url="http://localhost", client=("127.0.0.1", 5500)) as client:
+        metadata.create_all(app.state.engine)
+        schema = client.get("/openapi.json").json()
+        route = schema["paths"]["/api/v1/operations/{movement_id}/resolve"]["post"]
+        assert "nunca repite el POST" in route["description"]
+        saved = client.post("/api/v1/operations/plans", json=plan()).json()
+        assert client.post(f"/api/v1/operations/{saved['id']}/resolve", json={}).status_code == 422
+        free_text = {"reason_code": "operator_resolved", "note": "no admitida"}
+        assert (
+            client.post(f"/api/v1/operations/{saved['id']}/resolve", json=free_text).status_code
+            == 422
+        )
+        # Live is disabled on this server and the movement is a fixture draft anyway.
+        refused = client.post(
+            f"/api/v1/operations/{saved['id']}/resolve", json={"reason_code": "operator_resolved"}
+        )
+        assert refused.status_code == 409
+        assert client.get("/api/v1/operations").json()["movements"][0]["state"] == "draft"

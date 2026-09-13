@@ -145,7 +145,24 @@ recepción declarada en PostgreSQL ([ADR 0004](adr/0004-persistent-transfer-work
 worker explícito por CLI con avance durable de revisión; cobertura visible del
 registro (`WorkflowOverview.complete`); proyección de evidencia persistida en el
 hub; inicio de sesión, roles y administración de usuarios (`/login`,
-`/administracion`, `/api/v1/auth`, `/api/v1/users`); y grafo principal con
+`/administracion`, `/api/v1/auth`, `/api/v1/users`); el usuario autenticado
+vinculado a planes, cola, resolución y recepción (`actor_*` en cada evento,
+`declared_by_*` en la declaración; migración `0004`); orden determinista de
+observaciones (`recorded_at`, ID); exclusividad en vuelo por máquina y unicidad
+de `job_id` por modo y entorno como índices parciales, `operation_events`
+append-only por trigger en PostgreSQL y `POST /operations/{id}/resolve` para
+cerrar un `unknown` sin repetir el POST; un ciclo por proceso y por base
+(`pg_try_advisory_lock`, un worker por IP), cortes deduplicados por huella
+estable y poda explícita por CLI ([ADR 0006](adr/0006-postgresql-unica-infraestructura-de-estado.md));
+`tracked_vehicle_kind` declarado (máquina o transportador) que viaja con la
+evidencia de llegada; comparación de intervalos con «no verificable» explícito
+(`services/intervals.py`); proyección de grafo (`GET /api/v1/graph`),
+indicadores por fila (`GET /api/v1/indicators`,
+[fichas](indicadores-calculables.md)) y sugerencias de unidad
+(`GET /api/v1/requests/{id}/suggestions`; recomendar no es asignar);
+matrices CSV/XLSX y diccionario RF-01 generados y verificados en
+`scripts/check.sh` y CI, con pruebas PostgreSQL ejecutadas en CI.
+La portada es un grafo principal con
 posiciones deterministas, autoencuadre, selección de nodos y conexiones,
 zoom/pan, Roboto Mono local y SVG propios. La muestra actual permite dibujar
 PROY-014 y, al seleccionarlo, CF-03 con una asignación exacta. Las otras cuatro
@@ -157,11 +174,14 @@ la evidencia visible, sin afirmar presencia física.
 Pendiente: validación autenticada de Startrack (clave, catálogos y codificación
 de listas en creación); cotejo individual de las 51 definiciones para RF-02;
 demostración RF-04/RF-05 con evidencia vinculada de ambas plataformas;
-presentación final de hasta diez diapositivas; reproducción del PDF del manual;
-detección de cambios Prisma posteriores al envío, orden determinista de
-observaciones, cobertura por fuente y bandeja durable de eventos; vincular el
-usuario autenticado a la declaración de recepción. El backlog con
-criterios está en [los issues del repositorio](https://github.com/Los-Filosofos/econ-operations/issues).
+presentación final de hasta diez diapositivas; detección de cambios Prisma
+posteriores al envío como incidencia durable (hoy solo la señal
+`movement_source_changed` del grafo cuando la copia almacenada difiere),
+cobertura por fuente y bandeja durable de eventos; RACI validada por las
+gerencias. El PDF del manual (`ECON-diccionario-mapeo-y-manual-integracion.pdf`)
+no tiene generador y queda reemplazado por la matriz Markdown, `output/matrices`
+y el diccionario generado. El backlog con criterios está en
+[los issues del repositorio](https://github.com/Los-Filosofos/econ-operations/issues).
 Las propuestas de [sincronización y escala](sincronizacion-y-discrepancias.md)
 no están implementadas.
 

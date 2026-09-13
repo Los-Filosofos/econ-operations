@@ -1,6 +1,6 @@
 """Shared read projection for HTTP and Dash; never fall back between data modes."""
 
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.engine import Engine
 
@@ -33,9 +33,17 @@ from app.models.hub import (
     SourceStatus,
 )
 from app.services.evidence import project_operation_evidence
+from app.services.intervals import (
+    BUSINESS_TIMEZONE,
+    IntervalRelation,
+    assignment_window_of,
+    compare,
+    parse_day,
+    usage_period_of,
+)
 
-# El Salvador has no daylight-saving offset. Date-only plans stay dates.
-BUSINESS_TIMEZONE = timezone(timedelta(hours=-6), name="America/El_Salvador")
+__all__ = ["BUSINESS_TIMEZONE", "evaluate_alerts", "map_live", "parse_day", "read_hub"]
+
 PENDING = {"PENDIENTE", "PENDING"}
 APPROVED = {"APROBADA", "APPROVED"}
 SCOPE_DESCRIPTION = (
@@ -45,17 +53,6 @@ SCOPE_DESCRIPTION = (
     "En vivo se consultan páginas acotadas. La evidencia local de Startrack "
     "no acredita una consulta actual ni cobertura integrada completa."
 )
-
-
-def _plan_date(value: str | None) -> date | None:
-    """A documented day stays a day; a zoned instant is read in El Salvador; unzoned is unknown."""
-    try:
-        if value and len(value) == 10:
-            return date.fromisoformat(value)
-        instant = datetime.fromisoformat(value) if value else None
-    except ValueError:
-        return None
-    return instant.astimezone(BUSINESS_TIMEZONE).date() if instant and instant.tzinfo else None
 
 
 def _alert(code: str, key: str, severity: str, title: str, owner: str, **fields) -> AlertRecord:
@@ -125,7 +122,7 @@ def evaluate_alerts(
                 )
     for item in requests:
         status = item.status.upper()
-        starts_on = _plan_date(item.starts_on)
+        starts_on = parse_day(item.starts_on)
         if (
             status in PENDING
             and starts_on is not None
@@ -162,6 +159,110 @@ def evaluate_alerts(
                         "una unidad ni un traslado."
                     ),
                     evidence=[f"status={item.status}", "maquinaria_id=ausente"],
+                )
+            )
+    alerts.extend(_interval_alerts(equipment, requests))
+    return alerts
+
+
+def _not_verifiable(
+    key: str, relation: IntervalRelation, extra: list[str], **fields
+) -> AlertRecord:
+    """Incomplete dates never become «sin conflicto»; the absent fields stay visible."""
+    return _alert(
+        "overlap_not_verifiable",
+        key,
+        "info",
+        "Solapamiento no verificable por fechas ausentes",
+        "Logística",
+        description=relation.reason,
+        evidence=[f"missing={name}" for name in relation.missing] + extra,
+        **fields,
+    )
+
+
+def _interval_alerts(
+    equipment: list[EquipmentRecord], requests: list[RequestRecord]
+) -> list[AlertRecord]:
+    """Signals from documented dates only; they never use as_of nor the clock.
+
+    ECON cannot prevent Prisma from approving two requests on one unit or from keeping an
+    assignment window that differs from the request: these alerts point at the source facts
+    so Logística reviews them there. None of them blocks a preparation.
+    """
+    alerts: list[AlertRecord] = []
+    approved = [r for r in requests if r.status.upper() in APPROVED and r.machinery_id]
+    approved.sort(key=lambda r: r.id)
+    for index, first in enumerate(approved):
+        for second in approved[index + 1 :]:
+            if second.machinery_id != first.machinery_id or second.id == first.id:
+                continue
+            key = f"{first.id}|{second.id}"
+            relation = compare(usage_period_of(first), usage_period_of(second))
+            evidence = [
+                f"solicitud={first.id}; período={usage_period_of(first).span()}",
+                f"solicitud={second.id}; período={usage_period_of(second).span()}",
+                f"maquinaria_id={first.machinery_id}",
+            ]
+            if relation.status == "not_verifiable":
+                alerts.append(
+                    _not_verifiable(key, relation, equipment_id=first.machinery_id, extra=evidence)
+                )
+            elif relation.status == "overlap":
+                alerts.append(
+                    _alert(
+                        "overlapping_approved_requests",
+                        key,
+                        "warning",
+                        "Dos solicitudes aprobadas sobre la misma unidad con períodos que se "
+                        "cruzan",
+                        "Logística",
+                        equipment_id=first.machinery_id,
+                        description=(
+                            f"{relation.reason} Prisma admite ambas aprobaciones; ECON solo lo "
+                            "señala y no modifica la asignación."
+                        ),
+                        evidence=evidence,
+                    )
+                )
+    equipment_by_id = {item.id: item for item in equipment}
+    for request in approved:
+        unit = equipment_by_id.get(request.machinery_id)
+        if unit is None or not request.project_id or unit.project_id != request.project_id:
+            continue
+        usage, window = usage_period_of(request), assignment_window_of(unit)
+        relation = compare(usage, window)
+        evidence = [
+            f"solicitud={request.id}; período={usage.span()}",
+            f"maquinaria_id={unit.id}; asignación vigente={window.span()}",
+            f"project_id={request.project_id}",
+        ]
+        if relation.status == "not_verifiable":
+            alerts.append(
+                _not_verifiable(
+                    request.id,
+                    relation,
+                    equipment_id=unit.id,
+                    request_id=request.id,
+                    extra=evidence,
+                )
+            )
+        elif (usage.start, usage.end) != (window.start, window.end):
+            alerts.append(
+                _alert(
+                    "assignment_window_differs_from_request",
+                    request.id,
+                    "info",
+                    "La asignación vigente de la unidad no coincide con el período solicitado",
+                    "Logística",
+                    equipment_id=unit.id,
+                    request_id=request.id,
+                    description=(
+                        "Revisar vigencia en Prisma: la ventana de asignación registrada para la "
+                        "unidad difiere del período de uso aprobado en la solicitud del mismo "
+                        "proyecto. No es un bloqueo ni una falla."
+                    ),
+                    evidence=evidence,
                 )
             )
     return alerts

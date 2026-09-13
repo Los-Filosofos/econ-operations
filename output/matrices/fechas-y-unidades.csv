@@ -1,0 +1,9 @@
+Hecho,Campo y tratamiento
+Período de uso,fecha_inicio/fecha_fin se conservan como fechas. No se desplazan por conversión UTC ni se consideran vencimiento de entrega.
+Programación del movimiento,"Fecha y hora explícitas de TransferMapping. La UI las interpreta en America/El_Salvador; hay que confirmar que la zona de la cuenta Startrack coincide, pues start_time no lleva zona."
+Evento del proveedor,"Se mantiene el texto original y, cuando contiene zona, su instante. Una hora sin zona no acredita una llegada temporalmente válida."
+Observación,"provenance.observed_at es cuándo se leyó el dato; event_time es cuándo ocurrió; recorded_at, cuándo se almacenó. generated_at solo ensambla la respuesta."
+Documento de muestra,observed_on puede conservar el día documental. No inventa un instante conjunto para el dataset ni actualiza los datos al reloj actual.
+Duración,"UI del usuario en minutos; Job en segundos. Horómetro en horas, odómetro en distancia y tarifa por hora son magnitudes independientes."
+Coordenadas,POI en grados; radio en metros. Los enteros 133376152 y -878486967 del diccionario no tienen escala acreditada y no se dividen para producir una ubicación.
+Respuestas de formulario,"date, server_date, gps_epoch conservan enteros de época en segundos; son instantes diferentes. Las preguntas se identifican por ID, no por texto de etiqueta."

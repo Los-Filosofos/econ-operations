@@ -1,0 +1,9 @@
+Campo del formulario,Prisma: campo exacto o ausencia,Modelo normalizado / regla de ECON,Campo API de Startrack,Clasificación y alcance
+Artículos,No existe una lista de artículos de entrega en la solicitud de maquinaria.,Sin colección de artículos.,No documentada en Job.,Sin equivalente y no soportado. La existencia de APIs de pedidos/productos no documenta su vínculo con esta tarea.
+Cant.,Una maquinaria_id no es cantidad comercial; una solicitud por tipo tampoco autoriza inventar una unidad entregada.,Sin campo.,No documentado en Job.,Sin equivalente y no soportado.
+Descripción del artículo,"Equipo.nombre describe una máquina, no una línea de pedido.",EquipmentRecord.name queda en maquinaria.,No documentado como artículo de Job.,Sin equivalente directo; no confundir con Job.description.
+SKU,clave y no_activo identifican el equipo en su dominio; no son un SKU acreditado.,code y asset_number separados.,No documentado en Job.,Sin equivalente y no soportado.
+Volumen m³,No disponible en el contrato leído de maquinaria/solicitud.,Sin campo.,No documentado en Job.,Sin equivalente y no soportado; no estimar por clase de máquina.
+Peso kg,No disponible en el contrato leído de maquinaria/solicitud.,Sin campo.,No documentado en Job.,Sin equivalente y no soportado; no estimar por nombre/modelo.
+Precio unitario,"precio_x_hora, current_project_rate.precio_x_hora, effective_precio_x_hora son tarifas por hora de equipo.",EquipmentRecord.project_rate conserva la tarifa vigente con su proyecto y vigencia (solo en la lectura de detalle); no entra en el borrador.,No documentado como precio de artículo de Job.,Sin equivalente y no soportado. No convertir tarifa horaria en precio de transporte o de artículo.
+Total GTQ,La solicitud no aporta total de artículos ni moneda acreditada para su tarifa horaria.,Sin cálculo ni conversión monetaria.,No documentado en Job.,Sin equivalente y no soportado. GTQ es la etiqueta de esa pantalla; no fija la moneda de Prisma.

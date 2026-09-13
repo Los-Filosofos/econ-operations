@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "generator": "scripts/docs/exportar_matrices.py",
+  "reproduce": "uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py",
+  "check": "uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py --check",
+  "generated_on": "2026-09-13",
+  "source": {
+    "path": "docs/equivalencias-prisma-startrack.md",
+    "sha256": "028001dcdf54b4951172a8297617c95433065315710b18bb4af8a1cff533d306",
+    "revision": "12 de septiembre de 2026; el glosario de sinónimos y las inconsistencias internas se añadieron el 13 de septiembre de 2026",
+    "note": "Las tablas Markdown son el origen editable; CSV y XLSX son copias derivadas sin datos añadidos. Formato quitado: énfasis, código y destinos de enlaces."
+  },
+  "tables": [
+    {
+      "slug": "clasificaciones",
+      "heading": "Cómo leer las matrices",
+      "requirement": "RF-02: leyenda de las clasificaciones usadas en el mapeo",
+      "csv": "output/matrices/clasificaciones.csv",
+      "sheet": "Clasificaciones",
+      "columns": [
+        "Clasificación",
+        "Significado"
+      ],
+      "rows": 5,
+      "sha256": "4a4090891b7f6a26c7bb52b3868b02ed306679f1932f25dde725e82a10340024"
+    },
+    {
+      "slug": "identidad-cardinalidad",
+      "heading": "Identidad y cardinalidad",
+      "requirement": "RF-02: relaciones entre objetos y cardinalidad explícita",
+      "csv": "output/matrices/identidad-cardinalidad.csv",
+      "sheet": "Identidad y cardinalidad",
+      "columns": [
+        "Relación",
+        "Cardinalidad y decisión necesaria",
+        "Implementación vigente"
+      ],
+      "rows": 6,
+      "sha256": "a3bb7ebd9631c358beecc1a8d620f804ddc27919edb047b243615d80b38eb026"
+    },
+    {
+      "slug": "glosario-sinonimos",
+      "heading": "Glosario de sinónimos entre plataformas",
+      "requirement": "RF-01/RF-02: nombre exacto de cada concepto en Prisma, Startrack y ECON",
+      "csv": "output/matrices/glosario-sinonimos.csv",
+      "sheet": "Glosario de sinónimos",
+      "columns": [
+        "Concepto",
+        "Prisma (nombre exacto)",
+        "Startrack (nombre exacto)",
+        "ECON (nombre exacto)",
+        "Nota"
+      ],
+      "rows": 36,
+      "sha256": "a676753673d55220c329e7c2b2f857215153f9a66b70f6f62933f4cc2bfdc9cb"
+    },
+    {
+      "slug": "inconsistencias-internas",
+      "heading": "Inconsistencias internas que ya conoce el kit",
+      "requirement": "RF-02: anomalías de cada plataforma que obligan a comparar por ID",
+      "csv": "output/matrices/inconsistencias-internas.csv",
+      "sheet": "Inconsistencias internas",
+      "columns": [
+        "Dónde",
+        "Qué se observa",
+        "Consecuencia práctica"
+      ],
+      "rows": 9,
+      "sha256": "2f4e05b3c6a1775f6dc123f16dfbc3c6af6c935536067d03fc89eebc2d830b61"
+    },
+    {
+      "slug": "formulario-identificacion",
+      "heading": "Identificación, contenido y estado",
+      "requirement": "RF-02: formulario de tarea, identificación, contenido y estado",
+      "csv": "output/matrices/formulario-identificacion.csv",
+      "sheet": "Formulario 1 Identificación",
+      "columns": [
+        "Campo del formulario",
+        "Prisma: campo exacto o ausencia",
+        "Modelo normalizado / regla de ECON",
+        "Campo API de Startrack",
+        "Clasificación y alcance"
+      ],
+      "rows": 8,
+      "sha256": "cbbc7273f911b798b25d7f999ef1181f7bef72d9d5799a1a8225585c5fae51d4"
+    },
+    {
+      "slug": "formulario-programacion",
+      "heading": "Programación y ubicación",
+      "requirement": "RF-02: formulario de tarea, programación y ubicación",
+      "csv": "output/matrices/formulario-programacion.csv",
+      "sheet": "Formulario 2 Programación",
+      "columns": [
+        "Campo del formulario",
+        "Prisma: campo exacto o ausencia",
+        "Modelo normalizado / regla de ECON",
+        "Campo API de Startrack",
+        "Clasificación y alcance"
+      ],
+      "rows": 13,
+      "sha256": "0c042cc01c9948654a8e84e3410b5c751e1ed8b2978c9b8d90b39db27b20db10"
+    },
+    {
+      "slug": "formulario-asignacion",
+      "heading": "Asignación y formularios",
+      "requirement": "RF-02: formulario de tarea, asignación y formularios",
+      "csv": "output/matrices/formulario-asignacion.csv",
+      "sheet": "Formulario 3 Asignación",
+      "columns": [
+        "Campo del formulario",
+        "Prisma: campo exacto o ausencia",
+        "Modelo normalizado / regla de ECON",
+        "Campo API de Startrack",
+        "Clasificación y alcance"
+      ],
+      "rows": 2,
+      "sha256": "9a1945197361f3e6b05e3a8fd3a528e2e202280fe5fd54fc0726f475d02dd831"
+    },
+    {
+      "slug": "formulario-articulos",
+      "heading": "Artículos y valores económicos",
+      "requirement": "RF-02: formulario de tarea, artículos y valores económicos",
+      "csv": "output/matrices/formulario-articulos.csv",
+      "sheet": "Formulario 4 Artículos",
+      "columns": [
+        "Campo del formulario",
+        "Prisma: campo exacto o ausencia",
+        "Modelo normalizado / regla de ECON",
+        "Campo API de Startrack",
+        "Clasificación y alcance"
+      ],
+      "rows": 8,
+      "sha256": "c85e46bb321baf9169f0c3a0f9ef5f4cbc2d7c15a7560242bb058163d626a743"
+    },
+    {
+      "slug": "formulario-contacto",
+      "heading": "Contacto y notificaciones",
+      "requirement": "RF-02: formulario de tarea, contacto y notificaciones",
+      "csv": "output/matrices/formulario-contacto.csv",
+      "sheet": "Formulario 5 Contacto",
+      "columns": [
+        "Campo del formulario",
+        "Prisma: campo exacto o ausencia",
+        "Modelo normalizado / regla de ECON",
+        "Campo API de Startrack",
+        "Clasificación y alcance"
+      ],
+      "rows": 6,
+      "sha256": "dcc3b6441047e464db313d580b417cf93ef306841d4f4540a2292f7f9db6cd57"
+    },
+    {
+      "slug": "formulario-tarea-completo",
+      "heading": "Matriz completa del formulario de tarea suministrado",
+      "requirement": "RF-02: las cinco secciones del formulario de tarea en una sola matriz",
+      "csv": "output/matrices/formulario-tarea-completo.csv",
+      "sheet": "Formulario de tarea completo",
+      "columns": [
+        "Sección",
+        "Campo del formulario",
+        "Prisma: campo exacto o ausencia",
+        "Modelo normalizado / regla de ECON",
+        "Campo API de Startrack",
+        "Clasificación y alcance"
+      ],
+      "rows": 37,
+      "sha256": "8e47d23722183e341f5a043355661a74db457d44b17f7fa3e1cfe4d1319355b1"
+    },
+    {
+      "slug": "otros-campos-api-tarea",
+      "heading": "Otros campos API de tarea que no deben perder su significado",
+      "requirement": "RF-02: campos del Job sin control editable en el formulario",
+      "csv": "output/matrices/otros-campos-api-tarea.csv",
+      "sheet": "Otros campos API de tarea",
+      "columns": [
+        "Campo Startrack",
+        "Origen y modelo en ECON",
+        "Estado / equivalencia"
+      ],
+      "rows": 11,
+      "sha256": "51fad8d4b27bb3dad8ce48eca04215ae7489724afa0f879e5c0b0261bf61cc42"
+    },
+    {
+      "slug": "inventario-prisma",
+      "heading": "Inventario Prisma que se conserva y que no viaja a la tarea",
+      "requirement": "RF-01/RF-02: campos Prisma conservados y su relación real con Startrack",
+      "csv": "output/matrices/inventario-prisma.csv",
+      "sheet": "Inventario Prisma",
+      "columns": [
+        "Campo Prisma",
+        "Modelo de ECON",
+        "Relación real con Startrack"
+      ],
+      "rows": 28,
+      "sha256": "be98a2864594a136bd07e768dffa3a50b93e225fbd1bd6425747780a2e04589c"
+    },
+    {
+      "slug": "fechas-y-unidades",
+      "heading": "Fechas, unidades y estados separados",
+      "requirement": "RF-02: tratamiento de fechas, unidades y coordenadas",
+      "csv": "output/matrices/fechas-y-unidades.csv",
+      "sheet": "Fechas y unidades",
+      "columns": [
+        "Hecho",
+        "Campo y tratamiento"
+      ],
+      "rows": 8,
+      "sha256": "77337c057acc78c376bf8c02bd198acb8f15b5057fcb6c7460e4438a07af57e8"
+    },
+    {
+      "slug": "estados-separados",
+      "heading": "Fechas, unidades y estados separados",
+      "requirement": "RF-05: estados por objeto y regla de interpretación",
+      "csv": "output/matrices/estados-separados.csv",
+      "sheet": "Estados separados",
+      "columns": [
+        "Estado",
+        "Fuente / modelo",
+        "Regla"
+      ],
+      "rows": 7,
+      "sha256": "942bba61d2cbffaf2b58c91ae164d83779e695b4c67d8231699e0ac6b72582d9"
+    },
+    {
+      "slug": "evidencia-retorno",
+      "heading": "Evidencia de retorno y cobertura",
+      "requirement": "RF-04: qué evidencia de Startrack está implementada y su límite",
+      "csv": "output/matrices/evidencia-retorno.csv",
+      "sheet": "Evidencia de retorno",
+      "columns": [
+        "Información de Startrack",
+        "Implementado",
+        "Límite"
+      ],
+      "rows": 5,
+      "sha256": "20bff46c626d93b7ed4d54c3257a223a6252ec793c282dd86fc2816357edede5"
+    },
+    {
+      "slug": "raci-propuesta",
+      "heading": "Responsabilidades propuestas para confirmar",
+      "requirement": "RF-03: matriz RACI propuesta, pendiente de validación empresarial",
+      "csv": "output/matrices/raci-propuesta.csv",
+      "sheet": "RACI propuesta",
+      "columns": [
+        "Decisión o dato",
+        "R",
+        "A",
+        "C",
+        "I"
+      ],
+      "rows": 9,
+      "sha256": "0408151d367807eec86c5f32d065c4a463b27c251bf8140991048d55b2fedc65"
+    }
+  ],
+  "workbook": {
+    "path": "output/matrices/matrices-econ.xlsx",
+    "sha256": "a2841cc88468f70cbaa5aeee75f76a0d98acc636f9c5e0bc48e852bcc0bcffe3",
+    "openpyxl": "3.1.5",
+    "sheets": [
+      "Clasificaciones",
+      "Identidad y cardinalidad",
+      "Glosario de sinónimos",
+      "Inconsistencias internas",
+      "Formulario 1 Identificación",
+      "Formulario 2 Programación",
+      "Formulario 3 Asignación",
+      "Formulario 4 Artículos",
+      "Formulario 5 Contacto",
+      "Formulario de tarea completo",
+      "Otros campos API de tarea",
+      "Inventario Prisma",
+      "Fechas y unidades",
+      "Estados separados",
+      "Evidencia de retorno",
+      "RACI propuesta"
+    ]
+  },
+  "scope_notes": [
+    "Solo se exportan tablas ya escritas en la matriz; no se inventan filas ni IDs.",
+    "La RACI es una propuesta pendiente de validación empresarial (RF-03).",
+    "Una correspondencia documentada no acredita identidad de registros entre plataformas."
+  ]
+}

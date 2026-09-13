@@ -1,8 +1,9 @@
 # Solución de integración y operación local
 
-Actualizado el **12 de septiembre de 2026**; la sección
-[tiempos del traslado](#tiempos-del-traslado-qué-se-sabe-y-qué-no) se añadió el
-**13 de septiembre de 2026**. Este documento describe el código
+Actualizado el **13 de septiembre de 2026**: se añadieron
+[tiempos del traslado](#tiempos-del-traslado-qué-se-sabe-y-qué-no),
+[un worker por IP y candado de ciclo](#un-worker-por-ip-candado-de-ciclo-y-poda-de-cortes)
+y las preguntas ampliadas a los proveedores. Este documento describe el código
 implementado y su operación local. Una prueba con respuestas controladas no
 acredita que las credenciales o los contratos completos de los sandboxes hayan
 sido validados. El contexto de negocio se conserva en
@@ -55,13 +56,25 @@ flowchart LR
   coordina envío y seguimiento. Dash, HTTP y CLI utilizan este mismo servicio.
 - `app/services/ledger.py`: transacciones, identidad del movimiento, eventos,
   fotografías de lectura y cola duradera. Cada llamada usa su propia sesión SQL.
+- `app/services/intervals.py`, `graph.py`, `indicators.py` y `suggestions.py`:
+  comparación de intervalos por día, proyección de grafo (`GET /api/v1/graph`),
+  indicadores por fila (`GET /api/v1/indicators`) y sugerencias de unidad
+  (`GET /api/v1/requests/{id}/suggestions`). Son puros: leen el hub y una página
+  del registro; no consultan proveedores ni escriben.
+- `app/cli/prune_snapshots.py`: poda explícita de cortes antiguos del hub; nunca
+  toca movimientos ni eventos ([ADR 0006](adr/0006-postgresql-unica-infraestructura-de-estado.md)).
 - `app/integrations`: clientes HTTP acotados y muestras locales. Las credenciales
   permanecen en el servidor; los mensajes públicos no incluyen respuestas crudas
   de error, cookies ni secretos.
 
-La base contiene `operation_movements`, `operation_events` y
-`operation_snapshots`. Conserva IDs originales, entorno, clase de evidencia,
-fechas del proveedor, instantes de consulta, hashes y cobertura. Las consultas
+La base contiene `operation_movements`, `operation_events`,
+`operation_snapshots` y `users`. Conserva IDs originales, entorno, clase de
+evidencia, fechas del proveedor, instantes de consulta, hashes, cobertura y el
+actor de cada transición (`actor_*`, `declared_by_*`). La migración `0004`
+añade los índices parciales `uq_operation_movements_inflight_machine` (un
+movimiento `queued`/`sending`/`unknown` por máquina, modo y entorno) y
+`uq_operation_movements_job_identity` (un `job_id` por modo y entorno) y, en
+PostgreSQL, el trigger que hace `operation_events` append-only. Las consultas
 del registro siempre separan `fixture` y `live`; un fallo live no recurre a
 muestras. Arrancar la aplicación no crea tablas ni ejecuta migraciones.
 
@@ -111,7 +124,12 @@ La unicidad local no convierte `remote_id` en una garantía del proveedor.
 
 Un timeout o una respuesta ambigua deja el movimiento en `unknown`. Una
 reclamación `sending` con más de diez minutos pasa a `unknown` durante la
-sincronización. Ninguno de esos casos vuelve automáticamente a la cola.
+sincronización. Ninguno de esos casos vuelve automáticamente a la cola. Mientras
+un movimiento esté en vuelo (`queued`, `sending` o `unknown`) ninguna otra
+encolada para la misma máquina prospera (409). La salida de `unknown` es
+explícita: la conciliación vincula la tarea si existe, o el operador la cierra
+como `failed` con `POST /api/v1/operations/{id}/resolve` (código cerrado, actor
+registrado) tras comprobar Startrack a mano; nunca se repite el POST.
 La conciliación puede vincular una tarea existente únicamente cuando hay una
 coincidencia única de referencia y contenido suficiente. Una tarea cuyo formato
 no permita probar esa correspondencia conserva la incertidumbre.
@@ -201,11 +219,53 @@ con Startrack y con MAIC, con el campo y su unidad, para no inventar nombres.
    `workflow_role` `0` intermedio (por ejemplo «En ruta») queda registrado con
    su fecha, o si `last_status_change_date` es el único disponible. Un histórico
    de cambios de estado permitiría medir el traslado sin telemetría.
-6. **Zona horaria de la cuenta**: para poder restar `start_time` y visitas sin
-   suponer `America/El_Salvador`.
+6. **Zona horaria de la cuenta Startrack**: para poder restar `start_time` y
+   visitas sin suponer `America/El_Salvador`, y saber en qué zona se expresan
+   `creation_date`, `changed_date` y `closed_date` cuando llegan sin desfase.
 7. **Prisma**: si `PATCH /api/maquinaria/requests/{id}/approve` o el historial
    registran un instante de entrega o de puesta a disposición distinto de
    `approved_at`.
+8. **Instantes por transición del flujo de falla** (`/maquinaria/fallas`): fecha
+   de cada paso `SIN_REVISAR` → `PENDIENTE_INTERVENCION` → `EN_PROCESO` →
+   `ESPERA_REPUESTOS` → `TRASLADO_STD` → `EN_PRUEBAS` → `FINALIZADO`/`RECHAZADO`
+   y del cambio de `active_failure_is_paro`. Sin ellos no hay edad de falla ni
+   tiempo de paro (hoy `failure_age` queda `null`).
+9. **`rejected_at` y motivo de rechazo** de la solicitud: el contrato solo
+   publica `approved_at`; sin instante de rechazo el tiempo de decisión de las
+   RECHAZADA no se calcula.
+10. **Catálogo de `event_type` de `/history`** (historial de maquinaria): valores
+    posibles, qué transición representa cada uno y si `gps_captured_at` acompaña
+    siempre a `gps_latitude`/`gps_longitude`. Sin catálogo no se interpreta el
+    motivo de un cambio de `estado`.
+11. **Endpoint de última posición** del vehículo en Startrack (nombre, campos,
+    unidad de precisión, instante de la posición y límites de consulta): el SDK
+    solo lee el informe de visitas a POI, por lo que la antigüedad de posición
+    propuesta no puede calcularse.
+
+## Un worker por IP, candado de ciclo y poda de cortes
+
+Startrack publica un límite de 240 peticiones por IP cada dos minutos, así que
+la invariante operativa es **un solo worker por IP**: el presupuesto del
+proveedor, no la cola, es el cuello de botella. La aplicación lo defiende en dos
+capas: un `Lock` de proceso (un ciclo a la vez por servidor) y, en PostgreSQL, el
+candado de sesión `pg_try_advisory_lock(hashtext(clave))` de
+`app/core/database.py::cycle_lock`, que se toma sin esperar y se libera con la
+sesión; un segundo proceso sobre la misma base recibe un rechazo explícito en
+lugar de ejecutar el ciclo en paralelo. SQLite no ofrece este candado y no
+acredita el comportamiento concurrente. Detalle en
+[ADR 0006](adr/0006-postgresql-unica-infraestructura-de-estado.md).
+
+Cada ciclo guarda un corte del hub solo si su huella estable cambió; una
+relectura idéntica actualiza `last_confirmed_at` y `last_sync_at` refleja la
+última lectura. La retención es una decisión explícita del operador:
+
+```powershell
+uv run --directory apps/api python -m app.cli.prune_snapshots --mode live --keep-days 30 --keep-latest 1 --dry-run
+```
+
+Sin `--dry-run` elimina los cortes del modo cuya última lectura sea anterior a
+`--keep-days`, conservando siempre los `--keep-latest` más recientes; nunca toca
+`operation_events` ni `operation_movements`, y la aplicación no poda sola.
 
 ## SDK, sincronización y límites de cobertura
 
@@ -318,13 +378,19 @@ correspondencias nuevas a partir de coincidencias de nombres.
 
 ## Validación y trabajo pendiente con proveedores
 
-`scripts/check.sh` (o `check.ps1`) ejecuta Ruff, formato y pytest. Las pruebas de integración
-usan respuestas HTTP controladas y bases SQLite aisladas; incluyen concurrencia
-de reclamaciones, idempotencia, resultados ambiguos, aislamiento de evidencia y
-separación de recepción. Sus IDs artificiales viven en tests y no se sirven como
-datos de operación. La migración también se comprueba contra una base de prueba;
-el SQL de PostgreSQL puede revisarse sin conexión mediante `alembic upgrade head
---sql`.
+`scripts/check.sh` (o `check.ps1`) ejecuta Ruff, formato, pytest,
+`generar_diccionario.py --check` (RF-01) y `exportar_matrices.py --check`
+(RNF-02). Las pruebas de integración usan respuestas HTTP controladas y bases
+SQLite aisladas; incluyen concurrencia de reclamaciones, idempotencia, resultados
+ambiguos, aislamiento de evidencia y separación de recepción. Sus IDs
+artificiales viven en tests y no se sirven como datos de operación. Con
+`ECON_TEST_POSTGRES_URL` y `ECON_TEST_POSTGRES_MIGRATIONS_URL` definidas
+(`postgresql+psycopg://econ@127.0.0.1:54329/econ_test` y `…/econ_test_migrations`)
+se ejecutan además `tests/test_postgres_*.py`: exclusividad en vuelo, `SKIP
+LOCKED`, trigger append-only, `timestamptz`, candado de ciclo y el ida y vuelta
+de la migración `0004`; CI levanta `postgres:16` para no omitirlas. SQLite no
+acredita ese comportamiento. El SQL de PostgreSQL puede revisarse sin conexión
+mediante `alembic upgrade head --sql`.
 
 La siguiente validación con proveedores debe comprobar credenciales API,
 permisos y respuestas reales de los catálogos y de creación de tarea. En

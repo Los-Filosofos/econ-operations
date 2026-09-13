@@ -25,7 +25,8 @@ uv run --directory apps/api python -m app.cli.create_user \
 
 Abrir **http://127.0.0.1:8050**, iniciar sesión en `/login` con ese usuario y
 crear el resto en `/administracion`. El servicio también expone `/docs`,
-`/api/v1/hub`, `/health/live` y `/health/ready`. Sin `SESSION_SECRET` la
+`/api/v1/hub`, `/api/v1/graph`, `/api/v1/indicators`, `/health/live` y
+`/health/ready`. Sin `SESSION_SECRET` la
 aplicación no arranca; `AUTH_REQUIRED=false` desactiva el login **solo para
 desarrollo**. Sin scripts:
 
@@ -85,6 +86,86 @@ repetir el envío. El envío al sandbox exige credenciales y flags del servidor
 documentados en la [guía operativa](docs/solucion-integracion.md). Las
 lecturas y escrituras remotas están deshabilitadas por defecto.
 
+## Entregables y demo para el jurado
+
+Enlaces directos a lo que pide el [brief](docs/onedrive/02-brief-del-reto.md):
+
+| Entregable | Dónde está |
+| --- | --- |
+| Matriz de mapeo y glosario (RF-01/RF-02) | [Markdown editable](docs/equivalencias-prisma-startrack.md) · [CSV y XLSX](output/matrices/MANIFEST.md) (`output/matrices/*.csv`, `matrices-econ.xlsx`, manifiesto con SHA-256) |
+| Matriz RACI (RF-03) | [Propuesta en la matriz](docs/equivalencias-prisma-startrack.md#responsabilidades-propuestas-para-confirmar) · [`raci-propuesta.csv`](output/matrices/raci-propuesta.csv); roles de sesión en [ADR 0005](docs/adr/0005-session-auth-and-roles.md) |
+| Diccionario del modelo (RF-01) | [docs/diccionario-modelo-econ.md](docs/diccionario-modelo-econ.md), generado y verificado en CI |
+| Diagrama de arquitectura y «dónde vive cada estado» | [Gráficos y diagramas](docs/entregables-visuales.md) · [PNG](docs/assets/entregables/diagrama-estados.png) / [SVG](docs/assets/entregables/diagrama-estados.svg) |
+| PDFs (dossier visual de 16 páginas y decisiones técnicas de 2) | [`output/pdf`](output/pdf) con fecha, páginas y SHA-256 en [MANIFEST.md](output/pdf/MANIFEST.md) |
+| Decisiones técnicas | [docs/decisiones-tecnicas.md](docs/decisiones-tecnicas.md) · [ADR 0006](docs/adr/0006-postgresql-unica-infraestructura-de-estado.md) |
+| Indicadores (RF-06 y calculables) | [Definición única de RF-06](docs/entregables-visuales.md#rf-06-indicador-definido-sin-valor-inventado) · [Indicadores calculables](docs/indicadores-calculables.md) (`GET /api/v1/indicators`) |
+| Requisitos y brechas | [Matriz de requisitos](docs/matriz-requisitos-entregables.md) |
+
+Guion de la prueba en vivo en diez pasos (modo `fixture`, sin proveedores; el
+jurado elige el equipo y nada se inventa). Cada página conserva `mode` en la URL
+y los enlaces de las listas llevan el ID original codificado
+(`nexus:equipment:…`, `nexus:request:…`):
+
+1. **Arrancar y elegir el equipo.** Iniciar sesión (o `AUTH_REQUIRED=false` en
+   desarrollo) y abrir `/maquinaria?mode=fixture`: cinco unidades de la muestra
+   (CF-01, CF-02, CF-03, EXC-01, EXC-02) con estado administrativo, proyecto y
+   procedencia. El jurado elige cualquiera; el guion sigue con CF-03
+   (`nexus:equipment:66faacde-728c-4378-8b46-dbfb38254e03`).
+2. **Consulta unificada de la unidad** ([RF-04](docs/matriz-requisitos-entregables.md#trazabilidad-de-los-requisitos-funcionales))
+   en `/maquinaria/{id}`: estado administrativo, mantenimiento, ventana de
+   asignación, solicitudes por `maquinaria_id` exacto y la ubicación marcada
+   como **no verificable**, porque el fixture no trae visitas ni posición.
+3. **La solicitud** en `/solicitudes/{id}` (la APROBADA es
+   `nexus:request:46d2573e-08d3-4855-971d-2fbf9564e135`): aprobación con
+   `approved_at`, unidad asignada, período de uso (no es ventana de entrega),
+   señales de intervalos y lo que falta para preparar el movimiento.
+4. **Preparar el traslado** desde ese detalle hacia `/operaciones`: guardar el
+   plan con destino y usuarios de Startrack produce un movimiento `draft` o
+   `blocked` con su preparación y sus reglas; `/operaciones/{id}` muestra
+   estados, eventos y el actor de cada transición. En fixture no hay envío.
+5. **Estados que difieren y cómo se resuelven**
+   ([RF-05](docs/matriz-requisitos-entregables.md#trazabilidad-de-los-requisitos-funcionales)):
+   CF-03 está OBSOLETA en Prisma y tiene solicitud APROBADA; ECON lo muestra
+   como tensión y no lo «corrige». La regla de
+   [estados separados](docs/equivalencias-prisma-startrack.md#fechas-unidades-y-estados-separados)
+   y el [diagrama «dónde vive cada estado»](docs/entregables-visuales.md#diagrama-6-dónde-vive-cada-estado)
+   explican por qué. El caso con un estado de Startrack distinto al de Prisma
+   necesita evidencia live; con la muestra queda pendiente y se dice así.
+6. **La traza** en `/integracion` (selector «Solicitud a seguir»): qué leyó de
+   Prisma, cómo lo nombra ECON, el payload preparado para `POST /api/job` y lo
+   que Startrack devolvería; los
+   [tiempos del traslado](docs/solucion-integracion.md#tiempos-del-traslado-qué-se-sabe-y-qué-no)
+   solo se calculan con instantes existentes. La misma respuesta está en
+   `GET /api/v1/integration/{request_id}`.
+7. **Grafo en Swagger** (`/docs`): `GET /api/v1/graph?mode=fixture` devuelve 5
+   máquinas, 2 solicitudes y 1 proyecto `referenced_only`, 4 aristas con
+   evidencia, 0 conflictos, la tensión `obsolete_with_approved_request` y
+   `gaps` «no verificable» (ubicación de cada máquina, proyecto no leído,
+   Startrack no consultado); `coverage.complete=false`.
+   Detalle en [api-swagger](docs/api-swagger.md#grafo-indicadores-y-sugerencias-con-la-muestra).
+8. **Indicadores**: `GET /api/v1/indicators?mode=fixture` publica ocho fichas
+   por fila, sin promedios: `approval_time` evaluable para la APROBADA
+   (42,2 s entre creación y aprobación) y «sin approved_at» para la
+   PENDIENTE; el resto «no evaluable» con el motivo (sin corte de observación,
+   sin tareas en la muestra). La ausencia no es cero
+   ([fichas](docs/indicadores-calculables.md)).
+9. **Sugerencia de unidad**:
+   `GET /api/v1/requests/nexus:request:0cbbbd77-4593-4791-9be5-afd46b06c888/suggestions?mode=fixture`
+   (la PENDIENTE, «Cargador frontal»): CF-01 y CF-02 elegibles, CF-03 excluida
+   por OBSOLETA, EXC-01/EXC-02 por clase distinta; cada candidata lista
+   ubicación, operadores y tarifa como «no verificable». Recomendar no es
+   asignar: la asignación se registra en Prisma.
+10. **Qué muestra Prisma, qué mostraría Startrack y por qué falta**: `/fuentes`
+    separa muestras proporcionadas y sandbox. La tarea aparecería en
+    `/operaciones/{id}` (`job_id`, `status`, `workflow_role`), el GPS como
+    visita a la geocerca del movimiento (`arrival_event_time`; el vehículo
+    rastreado puede ser el transportador) y la recepción solo como declaración
+    con responsable, instante, referencia y usuario de sesión. El fixture **no
+    los trae** porque el OpenAPI proporcionado no contiene tareas, visitas ni
+    recepciones; esas filas quedan visibles como faltantes en lugar de
+    rellenarse. Cierre: matrices en `output/matrices`, PDFs con
+    [manifiesto](output/pdf/MANIFEST.md) y `scripts/check.sh` en verde.
+
 ## Sesión y roles
 
 El acceso exige iniciar sesión (cookie firmada `econ_session`, HttpOnly).
@@ -111,8 +192,14 @@ en desarrollo con `AUTH_REQUIRED=false`. Detalles en
 ./scripts/check.sh --container  # PowerShell: .\scripts\check.ps1 -Container
 ```
 
-Las pruebas (462 pruebas automatizadas) usan SQLite y HTTP controlado: callbacks reales de Dash, contrato
-API, filtros, reglas y errores sin fallback. El segundo comando construye la
+Las pruebas usan SQLite y HTTP controlado: callbacks reales de Dash, contrato
+API, filtros, reglas y errores sin fallback. Con `ECON_TEST_POSTGRES_URL` y
+`ECON_TEST_POSTGRES_MIGRATIONS_URL` definidas (CI levanta `postgres:16`; en local
+sirve el Compose con `econ_test` y `econ_test_migrations`) también se ejecutan
+las pruebas de PostgreSQL (exclusividad en vuelo, `SKIP LOCKED`, append-only,
+migración 0004); sin ellas se omiten y SQLite no acredita ese comportamiento.
+`check.sh` termina con `generar_diccionario.py --check` (RF-01) y
+`exportar_matrices.py --check` (RNF-02). El segundo comando construye la
 imagen Docker; no publica servicios. El [despliegue](docs/despliegue-backend.md)
 sirve interfaz y API juntas.
 
@@ -125,6 +212,8 @@ sirve interfaz y API juntas.
 [Analítica](docs/analitica-decisiones.md) ·
 [Mapeo y responsabilidades](docs/equivalencias-prisma-startrack.md) ·
 [Gráficos y diagramas](docs/entregables-visuales.md) ·
+[Indicadores calculables](docs/indicadores-calculables.md) ·
+[Matrices CSV/XLSX](output/matrices/MANIFEST.md) ·
 [Backlog](https://github.com/Los-Filosofos/econ-operations/issues) ·
 [OneDrive](docs/onedrive/README.md).
 

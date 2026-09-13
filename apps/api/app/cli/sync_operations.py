@@ -7,7 +7,7 @@ from app.core.config import Settings
 from app.core.database import build_engine
 from app.integrations.nexus import NexusConnector
 from app.integrations.startrack import StartrackClient, StartrackReadConfig
-from app.services.workflow import WorkflowError, WorkflowService
+from app.services.workflow import SyncInProgress, WorkflowError, WorkflowService
 
 
 def main() -> int:
@@ -29,6 +29,12 @@ def main() -> int:
                 result = service.run_cycle(args.mode)
                 print(result.message, flush=True)
                 print(f"Movimientos consultados: {len(result.movements)}", flush=True)
+            except SyncInProgress as error:
+                # Another process (or thread) owns the cycle lock: nothing ran here and
+                # nothing is retried early; a watch simply waits for the next interval.
+                print(f"Ciclo omitido: {error}", flush=True)
+                if not args.watch:
+                    return 1
             except WorkflowError as error:
                 print(str(error), flush=True)
                 if not args.watch:

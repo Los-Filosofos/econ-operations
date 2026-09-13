@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from sqlalchemy import event as sqlalchemy_event
 
 from app.core.access import management_scope
 from app.core.config import Settings
@@ -12,9 +13,10 @@ from app.core.database import build_engine
 from app.integrations.nexus import NexusConnector
 from app.integrations.startrack import StartrackClient, StartrackReadConfig
 from app.models import metadata
+from app.models.operations import Actor
 from app.services.hub import BUSINESS_TIMEZONE
 from app.services.transfers import TransferMapping
-from app.services.workflow import WorkflowError, WorkflowService
+from app.services.workflow import JOB_CONFLICT_REASON, WorkflowError, WorkflowService
 
 REQUEST_ID = "10000000-0000-4000-8000-000000000001"
 EQUIPMENT_ID = "20000000-0000-4000-8000-000000000001"
@@ -54,9 +56,16 @@ def workflow(tmp_path):
         "vehicle_deactivated": "0",
         "posts": 0,
         "calls": [],
+        # When set, an acknowledged POST also registers the job (payload + these facts) so
+        # that later bounded reads of the same cycle find it, as the sandbox would.
+        "created_job": None,
+        # Called at the start of every provider request; tests assert on SQL state there.
+        "probe": lambda: None,
     }
 
     def nexus_handler(request):
+        state["probe"]()
+        state["calls"].append((request.method, request.url.path))
         if request.method == "POST":
             return httpx.Response(
                 200,
@@ -64,10 +73,21 @@ def workflow(tmp_path):
                 headers={"Set-Cookie": "auth-token=test-only; Path=/; Secure; HttpOnly"},
             )
         assert request.url.host == "econ-key.maic.ai"
-        key = "request" if "/requests/" in request.url.path else "equipment"
+        path = request.url.path
+        if path.endswith(("/equipos", "/requests")):
+            key = "request" if path.endswith("/requests") else "equipment"
+            page = {
+                "items": [state[key]],
+                "total": 1,
+                "page": int(request.url.params.get("page", "1")),
+                "limit": int(request.url.params.get("limit", "25")),
+            }
+            return httpx.Response(200, json=page)
+        key = "request" if "/requests/" in path else "equipment"
         return httpx.Response(200, json=state[key])
 
     def startrack_handler(request):
+        state["probe"]()
         state["calls"].append((request.method, request.url.path))
         assert request.url.host == "staging.gps.gt"
         if request.method == "POST":
@@ -86,6 +106,8 @@ def workflow(tmp_path):
                 }
             if response == "contradictory":
                 data["poi_id"] = "another-destination"
+            if state["created_job"] is not None:
+                state["jobs"].append({**state["payload"], "id": "700", **state["created_job"]})
             return httpx.Response(200, json={"success": True, "data": data})
         path = request.url.path
         if path == "/api/pois":
@@ -103,7 +125,16 @@ def workflow(tmp_path):
         elif path == "/api/job/type":
             data = [{"id": "400", "name": "Traslado"}]
         elif path == "/api/job":
-            data = state["jobs"]
+            # The bounded reads filter by exact id or remote_id, as the client requests.
+            field = request.url.params.get("filter_by")
+            value = request.url.params.get("filter_values")
+            data = [job for job in state["jobs"] if field is None or str(job.get(field)) == value]
+        elif path == "/api/job/status":
+            data = [
+                {"id": "0", "name": "Pendiente", "workflow_role": "0"},
+                {"id": "1", "name": "Completada", "workflow_role": "1"},
+                {"id": "2", "name": "Cancelada", "workflow_role": "2"},
+            ]
         elif path == "/api/visits":
             data = state["visits"]
         else:
@@ -308,7 +339,9 @@ def test_task_completion_and_exact_vehicle_visit_never_create_receipt(workflow):
     workflow.state["payload"] = workflow.movement.payload
     sent = dispatch(workflow)
     workflow.state["jobs"] = [full_job(workflow)]
-    arrived_at = datetime.now(UTC) - timedelta(hours=1)
+    # The visit precedes the task closure, so it falls inside the movement's window.
+    closed_at = datetime.fromisoformat(workflow.state["jobs"][0]["closed_date"])
+    arrived_at = closed_at - timedelta(minutes=30)
     workflow.state["visits"] = [
         {
             "id": 800,
@@ -318,7 +351,7 @@ def test_task_completion_and_exact_vehicle_visit_never_create_receipt(workflow):
             "end_date": None,
         }
     ]
-    service._observe(sent, {"1": "1"})
+    assert service._observe(sent, {"1": "1"}) == 0
     observed = service.ledger.get(sent.id, "live")
     assert observed.status == "1" and observed.workflow_role == "1"
     assert observed.receipt is None
@@ -361,3 +394,343 @@ def test_unzoned_visit_dates_are_not_used_as_arrival(workflow, raw_date):
     observed = service.ledger.get(sent.id, "live")
     assert all(event.kind != "arrival" for event in observed.events)
     assert observed.receipt is None
+
+
+def visit(identifier: int, start: datetime, end: str | None = None) -> dict:
+    return {
+        "id": identifier,
+        "poi_id": 100,
+        "vehicle_id": 300,
+        "start_date": start.isoformat(),
+        "end_date": end,
+    }
+
+
+def closed_job(workflow, closed_at: datetime, **changes) -> dict:
+    return full_job(
+        workflow,
+        closed_date=closed_at.isoformat(),
+        last_status_change_date=closed_at.isoformat(),
+        **changes,
+    )
+
+
+def sent_with_vehicle(workflow, kind: str | None = None):
+    with management_scope(True):
+        movement = workflow.service.save_plan(
+            "live",
+            workflow.mapping.model_copy(update={"movement_reference": "tracked-test"}),
+            tracked_vehicle_id="300",
+            tracked_vehicle_kind=kind,
+        )
+    workflow.movement = movement
+    workflow.state["payload"] = movement.payload
+    return dispatch(workflow)
+
+
+def arrivals(workflow, movement_id: str) -> list:
+    record = workflow.service.ledger.get(movement_id, "live")
+    return [event for event in record.events if event.kind == "arrival"]
+
+
+SESSION_ACTOR = Actor(user_id="7", email="logistica@example.test", role="logistica", kind="session")
+
+
+def test_receipt_keeps_declared_receiver_separate_from_actor(workflow):
+    sent = dispatch(workflow)
+    with management_scope(True):
+        received = workflow.service.record_receipt(
+            sent.id,
+            "live",
+            receiver="Persona X",
+            received_at=datetime.now(UTC),
+            reference="ACTA-TEST-1",
+            actor=SESSION_ACTOR,
+        )
+    assert received.receipt.receiver == "Persona X"
+    assert received.receipt.declared_by_user_id == SESSION_ACTOR.user_id
+    assert received.receipt.declared_by_email == SESSION_ACTOR.email
+    assert received.receipt.declared_by_role == SESSION_ACTOR.role
+    receipt_event = next(event for event in received.events if event.kind == "receipt")
+    assert receipt_event.data["receiver"] == "Persona X"
+    assert (receipt_event.actor_user_id, receipt_event.actor_role, receipt_event.actor_kind) == (
+        "7",
+        "logistica",
+        "session",
+    )
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_label"),
+    [
+        ("transporter", "vehículo del transportador"),
+        ("machine_device", "vehículo GPS"),
+        (None, "vehículo GPS"),
+    ],
+)
+def test_tracked_vehicle_kind_travels_to_arrival_evidence(workflow, kind, expected_label):
+    sent = sent_with_vehicle(workflow, kind)
+    assert sent.tracked_vehicle_kind == kind
+    closed_at = datetime.now(UTC) - timedelta(hours=1)
+    workflow.state["jobs"] = [closed_job(workflow, closed_at)]
+    workflow.state["visits"] = [visit(800, closed_at - timedelta(minutes=30))]
+    assert workflow.service._observe(sent, {"1": "1"}) == 0
+    (arrival,) = arrivals(workflow, sent.id)
+    assert arrival.data.get("tracked_asset_kind") == kind
+    assert expected_label in arrival.data["label"]
+    assert "no acredita recepción" in arrival.data["label"]
+    if kind == "transporter":
+        assert "transportador" in arrival.data["label"]
+    assert workflow.service.ledger.get(sent.id, "live").receipt is None
+
+
+def test_visits_after_task_closure_are_not_attributed(workflow):
+    sent = sent_with_vehicle(workflow)
+    closed_at = datetime.now(UTC) - timedelta(hours=2)
+    workflow.state["jobs"] = [closed_job(workflow, closed_at)]
+    workflow.state["visits"] = [
+        visit(800, closed_at + timedelta(hours=1)),
+        visit(801, closed_at - timedelta(hours=1)),
+    ]
+    # One visit falls after the closure: it is counted, not attributed.
+    assert workflow.service._observe(sent, {"1": "1"}) == 1
+    assert [event.source_id for event in arrivals(workflow, sent.id)] == ["801"]
+    # Repeating the read attributes nothing new and keeps reporting the excluded visit.
+    assert workflow.service._observe(sent, {"1": "1"}) == 1
+    assert [event.source_id for event in arrivals(workflow, sent.id)] == ["801"]
+
+
+def test_cancelled_task_also_closes_the_window(workflow):
+    sent = sent_with_vehicle(workflow)
+    cancelled_at = datetime.now(UTC) - timedelta(hours=2)
+    workflow.state["jobs"] = [closed_job(workflow, cancelled_at, status="2")]
+    workflow.state["visits"] = [visit(800, cancelled_at + timedelta(minutes=5))]
+    assert workflow.service._observe(sent, {"2": "2"}) == 1
+    assert arrivals(workflow, sent.id) == []
+
+
+def test_reopened_task_reopens_the_attribution_window(workflow):
+    sent = sent_with_vehicle(workflow)
+    closed_at = datetime.now(UTC) - timedelta(hours=3)
+    later_visit = visit(800, closed_at + timedelta(hours=1))
+    workflow.state["jobs"] = [closed_job(workflow, closed_at)]
+    workflow.state["visits"] = [later_visit]
+    assert workflow.service._observe(sent, {"1": "1", "0": "0"}) == 1
+    assert arrivals(workflow, sent.id) == []
+    # The task goes back to pending after the closure: the window is open again and the
+    # old closure is not kept, so the same visit is now within the movement's window.
+    reopened_at = closed_at + timedelta(minutes=30)
+    workflow.state["jobs"] = [
+        full_job(
+            workflow,
+            status="0",
+            closed_date=None,
+            last_status_change_date=reopened_at.isoformat(),
+        )
+    ]
+    assert workflow.service._observe(sent, {"1": "1", "0": "0"}) == 0
+    assert [event.source_id for event in arrivals(workflow, sent.id)] == ["800"]
+    record = workflow.service.ledger.get(sent.id, "live")
+    assert record.workflow_role == "0"
+    assert record.receipt is None
+
+
+def test_undated_closure_never_uses_the_reading_time_as_closure(workflow):
+    sent = sent_with_vehicle(workflow)
+    # A closing state whose provider dates are unzoned yields no closure instant.
+    workflow.state["jobs"] = [
+        full_job(workflow, closed_date="2026-09-12 10:00:00", last_status_change_date=None)
+    ]
+    inside = datetime.now(UTC) - timedelta(hours=1)
+    workflow.state["visits"] = [visit(800, inside)]
+    assert workflow.service._observe(sent, {"1": "1"}) == 0
+    task_state = next(
+        event
+        for event in workflow.service.ledger.get(sent.id, "live").events
+        if event.kind == "task_state"
+    )
+    assert task_state.event_time is None
+    assert [event.source_id for event in arrivals(workflow, sent.id)] == ["800"]
+
+
+def test_creation_date_and_visit_end_are_persisted(workflow):
+    sent = sent_with_vehicle(workflow)
+    closed_at = datetime.now(UTC) - timedelta(hours=1)
+    workflow.state["jobs"] = [
+        closed_job(workflow, closed_at, creation_date="2026-09-12 08:00:00-06:00")
+    ]
+    workflow.state["visits"] = [
+        visit(800, closed_at - timedelta(minutes=30), end="2026-09-13 10:15:00-06:00")
+    ]
+    assert workflow.service._observe(sent, {"1": "1"}) == 0
+    record = workflow.service.ledger.get(sent.id, "live")
+    task_state = next(event for event in record.events if event.kind == "task_state")
+    assert task_state.data["creation_date"] == "2026-09-12 08:00:00-06:00"
+    (arrival,) = arrivals(workflow, sent.id)
+    assert arrival.data["end_date_raw"] == "2026-09-13 10:15:00-06:00"
+    assert arrival.data["event_time_raw"] == (closed_at - timedelta(minutes=30)).isoformat()
+
+
+def test_post_answered_with_a_job_linked_elsewhere_fails_without_repost(workflow):
+    service = workflow.service
+    first = dispatch(workflow)
+    assert first.state == "sent" and first.job_id == "700"
+    with management_scope(True):
+        second = service.save_plan(
+            "live", workflow.mapping.model_copy(update={"movement_reference": "second-attempt"})
+        )
+    workflow.movement = second
+    workflow.state["payload"] = second.payload
+    # The provider answers with the job that already belongs to the first movement.
+    failed = dispatch(workflow)
+    assert failed.state == "failed" and failed.reason_code == JOB_CONFLICT_REASON
+    assert failed.job_id is None
+    assert workflow.state["posts"] == 2
+    assert service.ledger.get(first.id, "live").job_id == "700"
+    assert service.ledger.claim() is None
+    with management_scope(True), pytest.raises(WorkflowError):
+        service.queue(failed.id)
+    assert workflow.state["posts"] == 2
+    finished = [event for event in failed.events if event.kind == "failed"]
+    assert finished and finished[-1].data["reason_code"] == JOB_CONFLICT_REASON
+
+
+def test_resolve_closes_unknown_without_repost_and_records_actor(workflow):
+    service = workflow.service
+    workflow.state["create_response"] = "timeout"
+    unknown = dispatch(workflow)
+    assert unknown.state == "unknown"
+    with management_scope(True):
+        with pytest.raises(WorkflowError, match="código permitido"):
+            service.resolve(unknown.id, reason_code="free text", actor=SESSION_ACTOR)
+        resolved = service.resolve(unknown.id, reason_code="operator_resolved", actor=SESSION_ACTOR)
+    assert resolved.state == "failed" and resolved.reason_code == "operator_resolved"
+    resolution = resolved.events[-1]
+    assert resolution.kind == "resolved"
+    assert resolution.data == {"reason_code": "operator_resolved", "previous_state": "unknown"}
+    assert (resolution.actor_user_id, resolution.actor_role, resolution.actor_kind) == (
+        "7",
+        "logistica",
+        "session",
+    )
+    assert workflow.state["posts"] == 1
+    with management_scope(True), pytest.raises(WorkflowError):
+        service.resolve(resolved.id, reason_code="operator_resolved", actor=SESSION_ACTOR)
+    # The machine's in-flight slot is free again for an explicit new plan.
+    with management_scope(True):
+        again = service.save_plan(
+            "live", workflow.mapping.model_copy(update={"movement_reference": "after-resolve"})
+        )
+        assert service.queue(again.id).state == "queued"
+    assert workflow.state["posts"] == 1
+
+
+def test_explicit_actor_never_bypasses_the_management_gate(workflow):
+    service = workflow.service
+    with management_scope(False):
+        with pytest.raises(WorkflowError, match="sesión con permiso"):
+            service.save_plan("live", workflow.mapping, actor=SESSION_ACTOR)
+        with pytest.raises(WorkflowError, match="sesión con permiso"):
+            service.queue(workflow.movement.id, actor=SESSION_ACTOR)
+        with pytest.raises(WorkflowError, match="sesión con permiso"):
+            service.sync("live", actor=SESSION_ACTOR)
+        with pytest.raises(WorkflowError, match="sesión con permiso"):
+            service.resolve(workflow.movement.id, reason_code="unknown", actor=SESSION_ACTOR)
+        with pytest.raises(WorkflowError, match="sesión con permiso"):
+            service.record_receipt(
+                workflow.movement.id,
+                "live",
+                receiver="Persona X",
+                received_at=datetime.now(UTC),
+                reference="ACTA-TEST-1",
+                actor=SESSION_ACTOR,
+            )
+    assert service.ledger.get(workflow.movement.id, "live").state == "draft"
+    assert workflow.state["posts"] == 0
+
+
+def test_no_sql_connection_is_held_during_provider_calls(workflow):
+    service = workflow.service
+    engine = service.ledger.engine
+    held = {"count": 0}
+    violations = []
+
+    @sqlalchemy_event.listens_for(engine, "checkout")
+    def _checked_out(_dbapi_connection, _record, _proxy):
+        held["count"] += 1
+
+    @sqlalchemy_event.listens_for(engine, "checkin")
+    def _checked_in(_dbapi_connection, _record):
+        held["count"] -= 1
+
+    def probe():
+        if held["count"] or engine.pool.checkedout():
+            violations.append((held["count"], engine.pool.checkedout()))
+
+    workflow.state["probe"] = probe
+    closed_at = datetime.now(UTC) - timedelta(hours=1)
+    workflow.state["created_job"] = {
+        "status": "1",
+        "closed_date": closed_at.isoformat(),
+        "last_status_change_date": closed_at.isoformat(),
+    }
+    workflow.state["visits"] = [visit(800, closed_at - timedelta(minutes=30))]
+    with management_scope(True):
+        movement = service.save_plan(
+            "live",
+            workflow.mapping.model_copy(update={"movement_reference": "tracked-test"}),
+            tracked_vehicle_id="300",
+        )
+        workflow.state["payload"] = movement.payload
+        service.queue(movement.id)
+        result = service.sync("live")
+    assert result.available
+    paths = [path for _, path in workflow.state["calls"]]
+    # Every phase talked to a provider: hub read, revalidation, dispatch and follow-up.
+    assert "/api/maquinaria/requests" in paths
+    assert f"/api/maquinaria/requests/{REQUEST_ID}" in paths
+    assert "/api/job/status" in paths and "/api/visits" in paths
+    assert workflow.state["posts"] == 1
+    assert violations == []
+    assert held["count"] == 0 and engine.pool.checkedout() == 0
+    record = service.ledger.get(movement.id, "live")
+    assert record.state == "sent" and record.job_id == "700"
+    assert [event.source_id for event in arrivals(workflow, movement.id)] == ["800"]
+
+
+def test_run_cycle_records_the_cli_worker_and_reports_visits_outside_the_window(workflow):
+    service = workflow.service
+    with management_scope(True):
+        movement = service.save_plan(
+            "live",
+            workflow.mapping.model_copy(update={"movement_reference": "tracked-test"}),
+            tracked_vehicle_id="300",
+            tracked_vehicle_kind="transporter",
+        )
+        workflow.state["payload"] = movement.payload
+        service.queue(movement.id)
+    closed_at = datetime.now(UTC) - timedelta(hours=2)
+    workflow.state["created_job"] = {
+        "status": "1",
+        "closed_date": closed_at.isoformat(),
+        "last_status_change_date": closed_at.isoformat(),
+    }
+    workflow.state["visits"] = [
+        visit(800, closed_at + timedelta(hours=1)),
+        visit(801, closed_at - timedelta(hours=1)),
+    ]
+    result = service.run_cycle("live")
+    assert "1 no atribuidas" in result.message
+    record = service.ledger.get(movement.id, "live")
+    assert record.state == "sent" and record.job_id == "700"
+    assert workflow.state["posts"] == 1
+    worker_kinds = {"sending", "sent", "task_state", "arrival"}
+    worker_events = [event for event in record.events if event.kind in worker_kinds]
+    assert {event.kind for event in worker_events} == worker_kinds
+    for event in worker_events:
+        assert event.actor_kind == "cli_worker"
+        assert event.actor_user_id is None and event.actor_role is None
+    (arrival,) = arrivals(workflow, movement.id)
+    assert arrival.source_id == "801"
+    assert arrival.data["tracked_asset_kind"] == "transporter"
+    assert record.receipt is None

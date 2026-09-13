@@ -9,19 +9,19 @@ productividad, ahorro o cumplimiento calculados con la muestra disponible.
 ## RF-06: indicador documentado
 
 El requisito pide documentar al menos un indicador que la integración haría
-visible; no exige inventar un resultado sin datos. El dossier define
-[tiempo fuera de geocerca sin justificación](entregables-visuales.md#rf-06-indicador-definido-sin-valor-inventado),
-por equipo y período, en horas.
+visible; no exige inventar un resultado sin datos. La **definición única** de
+[tiempo fuera de geocerca sin justificación](entregables-visuales.md#rf-06-indicador-definido-sin-valor-inventado)
+(por equipo y período, en horas; cálculo, identidad, evidencia, cobertura y
+decisión) vive en el dossier visual y este documento no la repite para evitar
+fórmulas distintas entre entregables. La muestra no permite calcularlo: el
+resultado es **no evaluable**, no cero.
 
-Su cálculo usa la unión de intervalos válidos fuera de la geocerca asignada,
-dentro del horario exigible y excluyendo salidas justificadas. Requiere identidad
-y vigencia del dispositivo, asignación, eventos, horario y justificaciones.
-Los huecos de señal permanecen sin clasificar y se informa la cobertura.
-La muestra no permite calcularlo: el resultado es **no evaluable**, no cero.
-
-La definición completa, sus condiciones y la referencia al brief se mantienen
-en el dossier para evitar fórmulas distintas entre entregables. Estar fuera de
-geocerca no demuestra tiempo muerto, uso indebido ni pérdida económica.
+Los indicadores que sí se calculan hoy con las lecturas existentes —tiempo de
+aprobación, antigüedad de la solicitud abierta, aprobadas sin tarea enviada,
+OCUPADA sin proyecto, asignación vencida, tarea completada sin recepción, falla
+activa y antigüedad de la evidencia— están definidos ficha por ficha en
+[indicadores calculables](indicadores-calculables.md) y publicados por
+`GET /api/v1/indicators`, por fila y sin promedios.
 
 ## Qué puede mostrar la implementación
 
@@ -51,11 +51,16 @@ validada con Startrack.
 | Medición | Cálculo propuesto | Condiciones pendientes |
 | --- | --- | --- |
 | Aprobadas sin unidad | Cantidad y porcentaje sobre las aprobadas del ámbito | Cobertura y catálogo validados; denominador cero significa sin casos evaluables |
-| Tiempo hasta aprobación | Mediana y percentil 90 de aprobación menos creación | Horas con zona, cambios de decisión y cohorte; mostrar también las pendientes |
+| Tiempo hasta aprobación | Hoy por fila: `approved_at − created_at` (`approval_time`); mediana y percentil 90 solo con cohorte suficiente | Horas con zona, cambios de decisión, `rejected_at` (no publicado) y cohorte; mostrar también las pendientes |
 | Cobertura solicitud–traslado | Solicitudes con vínculo validado sobre solicitudes que requieren traslado | Definir el denominador y comprobar recurso, destino, período y cardinalidad |
 | Antigüedad de posición | Corte menos instante del reporte del activo | Acceso API validado, unidad temporal, dispositivo vinculado y antigüedad aceptable |
 | Puntualidad de recepción | Recepciones validadas dentro del compromiso sobre traslados evaluables cuyo compromiso vence en el período | Compromiso de entrega, recepción, política de cancelación/reprogramación y cobertura |
 | Impacto del hub | Comparación del tiempo necesario para resolver una consulta operativa antes y durante un piloto | Casos comparables, muestra y condiciones registradas; sin porcentajes de ahorro supuestos |
+
+Las fichas de SLA propuestas (aprobación, asignación, envío de tarea,
+recepción, atención de falla con paro y frescura de evidencia) están en
+[indicadores calculables](indicadores-calculables.md#fichas-de-sla-propuestas-no-implementadas),
+con umbrales marcados «a validar con ECON».
 
 Los plazos de uso solicitado, programación de tarea y compromiso de entrega son
 datos diferentes. Una tarea completada o una visita GPS no sustituye la recepción.

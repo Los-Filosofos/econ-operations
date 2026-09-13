@@ -46,10 +46,26 @@ credenciales solo en el servidor, mínimo código propio y librerías mantenidas
 - **Un middleware decide por petición**: sin sesión, `/api/*` y `/_dash-*`
   responden 401 y las páginas redirigen a `/login?next=…`; con sesión pero sin
   permiso, 403. El permiso exigido se deriva de la ruta y el método
-  (`/receipt` → `declare_reception`, resto de `/api/v1/operations` en POST →
-  `manage_transfers`, `/api/v1/users` → `manage_users`). Las acciones de Dash
-  comparten un ámbito de gestión y `WorkflowService` vuelve a comprobar el rol
-  del usuario de sesión en cada acción.
+  (`/receipt` → `declare_reception`, `/resolve` y el resto de
+  `/api/v1/operations` en POST → `manage_transfers`, `/api/v1/users` →
+  `manage_users`). Las acciones de Dash comparten un ámbito de gestión y
+  `WorkflowService` vuelve a comprobar el rol del usuario de sesión en cada
+  acción.
+- **Actor en cada transición** (desde la migración `0004`, [ADR 0004](0004-persistent-transfer-workflow.md)):
+  cada evento de `operation_events` guarda `actor_user_id`, `actor_role` y
+  `actor_kind`, y la recepción guarda `declared_by_user_id/email/role` aparte
+  del `receiver` declarado. El actor se construye en la capa que conoce la
+  petición y viaja explícitamente hasta el registro; nunca se fabrica un usuario:
+
+  | `actor_kind` | Origen | Usuario |
+  | --- | --- | --- |
+  | `session` | Sesión autenticada: HTTP (`request_actor`, `app/core/auth.py`) o callback de Dash (`session_user()`) | `str(user.id)`, correo y rol leídos de SQL en esa petición |
+  | `local_dev` | `AUTH_REQUIRED=false` + `ALLOW_LOCAL_MANAGEMENT=true` desde loopback, sin login | ninguno (columnas de usuario y rol en NULL) |
+  | `cli_worker` | `python -m app.cli.sync_operations` (`WorkflowService.run_cycle`) | ninguno |
+
+  Cuando no se conoce ninguno de los tres (pruebas aisladas sin aplicación
+  Dash), el evento queda sin actor. Un actor explícito nunca sustituye la
+  comprobación de permiso: la puerta de gestión se ejecuta en cada acción.
 - **Endpoints**: `POST /api/v1/auth/login` (429 tras 10 fallos por IP en 15
   minutos; 401 sin revelar si el email existe), `POST /api/v1/auth/logout`,
   `GET /api/v1/auth/me`, `GET/POST /api/v1/users` y `PATCH /api/v1/users/{id}`
@@ -83,8 +99,14 @@ credenciales solo en el servidor, mínimo código propio y librerías mantenidas
   `ALLOW_LIVE_WRITES` y `AUTO_QUEUE_TRANSFERS` siguen siendo del servidor y
   continúan en `false` por defecto; un rol no las enciende.
 - La recepción sigue siendo una declaración con `receiver`, instante y
-  referencia. El usuario autenticado que la registra **no** queda vinculado
-  todavía a la declaración; añadirlo requiere una columna y una migración.
+  referencia. Desde la migración `0004` el usuario autenticado que la registra
+  **sí** queda vinculado como `declared_by_user_id/email/role` en la
+  declaración y como `actor_*` en el evento `receipt`; `receiver` sigue siendo
+  el nombre escrito en la constancia y no se sustituye por la sesión. Sin
+  sesión (`local_dev`, `cli_worker`) la declaración no lleva `declared_by_*`.
+- `POST /api/v1/operations/{id}/resolve` (permiso `manage_transfers`) cierra un
+  movimiento `unknown` como `failed` con un código permitido y deja el evento
+  `resolved` con su actor; no consulta ni modifica Startrack ni repite el POST.
 - El limitador de intentos es por proceso; con varias réplicas cada una cuenta
   por separado.
 - El TestClient de Starlette 1.6 necesita `httpx2` como dependencia de

@@ -138,6 +138,18 @@ def test_save_callback_persists_explicit_plan_and_never_sends_fixture(client):
     assert overview(client)["overview"]["movements"][0]["job_id"] is None
 
 
+def test_dash_save_in_development_records_the_local_developer_not_a_user(client):
+    assert action(client, "save", fields())["ok"]
+    (stored,) = client.app.state.workflow.ledger.list("fixture")
+    (created,) = stored.events
+    assert created.kind == "created"
+    # Anonymous loopback callback with AUTH_REQUIRED=false: the kind is recorded, no user.
+    assert created.actor_kind == "local_dev"
+    assert created.actor_user_id is None and created.actor_role is None
+    # The form does not collect the device kind, so it stays undeclared.
+    assert stored.tracked_vehicle_id == "test-vehicle" and stored.tracked_vehicle_kind is None
+
+
 @pytest.mark.parametrize(
     "headers",
     [
@@ -205,7 +217,7 @@ def test_receipt_input_uses_explicit_el_salvador_time():
         },
         "test-movement",
     )
-    received_at = service.record_receipt.call_args.args[3]
+    received_at = service.record_receipt.call_args.kwargs["received_at"]
     assert received_at.isoformat() == "2026-09-15T10:35:00-06:00"
     assert received_at.utcoffset() == timedelta(hours=-6)
     service.reset_mock()

@@ -15,9 +15,10 @@ from app.integrations.startrack import StartrackClient, StartrackReadConfig
 from app.main import create_app
 from app.models import metadata
 from app.models.hub import Provenance
-from app.services.evidence import matching_current_movements, project_operation_evidence
+from app.models.operations import MovementEventRecord
+from app.services.evidence import _transfer, matching_current_movements, project_operation_evidence
 from app.services.hub import read_hub
-from app.services.ledger import OperationsLedger
+from app.services.ledger import LedgerError, OperationsLedger
 from app.services.transfers import TransferMapping
 
 OBSERVED = datetime(2026, 9, 12, 18, tzinfo=UTC)
@@ -175,9 +176,47 @@ def test_projection_preserves_multiple_tasks_latest_source_times_and_separate_re
     assert task.receipt.reference == "constancia-prueba"
     assert task.receipt.receiver == "Responsable de prueba"
     assert task.arrival_observed is True
+    assert task.arrival_event_time == EVENT_TIME
+    assert task.arrival_observed_at == OBSERVED
+    assert task.arrival_poi_id == "projection-test-poi"
     second_task = next(item for item in equipment.transfers if item.movement_id == second.id)
     assert second_task.receipt is None
     assert second_task.arrival_observed is False
+    assert second_task.arrival_event_time is None
+    assert second_task.arrival_observed_at is None
+
+
+def test_arrival_read_time_never_stands_in_for_a_missing_fact_date(store):
+    settings, _, connector, ledger = store
+    movement = sent(store)
+    hub = read_hub(settings, connector, "live")
+    # A retained arrival event without its own date (never produced by the ledger anymore)
+    # is projected as observed, with the read time apart and no invented fact date.
+    undated = MovementEventRecord(
+        id="test-undated-arrival",
+        kind="arrival",
+        source_id="projection-test-visit",
+        event_time=None,
+        observed_at=OBSERVED,
+        recorded_at=OBSERVED + timedelta(minutes=5),
+        data={"poi_id": "projection-test-poi", "tracked_asset_id": "projection-test-vehicle"},
+        provenance=Provenance(
+            source="startrack",
+            source_id="projection-test-visit",
+            environment="sandbox",
+            observed_at=OBSERVED,
+            is_synthetic=True,
+            evidence_kind="live_read",
+        ),
+    )
+    record = ledger.get(movement.id, "live").model_copy(update={"events": [undated]})
+    transfer = _transfer(record, hub.requests[0])
+    assert transfer.arrival_observed is True
+    assert transfer.arrival_event_time is None
+    assert transfer.arrival_observed_at == OBSERVED
+    assert transfer.arrival_evidence_origin == "visit_observation"
+    with pytest.raises(LedgerError):
+        observe(store, movement, kind="arrival", event_time=None)
 
 
 def test_creation_acknowledgment_is_not_a_fresh_task_read_or_location(store):

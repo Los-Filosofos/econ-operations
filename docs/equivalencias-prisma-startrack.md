@@ -6,7 +6,10 @@ inconsistencias internas se añadieron el **13 de septiembre de 2026**. Alcance:
 sandbox sintético, formulario de tarea suministrado por el usuario, texto de la
 página oficial *API: Jobs* aportado por el usuario y código vigente. Este
 documento responde a RF-01, RF-02 y RF-03 del
-[brief](onedrive/02-brief-del-reto.md).
+[brief](onedrive/02-brief-del-reto.md). Sus tablas se exportan sin cambios a
+CSV y XLSX en [`output/matrices`](../output/matrices/MANIFEST.md) con
+`scripts/docs/exportar_matrices.py` (RNF-02); este Markdown sigue siendo el
+origen editable y `--check` falla en CI si las copias quedan desactualizadas.
 
 **Una solicitud de Prisma no es una tarea de Startrack.** Prisma aporta el
 proyecto, el requerimiento, su aprobación y la maquinaria asignada. Logística
@@ -188,7 +191,7 @@ y el [formulario actual de ECON](../apps/api/app/dashboard/workflow_forms.py).
 | El usuario debe estar en la Geocerca para completar la tarea | No existe esa condición en la solicitud. | Sin campo de mapeo/borrador. | No documentado en Job. | No soportado. `required_form_ids` no activa esta condición. |
 | Latitud | No está en Solicitud/Proyecto consultados. El historial de maquinaria sí documenta `gps_latitude`, nullable, para otro evento. | No hay coordenada de destino en el mapeo. `StartrackPoi` actual tampoco conserva geometría. | `POI.y` para geocerca; `Job.completed_lat` / `Job.y` corresponden a finalización, no a destino planificado. | Sin equivalente directo; geometría no implementada. No copiar una coordenada histórica ni de cierre al destino. |
 | Longitud | Mismo límite; el historial puede contener `gps_longitude`, nullable. | Sin coordenada normalizada de destino. | `POI.x` para geocerca; `Job.completed_lon` / `Job.x` corresponden a finalización. | Sin equivalente directo; geometría no implementada. |
-| Dirección o referencia | `Proyecto.description` puede ser solo una ciudad. `Solicitud.comentarios` no es una dirección estructurada. | `NexusProject.description` es lectura opcional; no pasa al borrador. | `address` | Manual; documentado, no soportado por el borrador actual. No geocodificar por suposición. |
+| Dirección o referencia | `Proyecto.description` puede ser solo una ciudad. `Solicitud.comentarios` no es una dirección estructurada. | Sin lector de proyectos en ECON; la descripción del proyecto no se lee y no pasa al borrador. | `address` | Manual; documentado, no soportado por el borrador actual. No geocodificar por suposición. |
 | Ventana horaria de entrega: de | No disponible; inicio de uso no fija una ventana de llegada. | Sin campo. | No documentado en Job. | No soportado. No reutilizar `start_time` con otro significado. |
 | Ventana horaria de entrega: a | No disponible; fin de uso no fija una ventana de llegada. | Sin campo. | No documentado en Job. | No soportado. |
 | Duración / Minutos | No hay duración estimada del traslado. `minimum_usage_hours` pertenece al uso del equipo. | Sin campo en borrador; una futura conversión tendría que aplicar minutos × 60. | `duration` | Transformada si se incorpora; hoy solo documentada. La unidad API es segundos, no horas de uso ni diferencia entre fechas de solicitud. |
@@ -204,7 +207,7 @@ no una afirmación de que la interfaz de Startrack carezca de ellas.
 
 | Campo del formulario | Prisma: campo exacto o ausencia | Modelo normalizado / regla de ECON | Campo API de Startrack | Clasificación y alcance |
 | --- | --- | --- | --- | --- |
-| Asignar a | `Operador.id`, `nombre`, `cod_trabajador`; el detalle de equipo incluye `associated_operators`. `Solicitud.requested_by_user_id` identifica al solicitante. | `NexusOperator` permite lectura de catálogo. La preparación exige `TransferMapping.assigned_user_ids` confirmado independientemente. | `assigned_user_ids` | Manual; implementada. No usar UUID de operador o solicitante como ID de usuario Startrack. |
+| Asignar a | `Operador.id`, `nombre`, `cod_trabajador`; el detalle de equipo incluye `associated_operators`. `Solicitud.requested_by_user_id` identifica al solicitante. | `NexusOperatorLink` conserva los operadores del detalle de equipo (`EquipmentRecord.operators`); no hay lector del catálogo `/api/maquinaria/operadores`. La preparación exige `TransferMapping.assigned_user_ids` confirmado independientemente. | `assigned_user_ids` | Manual; implementada. No usar UUID de operador o solicitante como ID de usuario Startrack. |
 | Formularios | No hay IDs de formularios Startrack en Prisma. | `StartrackTaskDraft.form_ids` y `required_form_ids` existen; `TransferMapping` no los recibe y `prepare_transfer` no los propaga. | `form_ids`, `required_form_ids` | Manual; soporte de SDK, pendiente en preparación/UI y selección de catálogo. No hay un formulario de recepción elegido por defecto. |
 
 El catálogo de [usuarios Startrack](https://support.gps-platform.com/api/users/)
@@ -297,9 +300,9 @@ campo Prisma con ECON **no implica** que tenga equivalente en Startrack.
 | `Equipo.associated_operators` del detalle | `EquipmentRecord.operators` (id, nombre, `worker_code` MOT-xxx, activo) solo en la lectura de detalle; `None` cuando la lectura acotada no lo cubrió. | La correspondencia con el conductor de Startrack se hace por el código MOT-xxx documentado, nunca por nombre; no es un ID de usuario Startrack. |
 | `Equipo.precio_x_hora`, `minimum_usage_hours`, `catalog_precio_x_hora`, `current_project_rate`, `project_rates`, `effective_precio_x_hora` | Solo `current_project_rate` se conserva como `EquipmentRecord.project_rate`; el resto queda fuera del DTO. | Tarifas y vigencias; no precio de artículo, duración del Job ni costo de traslado. |
 | `Equipo.motivo_baja`, `fecha_baja`, `mantenimiento_fecha_inicio`, `mantenimiento_fecha_fin`, `mantenimiento_notas`, `occupied_without_project`, `fallas_count` | Fuera del DTO actual; algunos aparecen solo en listado o detalle. | Información adicional de inventario/mantenimiento; no debe reducirse a estado de tarea. |
-| `Proyecto.id`, `name`, `status`, `description`, `start_date`, `end_date`, `project_manager_user_id`, `manager_name`, fechas de auditoría/archivo | `NexusProject` en lectura opcional; no forma parte del `read()` habitual del hub. | Catálogo administrativo; correspondencia con POI requiere decisión independiente. |
-| Presupuestos, avance, cliente, notas e indicadores de Proyecto | Fuera de `NexusProject`. | Sin destino definido en Job; no se fabrican costos de artículos ni porcentajes operativos. |
-| `Operador.id`, `nombre`, `cod_trabajador`, `is_active`, `created_at`, `updated_at` | `NexusOperator`; lectura opcional. | No prueba usuario Startrack asignable ni conductor del activo rastreado. |
+| `Proyecto.id`, `name`, `status`, `description`, `start_date`, `end_date`, `project_manager_user_id`, `manager_name`, fechas de auditoría/archivo | Sin lector: no existe un DTO `NexusProject` en `nexus.py` (corrección del 13/09/2026) y `/api/projects` no se consulta. El nodo `project` de `GET /api/v1/graph` se deriva de las referencias `project_id` de solicitudes y equipos y queda `referenced_only`. | Catálogo administrativo; correspondencia con POI requiere decisión independiente. |
+| Presupuestos, avance, cliente, notas e indicadores de Proyecto | Fuera de los DTO leídos. | Sin destino definido en Job; no se fabrican costos de artículos ni porcentajes operativos. |
+| `Operador.id`, `nombre`, `cod_trabajador`, `is_active`, `created_at`, `updated_at` | `NexusOperatorLink` solo dentro del detalle de equipo (`associated_operators` → `EquipmentRecord.operators`); el catálogo de operadores no se lee. | No prueba usuario Startrack asignable ni conductor del activo rastreado. |
 | Historial: `gps_latitude`, `gps_longitude`, `gps_accuracy_meters`, `gps_captured_at` | Ruta documentada de historial, no leída por el conector actual. Ejemplo con valores nulos. | Posición de un evento de Prisma; no origen actual ni recepción. |
 
 El catálogo de [vehículos Startrack](https://support.gps-platform.com/api/vehicles/vehicles/)
@@ -454,6 +457,7 @@ Una misma persona podría ejercer distintos roles, sin que los IDs se fusionen.
 | Paro, diagnóstico y liberación de mantenimiento | Mantenimiento | Gerencia de Mantenimiento | Logística; operador | Gerencia de Proyecto; Control de Costos |
 | Recepción de la máquina y constancia | Responsable receptor del proyecto | Gerencia de Proyecto | Logística; operador | Control de Costos |
 | Validación económica posterior | Control de Costos | Responsable de Control de Costos | Proyecto; Logística | Gerencia correspondiente |
+| Consulta: sugerencia ECON de unidad para una solicitud pendiente (`GET /api/v1/requests/{id}/suggestions`; ECON recomienda, Prisma asigna) | Logística y Equipo | Gerencia de Logística y Equipo | Mantenimiento; Gerencia de Proyecto | Control de Costos |
 
 La recepción actual guarda una declaración y su referencia. El acuerdo de quién
 puede recibir y qué documento lo acredita sigue siendo una decisión operativa.
@@ -463,10 +467,14 @@ Esta matriz está implementada en la aplicación como roles de sesión
 Equipo) guarda planes, encola y sincroniza y puede declarar recepción;
 `gerencia_proyecto` declara recepción; `mantenimiento` y `control_costos`
 consultan; `admin` administra usuarios y tiene todos los permisos. Declarar una
-recepción exige el permiso `declare_reception`, pero el usuario autenticado
-**no queda vinculado** a la declaración: `receiver` sigue siendo el texto
-declarado y no se guarda el ID del usuario que la registró. Añadir ese vínculo
-requiere una columna y una migración.
+recepción exige el permiso `declare_reception` y, desde la migración `0004`, el
+usuario autenticado **queda vinculado** a la declaración como
+`declared_by_user_id`, `declared_by_email` y `declared_by_role` y al evento
+`receipt` como `actor_user_id`, `actor_role` y `actor_kind` (`session`);
+`receiver` sigue siendo el nombre escrito en la constancia y no se sustituye por
+la sesión. Sin sesión (`local_dev`, `cli_worker`) la declaración no lleva
+`declared_by_*`: la autoría no se inventa. La RACI empresarial sigue pendiente
+de validación; el rol de sesión aplica permisos, no acredita esa aprobación.
 
 ## Lagunas que deben resolverse antes de ampliar la equivalencia
 
