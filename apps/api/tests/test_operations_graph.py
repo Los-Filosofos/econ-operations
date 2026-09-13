@@ -233,6 +233,7 @@ def test_full_page_graph_has_local_assets_straight_edges_and_no_tables_or_metric
     assert PLACE_RADIUS == 40 and MACHINE_RADIUS == 24
     assert "width: 80px; height: 80px" in css
     assert "width: 48px" in css and "height: 48px" in css
+    assert "font-size: 24px" in css and "font-size: 12px" in css
     assert "right: 32%" in css and "width: 32%" in css
     assert GRAPH_THEME == {
         "background": "#111513",

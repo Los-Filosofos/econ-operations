@@ -396,7 +396,7 @@ def build_operations_graph(hub: HubResponse) -> OperationsGraph:
 
     for project in project_nodes:
         group = sorted(grouped[project.key], key=lambda value: value.entity_id)
-        offsets = ((240, 0), (205, -75), (205, 75), (315, -75), (315, 75), (345, 0))
+        offsets = ((280, 0), (245, -85), (245, 85), (350, -85), (350, 85), (385, 0))
         for index, node in enumerate(group):
             lap, position = divmod(index, len(offsets))
             dx, dy = offsets[position]
