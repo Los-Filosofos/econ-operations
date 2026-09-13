@@ -38,7 +38,9 @@ def hub():
 
 
 def registry(*movements, available=True):
-    return WorkflowOverview(available=available, message="Test ledger", movements=list(movements))
+    return WorkflowOverview(
+        available=available, complete=available, message="Test ledger", movements=list(movements)
+    )
 
 
 def approved(hub):

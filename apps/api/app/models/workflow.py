@@ -9,6 +9,13 @@ from app.models.operations import MovementRecord
 class WorkflowOverview(BaseModel):
     available: bool
     message: str
+    complete: bool = Field(
+        default=False,
+        description=(
+            "Indica si todos los movimientos locales del modo y filtro de solicitud caben "
+            "en esta lectura acotada. No acredita cobertura de los proveedores."
+        ),
+    )
     management_enabled: bool = False
     sending_enabled: bool = False
     movements: list[MovementRecord] = Field(default_factory=list)

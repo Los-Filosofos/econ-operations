@@ -34,13 +34,20 @@ class QueryContext:
         return f"{path}?{urlencode(params)}"
 
     def equipment_href(self, identifier: str) -> str:
-        return self.href(f"/maquinaria/{quote(identifier, safe='')}")
+        return self.href(f"/maquinaria/{quote(identifier, safe='')}", filter=self.filter)
 
     def request_href(self, identifier: str) -> str:
-        return self.href(f"/solicitudes/{quote(identifier, safe='')}")
+        return self.href(f"/solicitudes/{quote(identifier, safe='')}", filter=self.filter)
 
     def movement_href(self, identifier: str) -> str:
-        return self.href(f"/operaciones/{quote(identifier, safe='')}")
+        return self.href(f"/operaciones/{quote(identifier, safe='')}", filter=self.filter)
+
+    def for_read(self, path: str | None) -> "QueryContext":
+        # Search limits lists, never the record opened from one of their links.
+        normalized = (path or "/").rstrip("/") or "/"
+        if normalized.startswith(("/maquinaria/", "/solicitudes/")):
+            return QueryContext(mode=self.mode)
+        return self
 
 
 def parse_context(search: str | None) -> QueryContext:

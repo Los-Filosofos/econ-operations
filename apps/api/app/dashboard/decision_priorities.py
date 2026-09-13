@@ -161,6 +161,12 @@ def _decision(
             "Consultar el registro del traslado",
             f"{unit} Registro de movimientos sin consultar; no se confirma si existe un plan.",
         )
+    if not movements and not workflow.complete:
+        return item(
+            "Consultar el registro completo del traslado",
+            f"{unit} La lectura de movimientos es parcial; puede existir un plan fuera "
+            "de esta ventana. Verificarlo antes de preparar otro traslado.",
+        )
     if not movements:
         return item(
             "Preparar correspondencias del traslado",
@@ -172,6 +178,12 @@ def _decision(
         row for row in movements if row.state != "sent" or not row.job_id or row.receipt is None
     ]
     if not unresolved:
+        if not workflow.complete:
+            return item(
+                "Consultar el registro completo del traslado",
+                "Los movimientos consultados tienen recepción; la lectura parcial no permite "
+                "descartar otros movimientos sin resolver.",
+            )
         return None
     movement = unresolved[0]
     if movement.state == "draft":

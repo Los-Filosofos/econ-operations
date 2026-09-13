@@ -11,8 +11,9 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from app.dashboard.context import QueryContext, parse_context
+from app.dashboard.icons import icon
 from app.dashboard.views import empty, navigation, notice, render_page, scope
-from app.dashboard.workflow_actions import execute_action
+from app.dashboard.workflow_actions import WorkflowInputError, execute_action
 from app.dashboard.workflow_forms import validation_controls
 from app.dashboard.workflow_views import workflow_page
 from app.models.hub import HubResponse
@@ -105,7 +106,6 @@ def layout():
                                 ],
                                 className="sidebar-brand",
                             ),
-                            html.Span("Espacio de trabajo", className="nav-heading"),
                             html.Nav(id="navigation", **{"aria-label": "Navegación principal"}),
                             html.Div(
                                 [
@@ -146,7 +146,7 @@ def layout():
                                         "Operación de maquinaria", className="workspace-title"
                                     ),
                                     html.Button(
-                                        "Actualizar datos",
+                                        [icon("refresh"), "Actualizar datos"],
                                         id="refresh",
                                         n_clicks=0,
                                         className="button refresh-button",
@@ -290,21 +290,35 @@ def create_dashboard(server: FastAPI) -> Dash:
         Input("search", "n_submit"),
         State("mode", "value"),
         State("search", "value"),
+        State("url", "search"),
         prevent_initial_call=True,
     )
-    def apply_query(_clicks, _submit, mode, query):
+    def apply_query(_clicks, _submit, mode, query, search):
         # The read callback validates these values again before accessing the service.
-        return "?" + urlencode({"mode": mode or "", "q": (query or "").strip()})
+        params = {"mode": mode or "", "q": (query or "").strip()}
+        try:
+            selected = parse_context(search).filter
+        except ValueError:
+            selected = "all"
+        if selected != "all":
+            params["filter"] = selected
+        return "?" + urlencode(params)
 
     @dashboard.callback(
         Output("snapshot", "data"),
         Input("url", "search"),
         Input("refresh", "n_clicks"),
+        Input("url", "pathname"),
+        Input("workflow-action-result", "data"),
         State("snapshot", "data"),
     )
-    async def load_snapshot(search, _refresh, previous):
+    async def load_snapshot(search, _refresh, path, action, previous):
+        if ctx.triggered_id == "workflow-action-result" and (
+            not isinstance(action, dict) or not action.get("ok")
+        ):
+            return no_update
         try:
-            context = parse_context(search)
+            context = parse_context(search).for_read(path)
         except ValueError as error:
             return {"error": str(error), "key": None, "hub": None}
         # Changing a display filter needs no new provider read. Each browser owns its store.
@@ -322,6 +336,8 @@ def create_dashboard(server: FastAPI) -> Dash:
                 server.state.nexus,
                 context.mode,
                 context.query,
+                engine=server.state.engine,
+                startrack=server.state.startrack,
             )
         except Exception:
             # Never return exceptions, upstream bodies, credentials or the previous success.
@@ -389,6 +405,8 @@ def create_dashboard(server: FastAPI) -> Dash:
             if record is not None:
                 result["href"] = context.movement_href(record.id)
         except WorkflowError as error:
+            result.update({"ok": False, "message": str(error)})
+        except WorkflowInputError as error:
             result.update({"ok": False, "message": str(error)})
         except (ValidationError, ValueError, TypeError, KeyError):
             result.update(
@@ -481,7 +499,8 @@ def create_dashboard(server: FastAPI) -> Dash:
                     className="scope-line",
                 ),
             )
-        if not isinstance(snapshot, dict) or snapshot.get("key") != context.read_key:
+        read_context = context.for_read(path)
+        if not isinstance(snapshot, dict) or snapshot.get("key") != read_context.read_key:
             return (
                 empty("Consultando la operación…", "Preparando los datos del origen seleccionado."),
                 nav,
@@ -491,7 +510,7 @@ def create_dashboard(server: FastAPI) -> Dash:
             return notice("Consulta no disponible", snapshot["error"], error=True), nav, None
         try:
             hub = HubResponse.model_validate(snapshot.get("hub"))
-            if hub.mode != context.mode or hub.scope.search != context.query:
+            if hub.mode != context.mode or hub.scope.search != read_context.query:
                 raise ValueError("La respuesta no corresponde a esta consulta.")
         except (ValidationError, ValueError):
             return (

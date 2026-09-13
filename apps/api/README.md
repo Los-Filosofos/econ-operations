@@ -26,6 +26,11 @@ The health tests use temporary SQLite files; normal development uses the existin
 
 ## Read contract
 
+See the Spanish [Swagger walkthrough](../../docs/api-swagger.md) for every
+endpoint, parameters, response semantics and an isolated SQLite exercise.
+Swagger at `/docs` includes operation descriptions, request examples and errors;
+`/openapi.json` is generated from the implementation.
+
 `GET /api/v1/hub?mode=fixture&search=CF-03` returns the typed contract in `app/models/hub.py`. `mode` accepts only `fixture` or `live`; `fixture` is the default and now means supplied OpenAPI examples. The `search` filter is case-insensitive and applies locally to the bounded read set: equipment ID/code/asset number/name/company/project and request ID/project. Requests joined by exact machinery ID are retained with matching equipment; matching requests can also bring their equipment into the result. No joins use driver or project names.
 
 - `equipment` preserves administrative state, maintenance, multiple tasks (`transfers`), location timestamps and relationship status as separate facts. `code` maps to nullable Nexus `clave`; `asset_number` maps separately to `no_activo`. Display fallbacks do not replace the source ID or claim those fields are equivalent.

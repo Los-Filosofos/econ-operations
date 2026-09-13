@@ -100,7 +100,9 @@ class WorkflowService:
     def read(self, mode: DataMode, request_source_id: str | None = None) -> WorkflowOverview:
         try:
             self._mode(mode)
-            movements = self.ledger.list(mode, request_source_id=request_source_id)
+            candidates = self.ledger.list(mode, request_source_id=request_source_id, limit=101)
+            movements = candidates[:100]
+            complete = len(candidates) <= 100
             snapshot = self.ledger.last_snapshot(mode)
         except WorkflowError as error:
             return WorkflowOverview(available=False, message=str(error))
@@ -114,8 +116,12 @@ class WorkflowService:
         enabled = self.settings.allow_local_management and management_allowed()
         return WorkflowOverview(
             available=True,
+            complete=complete,
             message=(
-                "Planes locales sobre las muestras proporcionadas. No se envían a Startrack."
+                "Registro parcial: se muestran los 100 movimientos más recientes del ámbito. "
+                "Puede existir evidencia fuera de esta ventana."
+                if not complete
+                else "Planes locales sobre las muestras proporcionadas. No se envían a Startrack."
                 if mode == "fixture"
                 else "Movimientos del sandbox: tarea, presencia GPS y recepción separadas."
             ),

@@ -1,5 +1,7 @@
 from datetime import UTC, date, datetime, timedelta, timezone
 
+from sqlalchemy.engine import Engine
+
 from app.core.config import Settings
 from app.integrations.fixtures import (
     FIXTURE_AS_OF,
@@ -9,6 +11,7 @@ from app.integrations.fixtures import (
     fixture_records,
 )
 from app.integrations.nexus import NexusConnector, NexusReadError, NexusSnapshot
+from app.integrations.startrack import StartrackClient
 from app.models.hub import (
     AlertRecord,
     DataMode,
@@ -16,10 +19,12 @@ from app.models.hub import (
     HubResponse,
     HubScope,
     HubSummary,
+    OperationEvidenceStatus,
     Provenance,
     RequestRecord,
     SourceStatus,
 )
+from app.services.evidence import project_operation_evidence
 
 # El Salvador has no daylight-saving offset. Date-only plans stay dates.
 BUSINESS_TIMEZONE = timezone(timedelta(hours=-6), name="America/El_Salvador")
@@ -44,7 +49,7 @@ def evaluate_alerts(
 ) -> list[AlertRecord]:
     alerts = []
     for item in equipment:
-        display_name = item.code or item.asset_number or item.name
+        display_name = item.asset_number or item.code or item.name
         if item.maintenance_failure_id:
             stopped = item.maintenance_is_stopped
             alerts.append(
@@ -67,10 +72,16 @@ def evaluate_alerts(
                 )
             )
             for transfer in item.transfers:
+                pending = (
+                    transfer.workflow_role.strip().lower() == "pending"
+                    if transfer.workflow_role is not None
+                    else transfer.status.upper() in {"PENDIENTE", "PENDING"}
+                )
                 if not (
                     stopped is True
                     and item.relation_status == "confirmed"
-                    and transfer.status.upper() in {"PENDIENTE", "PENDING"}
+                    and transfer.evidence_current_assignment
+                    and pending
                 ):
                     continue
                 alerts.append(
@@ -88,6 +99,7 @@ def evaluate_alerts(
                             f"active_failure_id={item.maintenance_failure_id}",
                             "active_failure_is_paro=true",
                             f"transfer={transfer.id}; status={transfer.status}",
+                            f"workflow_role={transfer.workflow_role or 'desconocido'}",
                             "relation_status=confirmed",
                         ],
                     )
@@ -160,6 +172,7 @@ def _map_live(
             created_at=item.created_at,
             updated_at=item.updated_at,
             approved_at=item.approved_at,
+            approved_by_user_id=item.approved_by_user_id,
             provenance=provenance(item.id),
         )
         for item in snapshot.requests
@@ -219,8 +232,55 @@ def _filter_records(
     return equipment, requests
 
 
+def _startrack_status(
+    settings: Settings, mode: DataMode, client: StartrackClient | None
+) -> SourceStatus:
+    configured = (
+        client.configured
+        if client is not None
+        else bool(
+            settings.startrack_api_key
+            and settings.startrack_api_key.get_secret_value().strip()
+            and settings.startrack_password
+            and settings.startrack_password.get_secret_value().strip()
+        )
+    )
+    if mode == "fixture":
+        status = "fixture"
+        message = (
+            "Las muestras del archivo no contienen tareas de Startrack. "
+            "Este modo no consulta el proveedor."
+        )
+    elif not settings.allow_live_reads or (client is not None and not client.config.enabled):
+        status = "disabled"
+        message = "Las lecturas de Startrack están deshabilitadas en el servidor."
+    elif not configured:
+        status = "not_configured"
+        message = "Faltan credenciales de Startrack configuradas en el servidor."
+    else:
+        status = "not_queried"
+        message = (
+            "SDK configurado; esta lectura no consultó Startrack. "
+            "El seguimiento se consulta mediante la sincronización explícita."
+        )
+    return SourceStatus(
+        id="startrack",
+        label="Startrack",
+        status=status,
+        environment="sandbox",
+        configured=configured,
+        message=message,
+    )
+
+
 def read_hub(
-    settings: Settings, connector: NexusConnector, mode: DataMode = "fixture", search: str = ""
+    settings: Settings,
+    connector: NexusConnector,
+    mode: DataMode = "fixture",
+    search: str = "",
+    *,
+    engine: Engine | None = None,
+    startrack: StartrackClient | None = None,
 ) -> HubResponse:
     """Shared read projection for HTTP and Dash; never fall back between data modes."""
     if mode not in {"fixture", "live"} or len(search) > 100:
@@ -249,13 +309,7 @@ def read_hub(
                     "No tienen un corte conjunto ni acreditan el estado actual del sandbox."
                 ),
             ),
-            SourceStatus(
-                id="startrack",
-                label="Startrack",
-                status="not_configured",
-                environment="sandbox",
-                message="Las muestras proporcionadas no incluyen tareas ni evidencia de recepción.",
-            ),
+            _startrack_status(settings, mode, startrack),
         ]
     else:
         nexus_status = "disabled"
@@ -276,7 +330,7 @@ def read_hub(
                     # Nexus page completion does not imply a complete integrated operation.
                     nexus_status = "connected" if snapshot.complete else "partial"
                     message = (
-                        "Lectura acotada del sandbox; Startrack y los vínculos siguen pendientes."
+                        "Lectura acotada de Prisma en el sandbox."
                         if snapshot.complete
                         else "Lectura parcial: se alcanzó el límite o cambió la paginación."
                     )
@@ -291,29 +345,10 @@ def read_hub(
                 observed_at=observed_at,
                 message=message,
             ),
-            SourceStatus(
-                id="startrack",
-                label="Startrack",
-                status="not_configured",
-                environment="sandbox",
-                message="API key pendiente; no hay lecturas autenticadas ni vínculos verificados.",
-            ),
+            _startrack_status(settings, mode, startrack),
         ]
     equipment, requests = _filter_records(equipment, requests, search)
-    alerts = evaluate_alerts(equipment, requests, observed_at)
-    summary = HubSummary()
-    if available:
-        summary = HubSummary(
-            equipment_count=len(equipment),
-            administratively_available=sum(
-                e.machinery_status.upper() == "DISPONIBLE" for e in equipment
-            ),
-            active_failures=sum(bool(e.maintenance_failure_id) for e in equipment),
-            stopped_equipment=sum(e.maintenance_is_stopped is True for e in equipment),
-            unlinked_equipment=sum(e.relation_status != "confirmed" for e in equipment),
-            alerts_count=len(alerts),
-        )
-    return HubResponse(
+    hub = HubResponse(
         mode=mode,
         generated_at=datetime.now(UTC),
         data_as_of=observed_at,
@@ -329,11 +364,31 @@ def read_hub(
                 "Los conteos describen únicamente los registros devueltos y el filtro local. "
                 "No son KPIs globales, disponibilidad física ni tendencias históricas. "
                 "Las muestras del contrato tienen cobertura parcial, sin corte conjunto. "
-                "En vivo se consultan páginas acotadas y Startrack permanece pendiente."
+                "En vivo se consultan páginas acotadas. La evidencia local de Startrack "
+                "no acredita una consulta actual ni cobertura integrada completa."
             ),
         ),
-        summary=summary,
+        summary=HubSummary(),
         equipment=equipment,
         requests=requests,
-        alerts=alerts,
+        alerts=[],
     )
+    if mode == "live" and not settings.allow_live_reads:
+        hub.operation_evidence = OperationEvidenceStatus(
+            status="disabled", message="Las lecturas del modo live están deshabilitadas."
+        )
+    else:
+        project_operation_evidence(hub, engine)
+    hub.alerts = evaluate_alerts(hub.equipment, hub.requests, observed_at)
+    if available:
+        hub.summary = HubSummary(
+            equipment_count=len(equipment),
+            administratively_available=sum(
+                e.machinery_status.upper() == "DISPONIBLE" for e in equipment
+            ),
+            active_failures=sum(bool(e.maintenance_failure_id) for e in equipment),
+            stopped_equipment=sum(e.maintenance_is_stopped is True for e in equipment),
+            unlinked_equipment=sum(e.relation_status != "confirmed" for e in equipment),
+            alerts_count=len(hub.alerts),
+        )
+    return hub

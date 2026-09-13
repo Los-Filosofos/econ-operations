@@ -15,14 +15,23 @@ from app.dashboard.analytics import (
     request_operation,
 )
 from app.dashboard.context import QueryContext
+from app.dashboard.icons import icon
 from app.models.hub import EquipmentRecord, HubResponse, Provenance, RequestRecord
 
 NAVIGATION = [
     ("/", "Resumen"),
+    ("/maquinaria", "Maquinaria"),
     ("/solicitudes", "Solicitudes"),
     ("/operaciones", "Operaciones"),
     ("/fuentes", "Fuentes"),
 ]
+NAVIGATION_ICONS = {
+    "/": "overview",
+    "/maquinaria": "equipment",
+    "/solicitudes": "requests",
+    "/operaciones": "operations",
+    "/fuentes": "sources",
+}
 SOURCE_STATES = {
     "fixture": "Muestras del contrato",
     "connected": "Conectada",
@@ -30,6 +39,7 @@ SOURCE_STATES = {
     "not_configured": "Pendiente de conexión",
     "disabled": "Consulta desactivada",
     "error": "Error de lectura",
+    "not_queried": "Sin consulta actual",
 }
 RELATIONS = {
     "confirmed": "Vínculo confirmado",
@@ -59,7 +69,9 @@ def navigation(path: str, context: QueryContext):
         "/"
         if path in {"/", "/resumen"}
         else "/solicitudes"
-        if path.startswith(("/solicitudes", "/maquinaria/"))
+        if path.startswith("/solicitudes")
+        else "/maquinaria"
+        if path == "/maquinaria" or path.startswith("/maquinaria/")
         else "/operaciones"
         if path.startswith("/operaciones")
         else "/fuentes"
@@ -68,7 +80,11 @@ def navigation(path: str, context: QueryContext):
     )
     return [
         dcc.Link(
-            html.Span(label, **{"aria-current": "page"}) if selected == route else label,
+            html.Span(
+                [icon(NAVIGATION_ICONS[route]), html.Span(label)],
+                className="nav-label",
+                **({"aria-current": "page"} if selected == route else {}),
+            ),
             href=context.href(route),
             className="nav-link"
             + (" active" if selected == route else "")
@@ -91,6 +107,11 @@ def scope(hub: HubResponse, context: QueryContext | None = None, workflow=None):
             html.Span(mode, className="scope-mode"),
             html.Span(count),
             html.Span("Cobertura completa" if hub.scope.complete else "Cobertura parcial"),
+            html.Span(
+                f"{hub.scope.equipment_returned} de {hub.scope.equipment_total} equipos"
+                if hub.scope.equipment_total is not None
+                else f"{hub.scope.equipment_returned} equipos · total desconocido"
+            ),
         ],
         className="scope-line",
     )
@@ -113,6 +134,9 @@ def simple_table(headers: list[str], rows: list[list], *, caption: str):
             ]
         ),
         className="table-scroll",
+        role="region",
+        tabIndex=0,
+        **{"aria-label": caption},
     )
 
 
@@ -159,7 +183,7 @@ def grid(
         dashGridOptions={
             "theme": {
                 "function": (
-                    "themeQuartz.withParams({fontFamily:'Inter, sans-serif',fontSize:12,"
+                    "themeQuartz.withParams({fontFamily:'Inter, sans-serif',fontSize:13,"
                     "accentColor:'#144f81',foregroundColor:'#202c38',"
                     "headerTextColor:'#626e7a',headerBackgroundColor:'#f8fafb',"
                     "borderColor:'#e2e7eb',wrapperBorderRadius:0,borderRadius:0})"
@@ -252,6 +276,7 @@ def filter_links(context: QueryContext):
 
 def requests(hub: HubResponse, context: QueryContext, workflow=None):
     from app.dashboard.decision_analytics import matching_current_movements, requests_in_scope
+    from app.dashboard.evidence_views import operation_read_message
     from app.dashboard.workflow_views import (
         STATES,
         receipt_label,
@@ -285,6 +310,10 @@ def requests(hub: HubResponse, context: QueryContext, workflow=None):
             if received
             else "Sin constancia"
         )
+        unknown = operation_read_message(workflow)
+        if unknown:
+            transfer = f"{transfer} · {unknown}" if transfer else unknown
+            receipt = unknown
         unit = (
             equipment_label(item)
             if item
@@ -448,6 +477,11 @@ def machine_evidence(item: EquipmentRecord, context: QueryContext):
 
 def request_detail(hub: HubResponse, context: QueryContext, identifier: str, workflow=None):
     from app.dashboard.decision_analytics import matching_current_movements
+    from app.dashboard.evidence_views import (
+        interpretation_section,
+        operation_read_message,
+        request_timeline,
+    )
     from app.dashboard.workflow_views import (
         matching_movements,
         remaining_evidence,
@@ -456,7 +490,9 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
 
     request = next((item for item in hub.requests if item.id == identifier), None)
     back = dcc.Link(
-        "← Volver a solicitudes", href=context.href("/solicitudes"), className="back-link"
+        [icon("back"), "Volver a solicitudes"],
+        href=context.href("/solicitudes", filter=context.filter),
+        className="back-link",
     )
     if request is None:
         return [
@@ -470,6 +506,7 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
     item = operation.equipment
     movements = matching_movements(workflow, request)
     current_movements = matching_current_movements(hub, request, workflow)
+    unknown = operation_read_message(workflow)
     task_sections = []
     for task in operation.transfers:
         task_sections.append(
@@ -526,7 +563,7 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
                         ("Período solicitado", period_label(request)),
                         (
                             "Unidad asignada",
-                            equipment_label(item)
+                            equipment_link(item, context)
                             if item
                             else "Unidad fuera de consulta"
                             if request.machinery_id
@@ -547,6 +584,12 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
                         facts(
                             [
                                 ("Solicitante", request.requested_by or "Sin informar"),
+                                (
+                                    "ID de quien aprobó",
+                                    getattr(request, "approved_by_user_id", None)
+                                    or "No proporcionado",
+                                ),
+                                ("Fecha de aprobación", instant(request.approved_at)),
                                 ("ID de proyecto", request.project_id or "Sin ID de proyecto"),
                                 (
                                     "ID de maquinaria asignada",
@@ -594,9 +637,13 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
                     task_sections
                     or [
                         empty(
-                            "Sin traslado vinculado a esta solicitud",
-                            "Falta una tarea con correspondencia de solicitud y maquinaria "
-                            "validada. Los nombres no confirman esa relación.",
+                            unknown or "Sin traslado vinculado a esta solicitud",
+                            "La consulta de operaciones no permite determinar "
+                            "los movimientos vinculados."
+                            if unknown
+                            else "Falta una tarea con correspondencia de solicitud y maquinaria "
+                            "validada en los registros consultados. Los nombres "
+                            "no confirman esa relación.",
                         )
                     ]
                 ),
@@ -608,8 +655,8 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
                 html.H2("Llegada y recepción"),
                 facts(
                     [
-                        ("Llegada al destino", "Sin evidencia de llegada vinculada"),
-                        ("Recepción física", "Sin constancia de recepción"),
+                        ("Llegada al destino", unknown or "Sin evidencia de llegada vinculada"),
+                        ("Recepción física", unknown or "Sin constancia de recepción"),
                     ]
                 ),
                 html.P(
@@ -626,7 +673,14 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
                 html.Ul(
                     [
                         html.Li(value)
-                        for value in remaining_evidence(operation.missing, current_movements)
+                        for value in (
+                            [
+                                "Consultar el registro de operaciones para determinar "
+                                "la evidencia pendiente."
+                            ]
+                            if unknown
+                            else remaining_evidence(operation.missing, current_movements)
+                        )
                     ]
                 ),
             ],
@@ -636,6 +690,9 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
     if movements:
         content[4:6] = []
     content[4:4] = request_workflow(workflow, context, request, item)
+    if item:
+        content.insert(3, interpretation_section(item, current_movements))
+    content.append(request_timeline(request, movements, context))
     if request_alerts:
         content.append(
             html.Section(
@@ -667,10 +724,19 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
     return content
 
 
-def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str):
+def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str, workflow=None):
+    from app.dashboard.evidence_views import (
+        equipment_movements,
+        interpretation_section,
+        source_comparison,
+    )
+    from app.dashboard.workflow_views import workflow_table
+
     item = next((item for item in hub.equipment if item.id == identifier), None)
     back = dcc.Link(
-        "← Volver a solicitudes", href=context.href("/solicitudes"), className="back-link"
+        [icon("back"), "Volver a maquinaria"],
+        href=context.href("/maquinaria", filter=context.filter),
+        className="back-link",
     )
     if item is None:
         return [
@@ -681,23 +747,26 @@ def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str):
             ),
         ]
     related = [request for request in hub.requests if request.machinery_id == item.id]
+    movements = equipment_movements(hub, item, workflow)
     return [
         back,
         heading(f"{equipment_label(item)} · {item.name}", "Evidencia de la maquinaria consultada."),
-        html.Section(machine_evidence(item, context), className="detail-section"),
+        interpretation_section(item, movements),
+        *source_comparison(item, movements, workflow, context, hub),
         html.Section(
             [
                 html.H2("Solicitudes con esta unidad asignada"),
-                html.Ul(
+                simple_table(
+                    ["Proyecto / solicitud", "Estado de solicitud", "Período solicitado"],
                     [
-                        html.Li(
-                            dcc.Link(
-                                f"{request_label(request)} · {project_label(request)}",
-                                href=context.request_href(request.id),
-                            )
-                        )
+                        [
+                            dcc.Link(project_label(request), href=context.request_href(request.id)),
+                            request.status,
+                            period_label(request),
+                        ]
                         for request in related
-                    ]
+                    ],
+                    caption="Solicitudes que asignan esta maquinaria por su ID",
                 )
                 if related
                 else html.P(
@@ -707,6 +776,19 @@ def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str):
             ],
             className="detail-section",
         ),
+        html.Section(
+            [
+                html.H2("Movimientos de la asignación consultada"),
+                workflow_table(movements, context),
+                html.P(
+                    "Los vínculos coinciden con los IDs, el origen y el período solicitado. "
+                    "Cada movimiento conserva su propia tarea y constancia."
+                ),
+            ],
+            className="detail-section",
+        )
+        if movements
+        else None,
     ]
 
 
@@ -727,21 +809,13 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
                         [
                             html.H2(source.label),
                             html.Span(
-                                "Evidencia por movimiento"
-                                if source.id == "startrack"
-                                else SOURCE_STATES[source.status],
+                                SOURCE_STATES[source.status],
                                 className="source-status",
                             ),
                         ],
                         className="section-heading",
                     ),
-                    html.P(
-                        "Las tareas y visitas de Startrack se conservan en el registro de cada "
-                        "movimiento, con sus IDs y fechas de observación. La recepción se registra "
-                        "por separado con una constancia explícita."
-                        if source.id == "startrack"
-                        else source.message
-                    ),
+                    html.P(source.message),
                     html.Dl(
                         [
                             html.Dt("Entorno"),
@@ -756,12 +830,19 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
                             ),
                         ],
                         className="provenance",
-                    )
-                    if source.id != "startrack"
-                    else html.P(
+                    ),
+                    html.P(
                         "La ausencia de tareas en el corte de Prisma no determina si existen "
                         "tareas o visitas en Startrack. Revisa la evidencia de cada movimiento."
-                    ),
+                    )
+                    if source.id == "startrack"
+                    else None,
+                    html.P(
+                        "Última evidencia conservada: "
+                        f"{instant(getattr(source, 'last_evidence_at', None))}"
+                    )
+                    if source.id == "startrack"
+                    else None,
                     html.A(
                         "Abrir plataforma ↗",
                         href=links[source.id],
@@ -841,8 +922,14 @@ def render_page(path: str, hub: HubResponse, context: QueryContext, workflow=Non
         from app.dashboard.workflow_views import workflow_page
 
         content = workflow_page(path, workflow, context)
+    elif path == "/maquinaria":
+        from app.dashboard.equipment_views import equipment_inventory
+
+        content = equipment_inventory(hub, context)
     elif path.startswith("/maquinaria/"):
-        content = equipment_detail(hub, context, unquote(path.removeprefix("/maquinaria/")))
+        content = equipment_detail(
+            hub, context, unquote(path.removeprefix("/maquinaria/")), workflow
+        )
     elif path == "/fuentes":
         content = sources(hub, context, workflow)
     else:

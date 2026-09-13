@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.dashboard.analytics import instant
 from app.dashboard.context import QueryContext
+from app.dashboard.icons import icon
 from app.dashboard.views import empty, facts, grid, heading, markdown_link, provenance, simple_table
 from app.dashboard.workflow_forms import action_button, plan_form, receipt_form
 from app.models.hub import EquipmentRecord, Provenance, RequestRecord
@@ -88,6 +89,17 @@ def pending_reasons(movement: MovementRecord) -> list[str]:
     return list(dict.fromkeys(str(reason) for reason in reasons))
 
 
+def event_description(event) -> str:
+    if event.kind == "task_state":
+        return "Estado de tarea: " + str(event.data.get("status") or "No informado")
+    if event.kind == "arrival":
+        vehicle = event.data.get("vehicle_id") or "sin ID informado"
+        return f"Visita del activo GPS {vehicle}; no acredita recepción de la maquinaria."
+    if event.kind == "receipt":
+        return "Constancia: " + str(event.data.get("reference") or "Ver declaración de recepción")
+    return STATES.get(event.state, event.state or EVENTS.get(event.kind, event.kind))
+
+
 def remaining_evidence(missing: list[str], movements: list[MovementRecord]) -> list[str]:
     """Remove a gap only when every persisted movement has that distinct evidence."""
     result = list(missing)
@@ -106,7 +118,7 @@ def remaining_evidence(missing: list[str], movements: list[MovementRecord]) -> l
 def matching_movements(
     workflow: "WorkflowOverview | None", request: RequestRecord
 ) -> list[MovementRecord]:
-    if workflow is None:
+    if workflow is None or not workflow.available:
         return []
     return [
         movement
@@ -155,6 +167,14 @@ def request_workflow(
         workflow.message if workflow is not None else "Consultando el registro de movimientos…"
     )
     return [
+        html.P(
+            "Consulta parcial de operaciones. Puede haber movimientos fuera de esta ventana; "
+            "revisa el registro antes de preparar otro traslado.",
+            className="table-hint",
+            role="status",
+        )
+        if available and not workflow.complete
+        else None,
         html.Section(
             [
                 html.H2("Movimientos de esta solicitud"),
@@ -291,8 +311,15 @@ def operations(workflow: "WorkflowOverview | None", context: QueryContext):
         )
         if rows
         else empty(
-            "Sin movimientos en este origen y búsqueda",
-            "Abre una solicitud para preparar su traslado. Los planes se conservan por origen.",
+            "Sin movimientos en la ventana consultada"
+            if not workflow.complete
+            else "Sin movimientos en este origen y búsqueda",
+            "La consulta parcial no permite descartar otros movimientos. Revisa el registro "
+            "antes de preparar un traslado."
+            if not workflow.complete
+            else (
+                "Abre una solicitud para preparar su traslado. Los planes se conservan por origen."
+            ),
         )
     )
     content.append(
@@ -308,18 +335,22 @@ def operations(workflow: "WorkflowOverview | None", context: QueryContext):
 
 def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, identifier: str):
     back = dcc.Link(
-        "← Volver a operaciones", href=context.href("/operaciones"), className="back-link"
+        [icon("back"), "Volver a operaciones"],
+        href=context.href("/operaciones", filter=context.filter),
+        className="back-link",
     )
     if workflow is None:
         return [back, empty("Consultando movimiento…", "Cargando el registro del origen.")]
+    if not workflow.available:
+        return [back, empty("Registro de operaciones no disponible", workflow.message)]
     movement = next((item for item in workflow.movements if item.id == identifier), None)
     if movement is None:
         return [
             back,
             empty(
-                "Movimiento fuera de este origen",
+                "Movimiento fuera de la consulta",
                 workflow.message
-                if not workflow.available
+                if not workflow.complete
                 else "Comprueba el origen seleccionado y el identificador del movimiento.",
             ),
         ]
@@ -328,7 +359,24 @@ def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, 
     reasons = pending_reasons(movement)
     mapping = movement.mapping
     machine = movement.source_equipment or {}
-    machine_label = machine.get("code") or machine.get("asset_number") or machine.get("name")
+    machine_label = machine.get("asset_number") or machine.get("code") or machine.get("name")
+    machine_sections = []
+    try:
+        equipment = EquipmentRecord.model_validate(machine)
+    except ValidationError:
+        equipment = None
+    if equipment:
+        from app.dashboard.evidence_views import interpretation_section, source_comparison
+
+        machine_sections = [
+            interpretation_section(equipment, [movement]),
+            html.P(
+                "La comparación usa el corte de Prisma conservado al preparar o validar "
+                "este movimiento. Su fecha no cambia al consultar el historial.",
+                className="table-hint",
+            ),
+            source_comparison(equipment, [movement], workflow, context)[0],
+        ]
     content = [
         back,
         heading(movement.movement_reference, "Evidencia y acciones de este traslado concreto."),
@@ -344,6 +392,7 @@ def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, 
         )
         if movement.source_request.get("id")
         else None,
+        *machine_sections,
         html.Section(
             [
                 html.H2("Programación"),
@@ -493,28 +542,30 @@ def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, 
             ],
             className="detail-section",
         ),
-        html.Details(
+        html.Section(
             [
-                html.Summary("Historial y evidencia del movimiento"),
+                html.H2("Historial y evidencia del movimiento"),
+                html.P(
+                    "Eventos en orden de registro. La fecha del hecho y el momento de "
+                    "observación se muestran por separado; el historial puede ser parcial."
+                ),
                 simple_table(
                     [
                         "Evento",
-                        "Estado de integración",
+                        "Evidencia conservada",
                         "Fecha del evento",
                         "Observado",
                         "Registrado",
-                        "ID de origen",
                     ],
                     [
                         [
                             EVENTS.get(event.kind, event.kind),
-                            STATES.get(event.state, event.state or "—"),
+                            event_description(event),
                             instant(event.event_time),
                             instant(event.observed_at),
                             instant(event.recorded_at),
-                            event.source_id or "Registro local",
                         ]
-                        for event in movement.events
+                        for event in sorted(movement.events, key=lambda item: item.recorded_at)
                     ],
                     caption="Historial persistido, con fechas de origen y registro separadas",
                 )
@@ -527,6 +578,12 @@ def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, 
                                 f"Procedencia · {EVENTS.get(event.kind, event.kind)} · "
                                 f"{instant(event.recorded_at)}"
                             ),
+                            facts(
+                                [
+                                    ("ID del evento", event.id),
+                                    ("ID de origen", event.source_id or "Registro local"),
+                                ]
+                            ),
                             provenance(event.provenance),
                         ]
                     )
@@ -534,7 +591,7 @@ def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, 
                     if event.provenance
                 ],
             ],
-            className="detail-section detail-disclosure",
+            className="detail-section evidence-timeline",
         ),
     ]
     return content
