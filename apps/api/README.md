@@ -2,6 +2,8 @@
 
 Dash (dash-mantine-components, local Tabler icons, Plotly, AG Grid Community) on FastAPI, with SQLModel + Alembic and PostgreSQL for the integration store. The hub endpoint remains a read projection; the separate operations service persists plans, source snapshots, a dispatch outbox and evidence. An explicit CLI worker performs bounded synchronization. All business data for this project is synthetic sandbox data; file samples and current provider reads remain separate evidence.
 
+The homepage (`/`) features an interactive, full-page operations graph with a warm charcoal palette, local SVG silhouettes, a 68/32 desktop canvas-to-detail split, keyboard-focused nodes, and verified relationship evidence. Dedicated pages include requests, machinery, operations workflow, integration trace (`/integracion`), and admin user management (`/administracion`).
+
 From the repository root:
 
 ```sh
@@ -17,7 +19,7 @@ uv run --directory apps/api python -m app.cli.create_user --email admin@example.
 Do not overwrite an existing `.env`; retain its database settings. Configuration loads `apps/api/.env` regardless of the working directory. `SESSION_SECRET` is mandatory: the application refuses to start without it unless `AUTH_REQUIRED=false` (development only). `create_user` prompts for the password (or reads it with `--password-stdin`); passwords are never command-line arguments. Open `http://localhost:8050` for Dash (sign in at `/login`) and `http://localhost:8050/docs` for the typed OpenAPI contract. Both use one server and the shared `app/services/hub.py` read service. UI code and local assets live in `app/dashboard`; the URL carries the origin, search and display filter. Snapshots are scoped to each browser in memory. See [the dashboard architecture](../../docs/frontend-architecture.md).
 
 ```sh
-./scripts/check.sh   # ruff check, ruff format --check, pytest; --container builds the image
+./scripts/check.sh   # ruff check, ruff format --check, pytest (462 passing tests); --container builds the image
 ```
 
 Tests set `AUTH_REQUIRED=false` through `conftest.py` (the auth tests enable it explicitly), use `httpx2` for Starlette 1.6's TestClient and fail on any `DeprecationWarning`. The health tests use temporary SQLite files; normal development uses the existing PostgreSQL Docker service. Schema migrations still run explicitly, never on server startup. `DATABASE_URL` accepts `postgres://`, `postgresql://` and `postgresql+psycopg://`: the first two select the installed psycopg driver without changing credentials, hostname, database or SSL options. Other explicit driver schemes are preserved. CI without a local `.env` must supply `DATABASE_URL` before importing the application.

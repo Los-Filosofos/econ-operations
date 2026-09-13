@@ -28,6 +28,7 @@ from app.dashboard.integration_views import (
     integration_controls,
     trace_panel,
 )
+from app.dashboard.operations_graph import graph_status
 from app.dashboard.theme import BRAND, MANTINE_THEME
 from app.dashboard.views import (
     MODES,
@@ -205,6 +206,7 @@ def app_shell(auth_required: bool):
             ],
             size=1400,
             px=0,
+            className="application-container",
         )
     )
     return html.Div(
@@ -225,7 +227,9 @@ def app_shell(auth_required: bool):
                 padding="md",
                 closeButtonProps={"aria-label": "Cerrar navegación"},
             ),
-        ]
+        ],
+        id="application-shell",
+        className="application-shell",
     )
 
 
@@ -269,7 +273,7 @@ def create_dashboard(server: FastAPI) -> Dash:
         # Register CSS explicitly so a cold deep link is styled on its first load.
         assets_ignore=r"style\.css",
         external_stylesheets=[f"/assets/style.css?v={STYLESHEET_VERSION}"],
-        title="ECON · Seguimiento de solicitudes",
+        title="ECON · Mapa de operaciones",
         update_title="Consultando…",
         index_string=INDEX,
         suppress_callback_exceptions=False,
@@ -568,18 +572,34 @@ def create_dashboard(server: FastAPI) -> Dash:
             return workflow_page(path, workflow, context), nav, nav, line
         read_context = context.for_read(path)
         if not isinstance(snapshot, dict) or snapshot.get("key") != read_context.read_key:
-            return loading(), nav, nav, None
+            page = (
+                graph_status(None, "Consultando la operación", "Leyendo proyectos y maquinaria…")
+                if path in {"/", "/resumen"}
+                else loading()
+            )
+            return page, nav, nav, None
         if snapshot.get("error"):
-            return notice("Consulta no disponible", snapshot["error"], error=True), nav, nav, None
+            page = (
+                graph_status(None, "Consulta no disponible", snapshot["error"])
+                if path in {"/", "/resumen"}
+                else notice("Consulta no disponible", snapshot["error"], error=True)
+            )
+            return page, nav, nav, None
         try:
             hub = HubResponse.model_validate(snapshot.get("hub"))
             if hub.mode != context.mode or hub.scope.search != read_context.query:
                 raise ValueError("La respuesta no corresponde a esta consulta.")
         except (ValidationError, ValueError):
             message = "Actualiza la consulta para recuperar los datos."
-            return notice("Respuesta no válida", message, error=True), nav, nav, None
+            page = (
+                graph_status(None, "Respuesta no válida", message)
+                if path in {"/", "/resumen"}
+                else notice("Respuesta no válida", message, error=True)
+            )
+            return page, nav, nav, None
         page = render_page(path, hub, context, workflow)
-        return page, nav, nav, scope(hub, context, workflow, path)
+        page_scope = None if path in {"/", "/resumen"} else scope(hub, context, workflow, path)
+        return page, nav, nav, page_scope
 
     @dashboard.callback(
         Output(PANEL_PATTERN, "children"),

@@ -58,6 +58,7 @@ from app.dashboard.evidence_views import (
     source_comparison,
 )
 from app.dashboard.integration_views import integration_page
+from app.dashboard.operations_graph import graph_status, operations_graph_view
 from app.dashboard.workflow_views import (
     STATES,
     matching_movements,
@@ -289,7 +290,7 @@ def decision_cards(hub, context, workflow):
     return dmc.Stack(cards, gap="sm")
 
 
-def overview(hub: HubResponse, context: QueryContext, workflow=None):
+def decision_overview(hub: HubResponse, context: QueryContext, workflow=None):
     content = [
         heading(
             "Qué requiere atención",
@@ -444,6 +445,17 @@ def overview(hub: HubResponse, context: QueryContext, workflow=None):
         )
     )
     return content
+
+
+def overview(hub: HubResponse, context: QueryContext, workflow=None):
+    """Primary full-viewport graph; query context never changes source relationships."""
+    if hub.mode != context.mode:
+        return graph_status(
+            hub,
+            "Origen no disponible",
+            "La lectura recibida no corresponde al origen solicitado.",
+        )
+    return operations_graph_view(hub, workflow)
 
 
 def period_label(request: RequestRecord) -> str:
