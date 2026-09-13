@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Engine, func, update
+from sqlalchemy import Engine, case, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -116,6 +116,49 @@ def _safe_reason(reason_code: str) -> str:
     return reason_code if reason_code in SAFE_REASON_CODES else "unknown"
 
 
+def effective_event_sort_key(
+    event: OperationEvent | MovementEventRecord,
+) -> tuple[int, datetime, datetime, str]:
+    """Total ordering policy for operation events.
+
+    Rules:
+    1. Known fact date (has_event_time): Events with an explicit event_time
+       represent verified physical occurrences. They take absolute precedence
+       over events that only have an observation/read timestamp (observed_at).
+       Per policy, reading timestamps never assert actuality over known fact dates.
+    2. Primary time: Compares event_time if present, otherwise observed_at
+       (or recorded_at as final fallback).
+    3. Tie breaking (recorded_at): If two events have identical primary times,
+       the one recorded later in the ledger wins.
+    4. Deterministic tie breaking (id): Final fallback on event ID.
+    """
+    return _event_sort_key(
+        event.event_time,
+        event.observed_at,
+        event.recorded_at,
+        event.id,
+    )
+
+
+def _event_sort_key(
+    event_time: datetime | None,
+    observed_at: datetime | None,
+    recorded_at: datetime | None = None,
+    event_id: str | None = None,
+) -> tuple[int, datetime, datetime, str]:
+    has_event_time = 1 if event_time is not None else 0
+    t_event = _stored_time(event_time)
+    t_observed = _stored_time(observed_at)
+    t_recorded = _stored_time(recorded_at) or datetime.min.replace(tzinfo=UTC)
+    primary_time = t_event or t_observed or t_recorded
+    return (
+        has_event_time,
+        primary_time,
+        t_recorded,
+        event_id or "",
+    )
+
+
 class OperationsLedger:
     """Each method owns its transaction, suitable for web requests and workers."""
 
@@ -123,11 +166,14 @@ class OperationsLedger:
         self.engine = engine
 
     @staticmethod
-    def _row(session: Session, movement_id: str, mode: DataMode) -> Movement:
+    def _row(
+        session: Session, movement_id: str, mode: DataMode, for_update: bool = False
+    ) -> Movement:
         _mode(mode)
-        row = session.exec(
-            select(Movement).where(Movement.id == movement_id, Movement.mode == mode)
-        ).first()
+        statement = select(Movement).where(Movement.id == movement_id, Movement.mode == mode)
+        if for_update:
+            statement = statement.with_for_update()
+        row = session.exec(statement).first()
         if row is None:
             raise MovementNotFound()
         return row
@@ -688,7 +734,7 @@ class OperationsLedger:
         except (TypeError, ValueError):
             raise LedgerError("La observación contiene campos de evidencia no válidos.") from None
         with Session(self.engine) as session:
-            row = self._row(session, movement_id, mode)
+            row = self._row(session, movement_id, mode, for_update=True)
             request_provenance = Provenance.model_validate(row.source_request["provenance"])
             if (
                 provenance.source != "startrack"
@@ -746,13 +792,26 @@ class OperationsLedger:
                         OperationEvent.kind == "task_state",
                         OperationEvent.evidence_hash != evidence_hash,
                     )
-                    .order_by(OperationEvent.event_time.desc(), OperationEvent.observed_at.desc())
+                    .order_by(
+                        case((OperationEvent.event_time.is_not(None), 1), else_=0).desc(),
+                        func.coalesce(
+                            OperationEvent.event_time,
+                            OperationEvent.observed_at,
+                            OperationEvent.recorded_at,
+                        ).desc(),
+                        OperationEvent.recorded_at.desc(),
+                        OperationEvent.id.desc(),
+                    )
                     .limit(1)
                 ).first()
-                previous_time = (
-                    _stored_time(latest.event_time or latest.observed_at) if latest else None
+                incoming_key = _event_sort_key(
+                    event_time,
+                    observed_at,
+                    _now(),
+                    None,
                 )
-                if previous_time is None or (event_time or observed_at) >= previous_time:
+                latest_key = effective_event_sort_key(latest) if latest is not None else None
+                if latest_key is None or incoming_key >= latest_key:
                     row.status = data.get("status", row.status)
                     row.workflow_role = data.get("workflow_role", row.workflow_role)
             row.updated_at = _now()
