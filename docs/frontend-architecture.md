@@ -14,7 +14,7 @@ decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
 | Ruta | Contenido | Acceso |
 | --- | --- | --- |
 | `/login` | Formulario de inicio de sesión; `?next=` devuelve a la ruta pedida | Pública |
-| `/` y `/resumen` | Asuntos por revisar por solicitud, calendario de uso solicitado y distribución por estado | `read` |
+| `/` y `/resumen` | Grafo operativo a pantalla completa de identidades y relaciones verificadas | `read` |
 | `/solicitudes` | Proyecto/solicitud, maquinaria, período, estado, traslado y recepción | `read` |
 | `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento | `read`; guardar plan exige `manage_transfers` |
 | `/maquinaria` | Inventario consultado, incluidos equipos sin solicitud, con filtros y acceso por ID | `read` |
@@ -37,13 +37,38 @@ etiqueta, icono Tabler, función de lista y función de detalle). La navegación
 lateral, el cajón móvil y `render_page` se derivan de esa tabla; `Fuentes` es
 utilidad secundaria. Añadir una vista es añadir una fila.
 
+La ruta principal conserva el mismo shell y stores, pero `operations-graph.js`
+activa el modo visual de página completa: oculta cabecera, navegación, consulta y
+alcance mientras el grafo está montado. Las demás rutas recuperan el shell normal.
+
 ## Presentación y paleta
 
-La portada empieza por proyecto, revisión, evidencia y siguiente paso. No usa
-cards de conteos, badges ni prioridad inventada. IDs completos, mantenimiento,
-historial y preparación usan `Accordion`. Los estados se presentan como texto
-con un punto de color y conservan las diferencias entre administración,
-mantenimiento, tarea, ubicación y recepción.
+La portada es un lienzo carbón mate sin cards, tablas, leyenda extensa, brillos
+ni paneles permanentes. Inicia sólo con lugares confirmados. Todos los lugares
+tienen diámetro de 56 px y la maquinaria de 32 px; las posiciones se derivan de
+IDs ordenados y permanecen estables al actualizar. Seleccionar un lugar revela
+únicamente las unidades relacionadas por IDs exactos; una unidad en traslado
+activo permanece visible. Una unidad sin relación verificable no se muestra bajo
+una base ni se clasifica como disponible por inferencia. Los nodos usan botones
+HTML enfocados por teclado y siluetas SVG locales. Las
+aristas son segmentos CSS rectos y su etiqueta abre la evidencia de conexión:
+asignación fina; traslado confirmado dirigido; una tarea explícitamente activa
+usa azul y movimiento discreto. Ámbar identifica mantenimiento y rojo una
+falla/condición confirmada, siempre con texto o símbolo. `prefers-reduced-motion`
+detiene la animación.
+
+Hover o foco muestra identidad, estado, fuente y antigüedad. Seleccionar abre un
+detalle temporal con asignación, destino, estado, responsable disponible,
+historial, evidencia, incidentes, recepción y faltantes. Una conexión seleccionada
+muestra entidades legibles, solicitudes, períodos y evidencia. La selección resalta el flujo
+relacionado y atenúa el resto. El autoencuadre abre el flujo principal en móvil;
+zoom, centrado, rueda y pan sólo cambian la presentación y nunca escriben datos.
+
+El detalle contextual prioriza códigos operativos legibles, iconos, una matriz
+compacta de hechos y una línea de eventos. UUID, claves normalizadas y referencias
+técnicas se conservan en el modelo y en las relaciones internas, pero no se
+imprimen en la ficha ordinaria. Si una fuente no ofrece código o nombre legible,
+la interfaz indica «identificado» sin exponer fragmentos de la clave como etiqueta.
 
 `dashboard/theme.py` es la única fuente de color, compartida por Mantine, AG
 Grid y el template Plotly `econ`:
@@ -55,16 +80,20 @@ Grid y el template Plotly `econ`:
 | Magnitudes | Secuencial azul `#86b6ef → #0d366b` (`SEQUENTIAL`) | Un solo tono; más oscuro es más |
 | Desviación frente a meta | Divergente `#0d366b … #f0efec … #b3261e` (`DIVERGING`) | Neutro `#f0efec` en el cero; azul por debajo, rojo por encima |
 
-Tipografía Inter (OFL) servida localmente; radios pequeños, superficies claras
-y `focusRing: auto`. Los gráficos Plotly usan `figure()` del tema (sin zoom,
+Tipografía Inter (OFL) para el shell y Roboto Mono Variable en peso 300 para el
+grafo, ambas servidas localmente; radios pequeños, superficies claras y
+`focusRing: auto`. Los gráficos Plotly usan `figure()` del tema (sin zoom,
 ejes fijos, leyenda por texto) y siempre tienen una tabla alternativa; ver
 [definiciones analíticas](analitica-decisiones.md). Capturas de referencia
 verificadas a 1280 y 390 px en `docs/screenshots/`
 (`2026-09-13-<página>-<ancho>.png`).
 
-Los iconos son Tabler locales (`app/dashboard/assets/icons/*.svg`, licencia MIT),
-pintados con `mask-image` para heredar el color del texto. Acompañan texto en
-navegación y acciones y nunca son el único portador de significado.
+Los iconos de navegación son Tabler locales
+(`app/dashboard/assets/icons/*.svg`, licencia MIT), pintados con `mask-image`
+para heredar el color del texto. Las siluetas del grafo son SVG originales del
+proyecto (`graph-*.svg`) y se eligen únicamente a partir de `equipment_class`;
+cuando ese campo no permite distinguir el tipo se usa maquinaria genérica.
+Ningún icono es el único portador de significado.
 
 ## Servicios y módulos
 
@@ -83,16 +112,23 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `dashboard/analytics.py`, `dashboard/decision_analytics.py` | Relación solicitud/unidad, población filtrada, calendario y distribución por estado |
 | `dashboard/decision_priorities.py` | Un asunto con evidencia y siguiente paso por solicitud |
 | `dashboard/evidence_views.py` | Comparación de hechos por origen, interpretación y cronología por solicitud |
+| `dashboard/operations_graph.py` | Proyección visual de proyectos, maquinaria, aristas respaldadas y detalle contextual; no consulta proveedores ni duplica reglas |
 | `dashboard/workflow_forms.py`, `dashboard/workflow_views.py`, `dashboard/workflow_actions.py` | Preparación, registro de movimientos, recepción y ejecución de acciones con permiso |
 | `dashboard/auth_views.py`, `dashboard/admin_views.py` | Página `/login`, identidad en la cabecera, ayudas de permiso y página `/administracion`; las reglas viven en `api/users.py` |
 | `core/auth.py`, `api/auth.py`, `api/users.py` | Roles, permisos, sesión, login/logout/me y administración de usuarios |
 | `services/hub.py` | Proyección de lectura `HubResponse`, compartida con HTTP |
 | `services/evidence.py` | Proyección de evidencia persistida mediante identidades y períodos compatibles |
 | `services/workflow.py`, `services/ledger.py` | Reglas operativas, permiso por acción, persistencia, cortes, eventos y cola transaccional |
-| `dashboard/assets` | `style.css` mínimo (skip link, foco, grid, impresión), Inter y logotipos ECON |
+| `dashboard/assets` | Estilos, Inter, Roboto Mono (OFL), siluetas SVG, iconos y logotipos ECON |
 
-Se retiraron `icons.py`, `decision_views.py`, `equipment_views.py`, los SVG
-locales y el menú clientside: Mantine e Iconify cubren esas funciones.
+`assets/operations-graph.js` implementa únicamente interacción visual local
+(zoom, pan, selección, cierre y reencuadre responsive). No inicia consultas: el
+botón Actualizar activa el callback acotado ya existente. Se eligió HTML/CSS más
+SVG locales en lugar de otra dependencia porque preserva nodos como botones
+accesibles y reutiliza el estado Dash sin un segundo modelo de grafo.
+
+Se retiraron `icons.py`, `decision_views.py` y `equipment_views.py`; Mantine y
+los recursos locales cubren esas funciones sin introducir un segundo frontend.
 
 Las relaciones usan IDs originales, fuente, entorno y evidencia compatibles.
 Los movimientos que alimentan las decisiones deben corresponder también a la
@@ -139,6 +175,22 @@ automático siguen deshabilitados por defecto y solo los habilita el servidor;
 un rol o un flag del navegador no los encienden. El worker se inicia por CLI;
 navegar por el panel no lo inicia.
 
+El grafo recibe exclusivamente `HubResponse` y `WorkflowOverview`. Proyectos se
+deduplican por `project_id`; maquinaria por su ID normalizado; solicitudes se
+unen por `maquinaria_id` exacto. Los traslados sólo promueven una arista cuando
+la proyección de evidencia ya validó asignación, entorno y período. Un equipo sin
+asignación no se agrega a un lugar inventado. Las bases y talleres requieren una
+identidad y clasificación física verificables que el modelo normalizado actual
+todavía no aporta. Una geocerca sin tipo físico confirmado no se presenta como
+base o taller. La ubicación, mantenimiento, tarea, presencia GPS y recepción
+permanecen hechos separados.
+
+El detalle de maquinaria cuenta proyectos distintos usando únicamente IDs que
+aparecen en asignaciones, solicitudes, traslados o movimientos persistidos
+visibles. Los presenta por su código o nombre legible, no por el UUID. Es
+trazabilidad documental de la lectura, no prueba de presencia física ni una
+historia completa cuando la cobertura es parcial.
+
 ## Accesibilidad
 
 - Enlace «Saltar al contenido» hacia `main#content` (`tabIndex=-1`), foco
@@ -150,6 +202,9 @@ navegar por el panel no lo inicia.
   `aria-label`; mensajes de acción en una región `aria-live="polite"`.
 - AG Grid con teclado, locale en español y desplazamiento horizontal; las
   tablas no ocultan columnas de negocio en móvil (390 px).
+- Los nodos del grafo son botones con nombre accesible y tooltip asociado; Enter
+  o Espacio abre detalle, Escape lo cierra y devuelve el foco. El lienzo acepta
+  `+`, `-` y `0` para zoom/centrado, además de controles visibles.
 - `prefers-reduced-motion` desactiva animaciones.
 
 ## Desarrollo y verificación

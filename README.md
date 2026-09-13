@@ -39,8 +39,12 @@ PostgreSQL.
 
 ## Recorrido
 
-- **Resumen:** decisiones por solicitud, evidencia y siguiente paso; calendario
-  de uso como apoyo y estados en un desplegable.
+- **Mapa de operaciones (inicio):** grafo a pantalla completa que inicia sólo
+  con lugares confirmados. Al seleccionar un proyecto despliega únicamente la
+  maquinaria relacionada por identificadores exactos; una unidad en traslado
+  permanece visible. No crea bases, talleres, agrupaciones ni relaciones que
+  las fuentes no permitan identificar. La maquinaria sin vínculo verificable
+  no se atribuye a una base ni se clasifica como disponible por inferencia.
 - **Solicitudes:** proyecto, tipo requerido, período, unidad asignada, traslado,
   destino, llegada, recepción y evidencia pendiente.
 - **Maquinaria:** inventario consultado, comparación de fuentes por unidad e
@@ -61,6 +65,10 @@ magnitudes y desviaciones escalas secuencial y divergente
 ([arquitectura](docs/frontend-architecture.md)). Los iconos Tabler son locales
 (`app/dashboard/assets/icons`), sin peticiones a terceros. La cookie de sesión es
 `Secure` por defecto: `SESSION_HTTPS_ONLY=false` solo para desarrollo local por HTTP.
+La portada usa un lienzo HTML accesible con Roboto Mono y siluetas SVG locales,
+lugares de 56 px, maquinaria de 32 px, aristas rectas, autoencuadre,
+desplazamiento y detalle contextual de nodos y conexiones; no añade una
+dependencia de grafos.
 
 El modo `fixture` contiene cinco máquinas y dos solicitudes extraídas del
 OpenAPI proporcionado, con sus IDs y valores originales; no incluye
