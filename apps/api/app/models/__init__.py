@@ -14,3 +14,4 @@ metadata = SQLModel.metadata
 
 # Register tables after the naming convention, without importing service code.
 from app.models.operations import Movement, OperationEvent, SourceSnapshot  # noqa: E402, F401
+from app.models.users import User  # noqa: E402, F401

@@ -1,4 +1,4 @@
-"""Request-scoped local management boundary; no browser flag grants authority."""
+"""Request-scoped management boundary; authority comes from the session role or local dev mode."""
 
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -23,6 +23,7 @@ def management_scope(allowed: bool):
 
 
 def local_request(request: Request) -> bool:
+    """Loopback, same-origin request: the only management authority when AUTH_REQUIRED=false."""
     try:
         loopback = request.client is not None and ip_address(request.client.host).is_loopback
     except ValueError:
