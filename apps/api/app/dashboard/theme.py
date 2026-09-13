@@ -11,6 +11,15 @@ import plotly.io as pio
 BRAND = "#144f81"
 INK, MUTED, LINE, SURFACE = "#1f2933", "#5c6470", "#e3e7eb", "#f6f8fa"
 FONT = "Inter, system-ui, sans-serif"
+GRAPH_THEME = {
+    "background": "#111513",
+    "panel": "#161B18",
+    "border": "#39413B",
+    "text_primary": "#F1F0EA",
+    "text_secondary": "#A8AEA7",
+    "line": "#8E948C",
+    "warning": "#C8942C",
+}
 
 # Qualitative state families: orange, green and violet pass the CVD validator on all pairs.
 # `issue` is a reserved status color (always paired with an icon and label); `neutral` is gray.

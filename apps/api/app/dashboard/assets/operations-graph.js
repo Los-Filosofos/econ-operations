@@ -11,7 +11,17 @@
   function syncShell() {
     const shell = document.querySelector(".application-shell");
     const graph = document.querySelector(".operations-graph");
-    if (shell) shell.classList.toggle("graph-mode", Boolean(graph));
+    if (shell) {
+      shell.classList.toggle("graph-mode", Boolean(graph));
+      if (graph) {
+        shell.style.setProperty(
+          "--graph-shell-bg",
+          getComputedStyle(graph).getPropertyValue("--graph-bg")
+        );
+      } else {
+        shell.style.removeProperty("--graph-shell-bg");
+      }
+    }
     if (graph) mount(graph);
   }
 
@@ -32,6 +42,10 @@
     let lastSelected = null;
     let observedSize = null;
 
+    function focusDetail(detail) {
+      requestAnimationFrame(() => detail?.querySelector("[data-graph-close]")?.focus());
+    }
+
     function draw() {
       world.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
       viewStates.set(key, { ...state });
@@ -48,7 +62,10 @@
       const firstProject = root.querySelector(".graph-node--place");
       const projectX = Number.parseFloat(firstProject?.style.left || "");
       const mobileFlowStart = bounds.width < 600 && fitScale < 1 && Number.isFinite(projectX);
-      const scale = mobileFlowStart ? 1 : clamp(fitScale, MIN_SCALE, MAX_SCALE);
+      const preserveNodeScale = fitScale >= 0.82;
+      const scale = mobileFlowStart || preserveNodeScale
+        ? 1
+        : clamp(fitScale, MIN_SCALE, MAX_SCALE);
       state = {
         scale,
         x: mobileFlowStart ? 68 - projectX * scale : (bounds.width - width * scale) / 2,
@@ -128,13 +145,19 @@
         node.setAttribute("aria-pressed", selected ? "true" : "false");
         if (selected) lastSelected = node;
       });
+      let openDetail = null;
       root.querySelectorAll(".graph-detail").forEach((detail) => {
         const open = detail.dataset.nodeDetail === nodeKey;
         detail.hidden = !open;
         detail.setAttribute("aria-hidden", open ? "false" : "true");
+        if (open) openDetail = detail;
       });
-      if (nodeKey) root.dataset.selection = nodeKey;
-      else root.removeAttribute("data-selection");
+      if (nodeKey) {
+        root.dataset.selection = nodeKey;
+        focusDetail(openDetail);
+      } else {
+        root.removeAttribute("data-selection");
+      }
       if (!nodeKey && returnFocus && lastSelected) lastSelected.focus();
     }
 
@@ -165,12 +188,15 @@
         control.setAttribute("aria-pressed", selected ? "true" : "false");
         if (selected) lastSelected = control;
       });
+      let openDetail = null;
       root.querySelectorAll("[data-edge-detail]").forEach((detail) => {
         const open = detail.dataset.edgeDetail === edgeKey;
         detail.hidden = !open;
         detail.setAttribute("aria-hidden", open ? "false" : "true");
+        if (open) openDetail = detail;
       });
       root.dataset.edgeSelection = edgeKey;
+      focusDetail(openDetail);
     }
 
     viewport.addEventListener("wheel", (event) => {

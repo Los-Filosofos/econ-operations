@@ -43,16 +43,20 @@ alcance mientras el grafo está montado. Las demás rutas recuperan el shell nor
 
 ## Presentación y paleta
 
-La portada es un lienzo carbón mate sin cards, tablas, leyenda extensa, brillos
-ni paneles permanentes. Inicia sólo con lugares confirmados. Todos los lugares
-tienen diámetro de 56 px y la maquinaria de 32 px; las posiciones se derivan de
-IDs ordenados y permanecen estables al actualizar. Seleccionar un lugar revela
+La portada es un lienzo carbón cálido (`#111513`) sin cards, tablas, leyenda
+extensa, brillos ni paneles permanentes. Inicia sólo con lugares confirmados.
+Todos los lugares tienen diámetro de 80 px y la maquinaria de 48 px; las
+posiciones se derivan de IDs ordenados y permanecen estables al actualizar. Al
+seleccionar una entidad, el lienzo ocupa 68% y el panel contextual 32% en
+escritorio; en móvil el panel se superpone para conservar una lectura útil.
+Seleccionar un lugar revela
 únicamente las unidades relacionadas por IDs exactos; una unidad en traslado
 activo permanece visible. Una unidad sin relación verificable no se muestra bajo
 una base ni se clasifica como disponible por inferencia. Los nodos usan botones
 HTML enfocados por teclado y siluetas SVG locales. Las
 aristas son segmentos CSS rectos y su etiqueta abre la evidencia de conexión:
-asignación fina; traslado confirmado dirigido; una tarea explícitamente activa
+la asignación fina dice «Asignación registrada»; el traslado confirmado es
+dirigido; una tarea explícitamente activa
 usa azul y movimiento discreto. Ámbar identifica mantenimiento y rojo una
 falla/condición confirmada, siempre con texto o símbolo. `prefers-reduced-motion`
 detiene la animación.
