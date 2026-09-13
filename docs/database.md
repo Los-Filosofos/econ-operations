@@ -1,96 +1,82 @@
-# Base central: PostgreSQL en Docker
+# Persistencia de operaciones en PostgreSQL
 
-> Arquitectura vigente: [hub Dash y FastAPI](adr/0003-python-dash-hub.md).
-> PostgreSQL y su volumen local se conservan.
+ECON usa SQLModel y Alembic sobre PostgreSQL para guardar movimientos y su
+evidencia. Dash, HTTP y CLI comparten `WorkflowService` y el registro transaccional
+de `app/services/ledger.py`. La decisión implementada está en
+[ADR 0004](adr/0004-persistent-transfer-workflow.md).
 
-> Evaluación histórica anterior al acceso al sandbox. Las menciones siguientes a accesos pendientes describen esa etapa. PostgreSQL se conserva; las rutas y comandos actuales están en [desarrollo](desarrollo.md), la arquitectura en [ADR 0001](adr/0001-web-platform.md) y la evidencia de acceso en [revisión de contexto](revision-contexto.md).
+La consulta `GET /api/v1/hub` sigue siendo una proyección de lectura. Guardar un
+plan o un corte es una operación explícita; abrir el panel no convierte cada
+respuesta en una copia persistida de toda la flota.
 
-Recomendación inicial: PostgreSQL 18 para los datos compartidos, SQLModel para
-acceder a ellos desde FastAPI y Alembic para evolucionar el esquema. Docker
-Compose ejecuta PostgreSQL localmente; Docker no es una base de datos.
+## Esquema implementado
 
-## Por qué encaja
+La [migración 0001_operations](../apps/api/migrations/versions/0001_operations.py)
+crea las tres tablas definidas en
+[los modelos de operaciones](../apps/api/app/models/operations.py):
 
-El escenario sugiere entidades relacionadas, conciliación entre fuentes y
-consultas para indicadores. PostgreSQL permite claves foráneas y restricciones
-de unicidad: ayudan a mantener relaciones válidas y a evitar duplicados cuando
-ya se han definido correctamente sus identificadores.
-[Documentación de restricciones](https://www.postgresql.org/docs/current/ddl-constraints.html).
-
-También permite combinar tablas estructuradas con campos JSONB e índices sobre
-ellos. Propongo normalizar los campos acordados y usar JSONB, cuando corresponda,
-para conservar el contenido recibido y campos aún no mapeados. JSONB no conserva
-el texto original byte por byte ni claves duplicadas; si se necesita un original
-exacto para auditoría, habrá que conservar el archivo o texto por separado.
-[Documentación de JSON](https://www.postgresql.org/docs/current/datatype-json.html).
-
-Esto evita escoger otra base únicamente porque las fuentes tengan campos
-distintos. Las reglas para identificar el mismo registro, resolver conflictos
-y validar datos siguen siendo responsabilidad de la integración.
-
-## Cuándo reconsiderar
-
-| Si el reto resulta ser… | Evaluación |
+| Tabla | Contenido y límites |
 | --- | --- |
-| Una API operativa con datos relacionados e indicadores | Mantener PostgreSQL como punto de partida |
-| Una demostración local sin usuarios concurrentes | SQLite puede ser suficiente |
-| Una organización con otra base estándar y equipo que la opera | Evaluar esa base antes de introducir infraestructura nueva |
-| Análisis masivo sobre un historial muy grande | Medir consultas y volumen; podría requerir una plataforma analítica adicional |
-| Solo consulta en vivo de dos APIs sin almacenamiento propio | Confirmar si hace falta una base central |
+| `operation_movements` | Plan, correspondencias, IDs de solicitud/maquinaria/proyecto, fuentes y huellas, payload, estado de envío, tarea confirmada y recepción declarada |
+| `operation_events` | Eventos de cada movimiento con ID de origen, evidencia, procedencia y fechas de evento, observación y registro separadas |
+| `operation_snapshots` | Cortes del hub con modo, contenido, huella, fecha de construcción, fecha de registro y corte de origen cuando existe |
 
-Estas son recomendaciones de arquitectura, no resultados de una comparación
-de rendimiento. Aún no se conocen las cargas reales.
+La referencia de movimiento es única dentro de `mode` y `environment`; una
+solicitud puede tener varios movimientos. Los eventos referencian el movimiento
+por clave foránea y restringen duplicados por movimiento y huella de evidencia.
+No se asigna unicidad global a nombres, códigos visibles o `remote_id` de Startrack.
 
-## Información necesaria
+La cola de envío forma parte de `operation_movements`. Su reclamación se confirma
+en una transacción antes de llamar al proveedor. Si el resultado queda incierto,
+se registra `unknown` y se concilia por lectura; la recuperación no lo devuelve
+automáticamente a la cola para repetir el POST.
 
-Contexto confirmado: se ofrecerá un sandbox y se espera un volumen alto en una
-empresa de logística. Todavía no hay acceso al sandbox ni cifras de carga.
-La instalación local es una base de desarrollo, no una validación de capacidad.
+El esquema usa columnas `JSON` para correspondencias, fuentes, payload y
+evidencia. No implementa una capa analítica JSONB ni un archivo de documentos
+originales. Conservar un dato en JSON no sustituye conservar su fuente e identidad.
+La recepción manual permanece separada de estado de tarea y presencia GPS.
 
-1. **Acceso a las fuentes:** API, webhooks, exportaciones o acceso autorizado a
-   bases; autenticación, límites y posibilidad de extraer cambios y eliminaciones.
-2. **Tamaño y uso:** registros actuales, cambios diarios, años de historial,
-   archivos adjuntos, usuarios concurrentes y consultas esperadas.
-3. **Actualización:** si el panel puede llevar minutos de retraso o requiere
-   segundos; cómo trabajarían los operadores sin conexión.
-4. **Identidad y autoridad:** claves para cruzar registros, campos faltantes,
-   cuál fuente manda por campo y quién resuelve discrepancias.
-5. **Operación:** infraestructura disponible, presupuesto, permisos, respaldos,
-   tiempo máximo de caída aceptable y pérdida de datos tolerable.
+## Entorno local y migraciones
 
-## Validación cuando llegue el sandbox
+[compose.yaml](../compose.yaml) mantiene:
 
-Registrar filas y tamaño por entidad, cambios por segundo en horas pico,
-retención, consultas concurrentes y latencia objetivo. El sandbox podría tener
-menos datos o recursos que producción; confirmar si es representativo.
+- Proyecto `econ-backend` y servicio `db`, con imagen `postgres:18`.
+- Base y usuario `econ`; acceso local en `127.0.0.1:54329`.
+- Volumen `econ-backend_postgres18_data`, montado en `/var/lib/postgresql`.
+- Comprobación de salud con `pg_isready` y reinicio `unless-stopped`.
 
-Probar primero una importación acotada por lotes, con paginación, puntos de
-reanudación y procesamiento idempotente. Medir duración, errores, uso de memoria,
-conexiones y retraso de sincronización antes de aumentar la carga.
+Conservar el nombre del proyecto, el volumen y la configuración existente.
+`DATABASE_URL` se carga desde `apps/api/.env`; no se reemplaza un archivo
+existente ni se cambia de base ante un fallo. Las credenciales de proveedores
+permanecen en el servidor y no forman parte de los payloads persistidos.
 
-Crear índices según las consultas reales y comprobar sus planes de ejecución.
-El particionado y una plataforma analítica separada se evaluarán si las mediciones
-los justifican; no se activan solo por describir el volumen como alto.
-[Estadísticas de PostgreSQL](https://www.postgresql.org/docs/current/monitoring-stats.html)
-y [particionado](https://www.postgresql.org/docs/current/ddl-partitioning.html).
+Desde la raíz, después de preparar el entorno según [desarrollo](desarrollo.md):
 
-## Configuración entregada
+```powershell
+docker compose up -d --wait db
+uv run --directory apps/api alembic upgrade head
+uv run --directory apps/api alembic current
+```
 
-- Imagen oficial `postgres:18`, versión mayor estable soportada. El tag recibe
-  parches; se descarga con `docker compose pull db`. Para despliegues reproducibles
-  se debe fijar la imagen probada por digest y planificar las actualizaciones.
-- Puerto `127.0.0.1:54329`, base `econ`, usuario `econ`.
-- Volumen persistente `econ-backend_postgres18_data` y comprobación de salud.
-- Reinicio automático salvo parada explícita.
-- Conexión de FastAPI mediante `DATABASE_URL` en `.env`, sin fallback silencioso.
-- Credenciales exclusivamente de desarrollo; no se ha configurado producción.
+Las migraciones se ejecutan explícitamente. Arrancar el servidor no crea ni
+elimina tablas; no se requiere recrear el volumen para aplicar el esquema.
+`/health/ready` comprueba conexión con la base, no conectividad de los proveedores.
+Las pruebas usan SQLite aislado; el desarrollo normal conserva PostgreSQL.
 
-PostgreSQL 18 está soportado hasta noviembre de 2030 según la
-[política oficial](https://www.postgresql.org/support/versioning/). El montaje
-del volumen sigue el cambio introducido en la
-[imagen oficial de PostgreSQL 18](https://hub.docker.com/_/postgres).
+`fixture` y `live` mantienen registros separados y ambos corresponden a datos
+sintéticos del caso. Las muestras suministradas no se insertan en Prisma.
+Guardar planes localmente requiere habilitar gestión en el servidor; lecturas
+y escrituras remotas están deshabilitadas por defecto. Los controles y el worker
+se explican en [la guía operativa](solucion-integracion.md).
 
-Para producción, mi preferencia inicial sería PostgreSQL administrado si encaja
-en presupuesto: evaluar respaldos automáticos, recuperación a un momento dado,
-acceso privado y monitoreo. Docker local sirve para desarrollar y demostrar el
-prototipo; por sí solo no configura esas capacidades.
+## Escala y operación pendientes
+
+Esta persistencia no acredita un historial completo de las fuentes ni capacidad
+para miles de vehículos. La [arquitectura de flota](arquitectura-escalable-flota.md)
+propone separar operación e histórico, medir carga y evaluar procesamiento
+paralelo; esas ampliaciones no están implementadas.
+
+Antes de dimensionar un despliegue, medir volumen y ritmo de eventos, retención,
+concurrencia, latencia, conexiones y consultas. Respaldos, restauración,
+recuperación y disponibilidad deben verificarse para el entorno elegido.
+El Compose local no configura por sí solo esas capacidades.

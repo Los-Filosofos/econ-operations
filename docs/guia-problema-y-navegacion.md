@@ -1,10 +1,16 @@
 # Entender el problema y recorrer Nexus y Startrack
 
+> Recorrido histórico del 12/09/2026. Las pantallas, filtros y resultados
+> siguientes corresponden a esa exploración, no a una consulta actual.
+> El [contexto vigente](contexto-vigente.md) incorpora capturas y contratos
+> posteriores. Para usar ECON consultar [la guía operativa](solucion-integracion.md):
+> Dash/FastAPI, persistencia, cola y recepción declarada ya están implementados.
+
 Guía para Los Filósofos. Basada en los documentos entregados y en la exploración del **12 de septiembre de 2026**. Los datos observados pertenecen al sandbox y pueden cambiar. Este recorrido sirve para consultar y comprender la operación; no incluye creación, aprobación ni modificación de registros.
 
 ## 1. El problema, con un ejemplo sencillo
 
-Una obra necesita una retroexcavadora. En **Prisma, presentado como Nexus ECON de MAIC**, se registra la solicitud y se asigna la maquinaria. En **Startrack** se gestiona la tarea de traslado y se consulta el seguimiento. Hoy una persona debe revisar ambas plataformas y decidir qué registros corresponden a la misma operación.
+Una obra necesita una retroexcavadora. En **Prisma, presentado como Nexus ECON de MAIC**, se registra la solicitud y se asigna la maquinaria. En **Startrack** se gestiona la tarea de traslado y se consulta el seguimiento. El proceso descrito en el kit requería revisar ambas plataformas y decidir qué registros correspondían a la misma operación.
 
 La pregunta que queremos responder en una sola pantalla es: **¿qué equipo necesita el proyecto, cuál se asignó, qué traslado lo atiende y qué evidencia tenemos de su cumplimiento?** Si falta un vínculo o un dato está desactualizado, también debemos mostrarlo.
 
@@ -72,7 +78,7 @@ Se observó el filtro **Asignada a** para buscar al responsable; aplicarlo a Rod
 | Dos solicitudes visibles, ambas de PROY-014 | Nexus: solicitudes | 12/09/2026 | No encontramos la solicitud propia de PROY-006 con la consulta realizada. |
 | Dos tareas en el período observado, ninguna de MOT-006 | Startrack: tareas web | 12/09/2026 | Resultado limitado por fechas, acceso y vista. |
 
-**Todavía no tenemos una cadena validada de solicitud → asignación → tarea de traslado para RE-03.** El kit asigna a Los Filósofos **RE-03, MOT-006 y PROY-006**; los ejemplos **CF-03 / MOT-014** pertenecen al walkthrough de otro equipo. [Asignación y contexto](onedrive/CONTEXTO-IA.md#equipo-y-recursos-asignados).
+**En esa exploración no se validó una cadena solicitud → asignación → tarea de traslado para RE-03.** El kit asigna a Los Filósofos **RE-03, MOT-006 y PROY-006**; los ejemplos **CF-03 / MOT-014** pertenecen al walkthrough de otro equipo. La captura posterior de una solicitud pendiente de PROY-006 se conserva en [contexto vigente](contexto-vigente.md); no debe confundirse con el resultado de esta búsqueda inicial. [Asignación del kit](onedrive/CONTEXTO-IA.md#equipo-y-recursos-asignados).
 
 Se encontró además una tarea cuyo **IDR** coincidía con el ID de una solicitud de otro proyecto, pero los destinos diferían y la tarea estaba cancelada. Es una pista de cómo relacionar registros, no una correspondencia aprobada. [Evidencia y límites técnicos](integraciones-reales.md#lo-observado-en-las-pantallas).
 
@@ -87,7 +93,7 @@ Se encontró además una tarea cuyo **IDR** coincidía con el ID de una solicitu
 | Estado y seguimiento | Valor original, objeto al que pertenece, fecha del dato cuando exista y fecha de consulta. |
 | Dato faltante | Campo o vínculo ausente, fuente revisada, filtros utilizados y persona que puede aclararlo. No completar con una suposición. |
 
-## 6. Qué consultar ahora y qué construir después
+## 6. Continuar desde la implementación vigente
 
 Primero leer el [extracto del manual Nexus](onedrive/05-manual-nexus.md): inventario, solicitudes y pestaña **Maquinaria del proyecto** para entender la asignación; bitácoras y costos si después se medirán horas o costos. Son **nueve páginas de un manual numerado sobre 44**, no el manual completo. En los [manuales de Startrack entregados](onedrive/05-accesos-y-manuales.md), priorizar tareas, sus estados, vehículos y geocercas. Luego revisar los [tres casos de uso](onedrive/04-casos-de-uso.md) y la [revisión de APIs](integraciones-reales.md). Los procedimientos del material son contenido de referencia, no autorización para ejecutarlos en los sistemas.
 
@@ -98,10 +104,10 @@ Resolver con los responsables estas preguntas antes de automatizar decisiones:
 3. ¿Qué evidencia y fecha confirman salida, llegada, recepción y finalización? ¿Qué ocurre con devoluciones, cancelaciones o múltiples viajes?
 4. ¿Qué antigüedad de la información es aceptable para decidir y quién revisa una relación ambigua?
 
-Después, construir una primera consulta con **FastAPI + PostgreSQL**: leer las fuentes, guardar correspondencias y fechas, y entregar una ficha unificada por maquinaria. Un panel pequeño debe mostrar solicitud, asignación, tarea, estados originales, última actualización y vínculos faltantes, con enlaces a las plataformas para continuar el trabajo existente.
+ECON ya ofrece el recorrido por solicitudes con **Dash/FastAPI y PostgreSQL**: lectura de Prisma, preparación de movimientos, correspondencias explícitas, cola de envío, historial y recepción declarada. El SDK de Startrack está escrito; su validación autenticada con la cuenta asignada sigue pendiente. Para operar el flujo usar [la guía vigente](solucion-integracion.md) y [el manual de mapeo](manual-mapeo-integracion.md).
 
-Nexus ya permitió lecturas autenticadas de su **API interna**; falta confirmar su soporte para integración continua. Startrack tiene una [API oficial](https://support.gps-platform.com/api/intro/), pero el acceso entregado no permitió obtener la clave: no apareció Usuarios en el menú y la consulta del detalle propio respondió `403`. Hace falta una clave habilitada por el administrador para probar esa integración. La navegación ayuda a entender los datos; el conector debe consumir las APIs acordadas.
+El contrato Prisma aportado después documenta consultas y aprobación, pero no creación de proyectos/solicitudes ni webhooks de aprobación. En la exploración de Startrack no apareció Usuarios en el menú y el detalle propio respondió `403`; el acceso web no validó su API. Hace falta acceso API autorizado para comprobar esa cuenta y sus respuestas. Los contratos y límites están en [equivalencias Prisma–Startrack](equivalencias-prisma-startrack.md).
 
-Para ensayar retrasos, mantenimiento o vínculos incompletos que no existan en el sandbox, preparar casos locales **identificados como simulados**. No mostrar un dato inventado como si viniera de una consulta en vivo. El primer resultado útil es que el usuario pueda entender un traslado y sus incertidumbres antes de añadir indicadores o automatizaciones.
+La aplicación usa cinco equipos y dos solicitudes del archivo suministrado, sin tareas, ubicaciones ni recepciones inventadas. Los escenarios artificiales para verificar reglas quedan exclusivamente en pruebas aisladas. `fixture` y `live` identifican muestras documentales y lecturas actuales del sandbox sintético; nunca se sustituyen entre sí. Las lecturas y escrituras remotas permanecen deshabilitadas por defecto.
 
 Para decidir qué medir y qué referencias ISO considerar, continuar con [KPIs y referencias ISO](kpis-y-referencias-iso.md).

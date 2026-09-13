@@ -1,142 +1,102 @@
 # Interfaz Dash y arquitectura del hub
 
-## Interfaz vigente: sidebar y resumen operativo
+La interfaz y la API se ejecutan en **un servicio Python** en `apps/api`: Dash,
+Plotly y AG Grid Community sobre FastAPI. SQLModel, Alembic y PostgreSQL conservan
+la operación. Las decisiones aceptadas están en
+[ADR 0003](adr/0003-python-dash-hub.md) y
+[ADR 0004](adr/0004-persistent-transfer-workflow.md).
+No hay aplicación React, `apps/web` ni compilación o despliegue web separado.
 
-La navegación lateral contiene **Resumen**, **Solicitudes**, **Operaciones** y
-**Fuentes** como utilidad secundaria. `/` y `/resumen` muestran decisiones por
-solicitud antes del contexto analítico; `/solicitudes` la lista y
-`/solicitudes/{id}` su detalle.
-`/maquinaria/{id}` conserva una ficha de
-evidencia accesible desde el recorrido. Las pantallas generales anteriores ya no
-forman parte de la navegación ni se renderizan como páginas operativas.
+## Navegación y presentación
 
-`dashboard/analytics.py` prepara cada fila relacionando `request.machinery_id`
-con `equipment.id` y la tarea con `request.id`, sin coincidencias por nombre.
-`dashboard/views.py` concentra las tablas en seis columnas: proyecto/solicitud,
-maquinaria, período, estado de solicitud, traslado y recepción. El detalle conserva
-destino, llegada y faltantes. No infiere llegada o recepción desde una
-posición o una tarea completada. El detalle conserva mantenimiento como contexto
-de la unidad asignada, y la procedencia conserva los IDs completos. UUIDs,
-referencias de integración, condición mecánica, historial y preparación del
-traslado usan desplegables; las señales necesarias para decidir permanecen visibles.
-
-El sidebar de escritorio usa una columna de 236 píxeles, marca ECON, estado
-activo y acceso inferior a Fuentes. En móvil se abre con Menú y se cierra por
-botón, fondo, Escape o navegación. El foco se lleva al control de cierre y vuelve
-al menú. Las referencias del navegador no habilitan acciones de proveedor.
-
-`decision_priorities.py` deriva una revisión por solicitud, con hecho y siguiente
-paso, sin ranking artificial. `decision_analytics.py` conserva alcance y períodos.
-`decision_views.py` empieza por esa agenda, sin cards ni conteos destacados. El
-calendario de uso aparece debajo y la distribución por estado es desplegable.
-Ambos gráficos Plotly tienen datos alternativos en tabla.
-No hay indicadores de productividad, puntualidad ni series históricas fabricadas.
-Los asuntos y el calendario respetan los filtros compartidos con la lista.
-
-El selector «Muestras proporcionadas» mantiene `mode=fixture` para el contrato.
-Ahora lee las muestras entregadas con OpenAPI, sin casos inventados. La hora de
-observación y `data_as_of` son nulos; `observed_on` registra la fecha documental.
-Fuente, naturaleza y cobertura diferencian estas muestras de lecturas actuales.
-
-Se mantienen FastAPI/Dash, estado por navegador, validación URL/Pydantic, callbacks
-en threadpool, AG Grid Community, foco de teclado, CSS/Inter/logos ECON y el
-desplazamiento horizontal de las tablas. No se incorporan dependencias nuevas.
-`workflow_forms.py`, `workflow_views.py` y `workflow_actions.py` presentan planes,
-historial y recepción. Un store por navegador conserva la proyección tipada
-`WorkflowOverview`; los datos persistidos se consultan mediante `WorkflowService`
-y se relacionan por ID original, origen y entorno. Las acciones de gestión se
-ejecutan en threadpool y vuelven a validar el contexto local del servidor.
-Ningún flag del navegador habilita proveedores. Las credenciales siguen en el backend.
-
-El frontend distingue muestras del archivo y datos actuales del sandbox; ambos
-son sintéticos. Los movimientos guardados alimentan la tabla y el detalle.
-Una tarea enviada, una visita GPS y una constancia de recepción tienen evidencia
-y fechas independientes. Ver [solución implementada](solucion-integracion.md).
-
-Ver [contexto vigente](contexto-vigente.md), [desarrollo](desarrollo.md) y
-[evaluaciones de Astra](evaluaciones-astra.md). Las capturas y referencias de la
-portada con gráficos que siguen son históricas.
-
-## Registro de la implementación anterior
-
-Migración del **12 de septiembre de 2026**, solicitada para desarrollar en
-Python. [ADR 0003](adr/0003-python-dash-hub.md) reemplaza las decisiones de
-interfaz anteriores.
-
-## Un servicio y un contrato
-
-FastAPI sirve Dash de forma nativa. API y callbacks llaman a
-`app/services/hub.py`: no hay HTTP interno ni dos versiones de las reglas.
-Se conserva `HubResponse`. Los routers de API y salud preceden a la interfaz.
-`create_app` administra el conector Nexus y el motor SQL. La lectura síncrona
-de proveedores se ejecuta en threadpool; presentar una página no consulta APIs.
-
-| Módulo | Responsabilidad |
+| Ruta | Contenido |
 | --- | --- |
-| `dashboard/application.py` | Layout, cuatro callbacks, consulta y resultados |
-| `dashboard/context.py` | URL validada y enlaces codificados |
-| `dashboard/analytics.py` | Agrupaciones y figuras Plotly |
-| `dashboard/views.py` | Seis secciones, ficha, tablas y procedencia |
-| `dashboard/assets/style.css` | Identidad, móvil y foco |
-| `services/hub.py` | Proyección común para Dash y HTTP |
+| `/` y `/resumen` | Asuntos por revisar por solicitud, calendario de uso solicitado y distribución por estado desplegable |
+| `/solicitudes` | Proyecto/solicitud, maquinaria, período, estado, traslado y recepción en seis columnas |
+| `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento |
+| `/maquinaria/{id}` | Ficha de evidencia accesible desde la solicitud |
+| `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción |
+| `/fuentes` | Procedencia, alcance y estado de las consultas |
 
-Se usa `dcc.Location` y `dcc.Link` con callbacks por instancia, permitiendo
-servidores aislados en pruebas sin un registro global de páginas. Dash AG Grid
-Community aporta ordenación, filtros, paginación y enlaces hacia IDs codificados;
-no requiere Enterprise ni ejecuta código de proveedores.
+El sidebar contiene Resumen, Solicitudes y Operaciones, con Fuentes como utilidad
+secundaria. En móvil se abre con Menú y se cierra por botón, fondo, Escape o
+navegación; conserva el foco dentro del menú abierto y lo devuelve al control.
 
-## Estado y errores
+La portada empieza por proyecto, revisión, evidencia y siguiente paso. No usa
+cards de conteos, badges ni prioridad inventada. Los detalles técnicos, IDs
+completos, mantenimiento, historial y preparación usan desplegables. Los estados
+se presentan como texto, conservando las diferencias entre administración,
+mantenimiento, tarea, ubicación y recepción.
 
-La URL conserva `mode`, `q` y `filter`. Se rechazan modos desconocidos,
-parámetros duplicados, filtros inválidos y búsquedas mayores a 100 caracteres.
-Aplicar actualiza la URL; Atrás/Adelante sincroniza los controles.
+La identidad usa Inter local, azul ECON `#144f81`, superficies claras y bordes
+rectos. Se mantienen salto al contenido, foco visible, etiquetas, encabezados,
+teclado de AG Grid y desplazamiento horizontal de tablas. Los gráficos Plotly
+tienen tablas alternativas; ver [definiciones analíticas](analitica-decisiones.md).
 
-Cada navegador guarda un corte en `dcc.Store(storage_type="memory")` con el
-contrato público y clave `[modo, búsqueda]`. No hay estado operativo mutable
-compartido. Cambiar filtro visual o página reutiliza ese corte; Actualizar
-vuelve a leerlo. Esto no es sincronización ni caché global. Una respuesta de
-otro origen/búsqueda se oculta; un error descarta el resultado anterior.
+## Servicios y módulos
 
-Pydantic valida el estado del navegador para presentarlo; ese estado nunca
-autoriza conectores ni escrituras. API y callbacks envían `no-store`. Los
-errores de proveedores se sanitizan; los fallos inesperados de lectura se
-presentan con mensaje genérico y reintento manual.
+FastAPI y Dash llaman al mismo servicio de lectura; no hay HTTP interno.
+`create_app` administra conectores y motor SQL. Las lecturas y acciones bloqueantes
+se ejecutan en threadpool. La función que presenta una página consume las
+proyecciones ya consultadas.
 
-## Analítica e identidad
+| Módulo bajo `apps/api/app` | Responsabilidad |
+| --- | --- |
+| `dashboard/application.py` | Layout, callbacks, consultas, acciones y stores por navegador |
+| `dashboard/context.py` | Parámetros URL validados y enlaces con IDs codificados |
+| `dashboard/analytics.py`, `dashboard/views.py` | Relación solicitud/unidad, tablas, fichas y procedencia |
+| `dashboard/decision_priorities.py` | Un asunto con evidencia y siguiente paso por solicitud |
+| `dashboard/decision_analytics.py`, `dashboard/decision_views.py` | Población filtrada, calendario y distribución por estado |
+| `dashboard/workflow_forms.py`, `dashboard/workflow_views.py`, `dashboard/workflow_actions.py` | Preparación, registro de movimientos y recepción |
+| `services/hub.py` | Proyección de lectura `HubResponse`, compartida con HTTP |
+| `services/workflow.py`, `services/ledger.py` | Reglas operativas, persistencia, cortes, eventos y cola transaccional |
+| `dashboard/assets` | CSS, Inter con licencia OFL y recursos ECON |
 
-Los indicadores enlazan a cohortes de alertas del servicio. Las barras cuentan
-estados administrativos; las columnas cuentan inicios previstos alrededor del
-corte. No representan utilización, puntualidad ni historial. Fechas inválidas
-y fuera del período se cuentan aparte. Se agrupan alertas por equipo o solicitud,
-conservando causas y responsables. La ficha vincula tareas a solicitudes por ID
-y mantiene ubicación, mantenimiento y estados como hechos separados.
-Ver [definiciones analíticas](analitica-decisiones.md).
+Las relaciones usan IDs originales, fuente, entorno y evidencia compatibles.
+Los movimientos que alimentan las decisiones deben corresponder también a la
+asignación y período vigentes; el detalle conserva la evidencia histórica.
+Una visita GPS o tarea completada no genera recepción. Esta requiere responsable,
+instante con zona y referencia de constancia.
 
-Se conserva Inter local, azul ECON `#144f81`, superficies claras, bordes rectos
-y estados en texto. Hay salto al contenido, foco visible, encabezados,
-etiquetas, tablas alternativas para gráficos y navegación móvil. AG Grid
-conserva teclado y desplazamiento horizontal.
+## Estado, errores y habilitaciones
 
-Los logos se trasladaron a los assets Python sin modificación. El logo conserva
-SHA-256 `f4299912e5967fdafa32cfc531fc63c5206e074f80a7c521a6b610a7a95fe212`
-y el icono `eab8457fef6decac21496ad79f2d3ee2f8fd35b9d9e954b95c8ddefa8d12c326`.
-Proceden del [logo ECON](https://econ.com.sv/wp-content/uploads/2024/09/LOGO1_ECON.png)
-y [favicon ECON](https://econ.com.sv/wp-content/uploads/2025/01/cropped-logo_Mesa-de-trabajo-1-1-32x32.png).
-El CSS se registra explícitamente con una versión por contenido para que las rutas
-internas tengan estilos desde el primer arranque, antes del escaneo automático
-de assets del backend FastAPI de Dash. Una prueba cubre ese caso.
-Se conserva la licencia OFL junto a Inter WOFF2. Dash distribuye sus componentes
-de navegador; el equipo no mantiene una segunda aplicación JavaScript.
+La URL conserva `mode`, `q` y `filter`. Se rechazan modos desconocidos, parámetros
+duplicados, filtros inválidos y búsquedas mayores de 100 caracteres. Aplicar
+actualiza la URL; Atrás/Adelante sincroniza los controles.
 
-## Referencias y verificación
+Cada navegador guarda `HubResponse` en `dcc.Store(storage_type="memory")` con
+clave `[modo, búsqueda]`. Cambiar página o filtro visual reutiliza esa lectura;
+Actualizar vuelve a consultarla. Un store separado conserva `WorkflowOverview`
+por modo. Los planes, cortes, eventos y recepciones persisten en PostgreSQL:
+el store del navegador es una proyección, no el registro durable.
 
-Ejecutar `scripts/check.ps1` y el recorrido de `docs/desarrollo.md`.
-Documentación oficial consultada el 12/09/2026:
-[backend FastAPI](https://dash.plotly.com/server-backends),
-[navegación](https://dash.plotly.com/urls),
-[estado](https://dash.plotly.com/sharing-data-between-callbacks),
-[AG Grid](https://dash.plotly.com/dash-ag-grid/getting-started),
-[assets locales](https://dash.plotly.com/external-resources).
+Pydantic valida las proyecciones antes de presentarlas. Una respuesta de otro
+modo o búsqueda se oculta; un fallo de lectura no sirve el resultado anterior
+como si fuera actual. Errores, fuentes no disponibles y cobertura parcial quedan
+visibles. Las respuestas de API y callbacks usan `Cache-Control: no-store`;
+mensajes de error omiten credenciales y cuerpos privados del proveedor.
 
-Capturas verificadas con ejemplos locales: [vista general](screenshots/dash-overview-desktop.png)
-y [móvil](screenshots/dash-overview-mobile.png). No contienen accesos ni datos de proveedores.
+`fixture` usa los cinco equipos y dos solicitudes del archivo suministrado;
+`live` consulta datos actuales del sandbox. Ambos son sintéticos y no hay
+fallback entre modos. La fecha documental no inventa un instante de observación,
+tareas, GPS o recepciones.
+
+No hay login de aplicación. Las lecturas remotas, escrituras remotas y gestión
+local están deshabilitadas por defecto. La gestión exige habilitación del
+servidor, petición local y origen correspondiente; los flags del navegador no
+otorgan permisos. Las credenciales permanecen en el backend. La ejecución
+periódica requiere iniciar el worker por CLI; navegar por el panel no lo inicia.
+
+## Desarrollo y verificación
+
+Los comandos vigentes están en [desarrollo](desarrollo.md),
+[servicio Python](../apps/api/README.md) y
+[guía operativa](solucion-integracion.md). Ejecutar `scripts/check.ps1` para cambios
+de aplicación y `-Container` cuando corresponda validar la imagen. Los cambios de
+interfaz requieren revisar escritorio, móvil, navegación por teclado, estados
+vacío/error y preservación de filtros. Las capturas de versiones anteriores no
+son evidencia visual de la portada actual.
+
+El CSS se registra con versión por contenido para servir estilos en rutas
+internas desde el primer arranque. Dash distribuye los componentes del navegador;
+el equipo mantiene los módulos Python y sus assets locales.

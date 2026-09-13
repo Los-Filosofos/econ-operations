@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="841.68pt" height="550.8pt" viewBox="0 0 841.68 550.8" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 550.8 
+L 841.68 550.8 
+L 841.68 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 202.0032 347.004 
+L 774.3456 347.004 
+L 774.3456 143.208 
+L 202.0032 143.208 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 202.0032 347.004 
+L 202.0032 143.208 
+" clip-path="url(#pf2c80ddf10)" style="fill: none; stroke: #dfe5ea; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_1">
+      <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #526578" x="202.0032" y="368.880953" transform="rotate(-0 202.0032 368.880953)">0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 327.792738 347.004 
+L 327.792738 143.208 
+" clip-path="url(#pf2c80ddf10)" style="fill: none; stroke: #dfe5ea; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_2">
+      <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #526578" x="327.792738" y="368.880953" transform="rotate(-0 327.792738 368.880953)">1</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 453.582277 347.004 
+L 453.582277 143.208 
+" clip-path="url(#pf2c80ddf10)" style="fill: none; stroke: #dfe5ea; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_3">
+      <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #526578" x="453.582277" y="368.880953" transform="rotate(-0 453.582277 368.880953)">2</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_7">
+      <path d="M 579.371815 347.004 
+L 579.371815 143.208 
+" clip-path="url(#pf2c80ddf10)" style="fill: none; stroke: #dfe5ea; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_4">
+      <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #526578" x="579.371815" y="368.880953" transform="rotate(-0 579.371815 368.880953)">3</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_9">
+      <path d="M 705.161354 347.004 
+L 705.161354 143.208 
+" clip-path="url(#pf2c80ddf10)" style="fill: none; stroke: #dfe5ea; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10"/>
+     <g id="text_5">
+      <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #526578" x="705.161354" y="368.880953" transform="rotate(-0 705.161354 368.880953)">4</text>
+     </g>
+    </g>
+    <g id="text_6">
+     <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #182d40" x="488.1744" y="395.881969" transform="rotate(-0 488.1744 395.881969)">Equipos incluidos en la muestra</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_11"/>
+     <g id="text_7">
+      <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #182d40" x="190.0032" y="186.158583" transform="rotate(-0 190.0032 186.158583)">DISPONIBLE</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_12"/>
+     <g id="text_8">
+      <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #182d40" x="190.0032" y="313.93037" transform="rotate(-0 190.0032 313.93037)">OBSOLETA</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 202.0032 152.471455 
+L 705.161354 152.471455 
+L 705.161354 209.968759 
+L 202.0032 209.968759 
+z
+" clip-path="url(#pf2c80ddf10)" style="fill: #145da0"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 202.0032 280.243241 
+L 327.792738 280.243241 
+L 327.792738 337.740545 
+L 202.0032 337.740545 
+z
+" clip-path="url(#pf2c80ddf10)" style="fill: #145da0"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 202.0032 347.004 
+L 774.3456 347.004 
+" style="fill: none; stroke: #dfe5ea; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 20px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #145da0" x="720.256098" y="186.415419" transform="rotate(-0 720.256098 186.415419)">4</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 20px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #145da0" x="342.887483" y="314.187206" transform="rotate(-0 342.887483 314.187206)">1</text>
+   </g>
+  </g>
+  <g id="line2d_13">
+   <path d="M 50.5008 426.3192 
+L 791.1792 426.3192 
+" style="fill: none; stroke: #dfe5ea; stroke-width: 0.8; stroke-linecap: square"/>
+  </g>
+  <g id="text_11">
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="31.9464" transform="rotate(-0 50.5008 31.9464)">ECON · DATOS SINTÉTICOS PROPORCIONADOS</text>
+  </g>
+  <g id="text_12">
+   <text style="font-weight: 700; font-size: 23px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #182d40" x="50.5008" y="68.85" transform="rotate(-0 50.5008 68.85)">Estado administrativo de los equipos</text>
+  </g>
+  <g id="text_13">
+   <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="99.144" transform="rotate(-0 50.5008 99.144)">5 registros incluidos de 15 equipos reportados en el ejemplo de Prisma.</text>
+  </g>
+  <g id="text_14">
+   <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="446.148" transform="rotate(-0 50.5008 446.148)">Cobertura parcial: la distribución describe únicamente los registros incluidos, no toda la flota.</text>
+  </g>
+  <g id="text_15">
+   <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="465.426" transform="rotate(-0 50.5008 465.426)">DISPONIBLE es un estado administrativo; no acredita disponibilidad física ni aptitud técnica.</text>
+  </g>
+  <g id="text_16">
+   <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="484.704" transform="rotate(-0 50.5008 484.704)">OBSOLETA no equivale a avería. Los estados de mantenimiento deben leerse por separado.</text>
+  </g>
+  <g id="text_17">
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="512.7948" transform="rotate(-0 50.5008 512.7948)">Fuente: econ-hackathon-openapi.json · Ejemplos de respuesta de Prisma.</text>
+  </g>
+  <g id="text_18">
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="531.522" transform="rotate(-0 50.5008 531.522)">Fecha documental: 12/09/2026 · Sin corte de observación conjunto · IDs y hashes en manifest.json.</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pf2c80ddf10">
+   <rect x="202.0032" y="143.208" width="572.3424" height="203.796"/>
+  </clipPath>
+ </defs>
+</svg>

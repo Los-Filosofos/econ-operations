@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "generator": "scripts/docs/generar_graficos.py",
+  "generator_sha256": "0291971ae57ebd16d12328bd3c3181fdaca9eaf5e0473f2dcd326e2af1c05300",
+  "reproduce": "uv run --no-project --with matplotlib python scripts/docs/generar_graficos.py",
+  "rendering": {
+    "matplotlib": "3.11.2",
+    "figure_inches": [
+      11.69,
+      7.65
+    ],
+    "png_dpi": 300,
+    "svg_text": true
+  },
+  "provenance": {
+    "sample_file": "apps/api/app/integrations/data/sandbox_samples.json",
+    "sample_sha256": "60898129baf043180452183ac57d893c65a56ab23d07a010e1530161abe878a6",
+    "source_document": "econ-hackathon-openapi.json",
+    "source_sha256": "abfaf59ca6fc2ca74845051404479d5bba49dd2fb086dd319fbc69acfaf98444",
+    "evidence_kind": "provided_sample",
+    "environment": "sandbox",
+    "synthetic": true,
+    "documented_on": "2026-09-12",
+    "observed_at": null,
+    "verified_against_original": true
+  },
+  "scope_notes": [
+    "Only supplied synthetic Prisma examples are counted; no new operational records are generated.",
+    "PROY-014 and CF-03 remain the source identities; they are not mapped to the kit assignment RE-03/MOT-006/PROY-006.",
+    "Equipment administrative state, maintenance, transfer state, location and receipt are separate facts.",
+    "The documentation date is not a shared observation instant, so no lateness metric is derived."
+  ],
+  "charts": [
+    {
+      "id": "periodos-uso",
+      "visual": "horizontal_usage_intervals",
+      "source_reference": "#/paths/~1api~1maquinaria~1requests/get/responses/200/content/application~1json/example",
+      "rows": [
+        {
+          "source_id": "46d2573e-08d3-4855-971d-2fbf9564e135",
+          "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+          "status": "APROBADA",
+          "equipment_source_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+          "asset_number": "CF-03",
+          "start": "2026-09-11",
+          "end": "2026-09-14",
+          "inclusive_days": 4,
+          "source_timestamps": {
+            "approved_at": "2026-09-12T01:00:01.535958+00:00",
+            "created_at": "2026-09-12T00:59:19.326175+00:00",
+            "updated_at": "2026-09-12T01:00:01.535958+00:00"
+          }
+        },
+        {
+          "source_id": "0cbbbd77-4593-4791-9be5-afd46b06c888",
+          "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+          "status": "PENDIENTE",
+          "equipment_source_id": null,
+          "asset_number": null,
+          "start": "2026-09-16",
+          "end": "2026-09-18",
+          "inclusive_days": 3,
+          "source_timestamps": {
+            "approved_at": null,
+            "created_at": "2026-09-12T16:02:06.141170+00:00",
+            "updated_at": "2026-09-12T16:02:06.141170+00:00"
+          }
+        }
+      ],
+      "definition": "End date is drawn through the end of that calendar day; inclusive duration is end minus start plus one.",
+      "files": [
+        {
+          "path": "docs/assets/entregables/grafico-periodos-uso.png",
+          "sha256": "0cee9e1b8dd2d6b45680750f1724cfef39af9fe4e52daf6a4dde061aaf8d74a9",
+          "format": "png",
+          "dpi": 300
+        },
+        {
+          "path": "docs/assets/entregables/grafico-periodos-uso.svg",
+          "sha256": "4e28d99f935f09c115c97469cf660c6bf8e98f7d73c5df9e9be29d68c06639ff",
+          "format": "svg",
+          "dpi": null
+        }
+      ]
+    },
+    {
+      "id": "estados-administrativos",
+      "visual": "horizontal_count_bars_zero_baseline",
+      "source_reference": "#/paths/~1api~1maquinaria~1equipos/get/responses/200/content/application~1json/example",
+      "included_count": 5,
+      "reported_total": 15,
+      "counts": {
+        "DISPONIBLE": 4,
+        "OBSOLETA": 1
+      },
+      "rows": [
+        {
+          "source_id": "2a49b73e-a139-4ef1-866b-d54ef246fb46",
+          "asset_number": "CF-01",
+          "administrative_state": "DISPONIBLE",
+          "project_id": null,
+          "active_failure_id": null,
+          "active_failure_status": null,
+          "active_failure_is_paro": false,
+          "source_timestamps": {
+            "created_at": "2026-09-12T00:03:53.714086+00:00",
+            "updated_at": "2026-09-12T19:24:47.929736+00:00"
+          }
+        },
+        {
+          "source_id": "7328e8f3-7ada-4f6f-88a1-58cc4ddfd862",
+          "asset_number": "CF-02",
+          "administrative_state": "DISPONIBLE",
+          "project_id": null,
+          "active_failure_id": null,
+          "active_failure_status": null,
+          "active_failure_is_paro": false,
+          "source_timestamps": {
+            "created_at": "2026-09-12T00:04:21.506026+00:00",
+            "updated_at": "2026-09-12T19:42:46.040642+00:00"
+          }
+        },
+        {
+          "source_id": "66faacde-728c-4378-8b46-dbfb38254e03",
+          "asset_number": "CF-03",
+          "administrative_state": "OBSOLETA",
+          "project_id": "39723f32-8bb5-4158-a415-2a3d49b0993b",
+          "active_failure_id": null,
+          "active_failure_status": null,
+          "active_failure_is_paro": false,
+          "source_timestamps": {
+            "created_at": "2026-09-12T00:05:09.853492+00:00",
+            "updated_at": "2026-09-12T16:04:16.407630+00:00"
+          }
+        },
+        {
+          "source_id": "96519214-2337-4015-8e7c-ab3fdc112f06",
+          "asset_number": "EXC-01",
+          "administrative_state": "DISPONIBLE",
+          "project_id": null,
+          "active_failure_id": null,
+          "active_failure_status": null,
+          "active_failure_is_paro": false,
+          "source_timestamps": {
+            "created_at": "2026-09-11T23:58:12.491812+00:00",
+            "updated_at": "2026-09-11T23:58:12.491812+00:00"
+          }
+        },
+        {
+          "source_id": "30f98953-96e6-469e-92a5-19cd3431dd5c",
+          "asset_number": "EXC-02",
+          "administrative_state": "DISPONIBLE",
+          "project_id": null,
+          "active_failure_id": null,
+          "active_failure_status": null,
+          "active_failure_is_paro": false,
+          "source_timestamps": {
+            "created_at": "2026-09-11T23:58:48.742930+00:00",
+            "updated_at": "2026-09-11T23:58:59.062360+00:00"
+          }
+        }
+      ],
+      "files": [
+        {
+          "path": "docs/assets/entregables/grafico-estados-administrativos.png",
+          "sha256": "b934820271c422a14cc36d40e659c4d10331207db3cd1a5024e98b09482dc92b",
+          "format": "png",
+          "dpi": 300
+        },
+        {
+          "path": "docs/assets/entregables/grafico-estados-administrativos.svg",
+          "sha256": "2dca5e7092df15542bd12d3aef16b83c7ee6a513df891e1391add0acd37be550",
+          "format": "svg",
+          "dpi": null
+        }
+      ]
+    },
+    {
+      "id": "cobertura",
+      "visual": "coverage_table",
+      "selection_reason": "A table separates available counts from missing operational evidence without implying that missing Startrack data is a measured zero.",
+      "rows": [
+        {
+          "provider": "Prisma",
+          "collection": "equipment",
+          "included_count": 5,
+          "reported_total": 15,
+          "page": 1,
+          "limit": 5,
+          "source_reference": "#/paths/~1api~1maquinaria~1equipos/get/responses/200/content/application~1json/example",
+          "scope": "provided_document_example"
+        },
+        {
+          "provider": "Prisma",
+          "collection": "requests",
+          "included_count": 2,
+          "reported_total": 2,
+          "page": 1,
+          "limit": 5,
+          "source_reference": "#/paths/~1api~1maquinaria~1requests/get/responses/200/content/application~1json/example",
+          "scope": "provided_document_example"
+        },
+        {
+          "provider": "Startrack",
+          "collection": "operational_evidence",
+          "included_count": null,
+          "reported_total": null,
+          "availability": "not_supplied_in_this_dataset",
+          "measurement": null
+        }
+      ],
+      "files": [
+        {
+          "path": "docs/assets/entregables/grafico-cobertura.png",
+          "sha256": "34dfa211af23e927bc0742ffede27a9d0aa48151834b8bda6f54ea41f49b92bd",
+          "format": "png",
+          "dpi": 300
+        },
+        {
+          "path": "docs/assets/entregables/grafico-cobertura.svg",
+          "sha256": "018721594fbea2a7d1eedc644b9c89415e7acc94172e961f5b91ccada86d88a6",
+          "format": "svg",
+          "dpi": null
+        }
+      ]
+    }
+  ]
+}

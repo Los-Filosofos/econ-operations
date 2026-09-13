@@ -90,7 +90,9 @@ La antigua salida estática de Cloudflare fue retirada.
 
 [Contexto vigente](docs/contexto-vigente.md) · [Índice](docs/README.md) · [Arquitectura Dash](docs/frontend-architecture.md) ·
 [Solución y operación](docs/solucion-integracion.md) ·
-[Analítica](docs/analitica-decisiones.md) · [Modelo y matrices](docs/modelo-operativo.md) ·
+[Analítica](docs/analitica-decisiones.md) · [Mapeo y responsabilidades](docs/equivalencias-prisma-startrack.md) ·
+[Gráficos y diagramas](docs/entregables-visuales.md) ·
+[Auditoría y backlog](output/auditoria-2026-09-12/README.md) ·
 [OneDrive](docs/onedrive/README.md) · [Integraciones](docs/integraciones-reales.md).
 
 Los originales con accesos y la copia local del frontend anterior permanecen

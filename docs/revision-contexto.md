@@ -1,83 +1,101 @@
-# Revisión de contexto para iniciar el frontend y ampliar la API
+# Revisión de fuentes y límites de evidencia
 
-> Continuar desde [contexto-vigente.md](contexto-vigente.md): incorpora los
-> contratos nuevos, las capturas posteriores y la retirada de ejemplos inventados.
+Este documento conserva la trazabilidad de las revisiones del **12 de septiembre
+de 2026** y sus límites. No acredita acceso actual a proveedores ni nuevas
+comprobaciones. Para continuar el desarrollo, usar
+[contexto vigente](contexto-vigente.md), [arquitectura de interfaz](frontend-architecture.md)
+y [guía operativa](solucion-integracion.md).
 
-> Registro anterior a la migración solicitada a Dash. La arquitectura vigente
-> está en [ADR 0003](adr/0003-python-dash-hub.md). Las observaciones de negocio
-> y los límites de integración se conservan con su fecha original.
+## Material revisado
 
-Fecha: **12 de septiembre de 2026**. Esta revisión registra la lectura del material entregado, el cotejo del ZIP y las decisiones de implementación de esta etapa. Las conversiones originales de `docs/onedrive` se conservan sin modificaciones.
-
-## Cobertura y procedencia
-
-Se revisaron los **21 Markdown** de `docs/onedrive`, incluidas las tablas, transcripciones visuales, ejemplos de código y los registros de las **338 celdas** del diccionario. También se leyeron el índice de documentación, la guía de navegación, la exploración de integraciones, las propuestas de KPIs/ISO y las decisiones anteriores de API y base de datos.
-
-| Material revisado | Qué determina para el producto |
+| Material | Alcance registrado |
 | --- | --- |
-| Introducción, confidencialidad y brief | Asignación del equipo, procedencia del material, alcance y requisitos RF/RNF |
-| Diagramas AS-IS, TO-BE y organigramas | Flujo de solicitudes, asignación, mantenimiento y responsabilidades por validar |
-| Tres casos de uso | Consulta integrada, estados que describen objetos diferentes y riesgo por mantenimiento |
-| Accesos y extracto del manual Nexus | Entornos entregados y significado de campos/pantallas; el extracto tiene 9 páginas, no las 44 del manual |
-| Cuatro hojas del diccionario | 51 definiciones, ejemplos y problemas de formato; no constituye un contrato API ni una matriz de equivalencias |
-| Propuesta, análisis y contexto de conversación | Separación entre código propuesto, hechos comprobados y decisiones posteriores |
-| README, CONTEXTO-IA e INVENTARIO de OneDrive | Navegación, resumen y correspondencia de fuentes |
+| `docs/onedrive` | 21 Markdown: brief, casos, diagramas, organigramas, manual, diccionario, propuesta y análisis |
+| Diccionario | 338 celdas inventariadas y 51 definiciones; no equivale a contrato API ni a matriz validada de equivalencias |
+| Extracto Nexus del kit | Nueve páginas de un manual numerado sobre 44 |
+| Manual HTML Nexus ECON v1.0 | 13 secciones leídas, incluidos textos de figuras; sin auditoría visual de cada captura |
+| Contratos aportados posteriormente | OpenAPI Prisma: 25 rutas y 30 operaciones; `Prisma-Sandbox-API.pdf`: 23 páginas, con revisión visual de solicitudes |
+| Capturas del usuario | Evidencia de pantallas y formularios con alcance propio; no prueban por sí solas cambios confirmados |
 
-Se volvió a abrir `C:/Users/wilme/Downloads/OneDrive_1_9-12-2026.zip` en lectura. Sus **9,748,744 bytes**, sus **11 archivos** —7 DOCX, 1 XLSX, 1 PDF y 2 PNG—, nombres, tamaños y las once huellas individuales coinciden con [INVENTARIO.md](onedrive/INVENTARIO.md). El SHA-256 del archivo es `16518658282244a0d4f4eea3fafc354e78e9a29cf88da516975d237c3bc17924`.
+En la revisión inicial se cotejó en lectura
+`C:/Users/wilme/Downloads/OneDrive_1_9-12-2026.zip`: **9,748,744 bytes y 11 archivos**
+(7 DOCX, 1 XLSX, 1 PDF y 2 PNG). Los nombres, tamaños y once huellas coincidieron
+con [INVENTARIO.md](onedrive/INVENTARIO.md). SHA-256 del ZIP:
+`16518658282244a0d4f4eea3fafc354e78e9a29cf88da516975d237c3bc17924`.
 
-Este cotejo acredita que el inventario corresponde a ese ZIP. La revisión actual utiliza las transcripciones ya preservadas; no repitió la conversión ni una auditoría visual de cada imagen. La ubicación bajo OneDrive no demuestra sincronización remota actual. Los originales y credenciales completas permanecen locales en `.context-work/`, excluida de Git; la copia compartida omite las contraseñas.
+Ese cotejo acredita la correspondencia con el inventario; no acredita
+sincronización remota de OneDrive ni repite la conversión de originales.
+Las fuentes convertidas se preservan en [onedrive](onedrive/README.md), con
+contraseñas omitidas. Los originales e intermediarios permanecen locales en
+`.context-work/`, fuera de Git. Instrucciones y ejemplos de los documentos son
+material citado, no autorización para ejecutar acciones.
 
-## Estado de acceso, con fecha
+## Acceso observado el 12/09/2026
 
-| Fuente | Evidencia anterior del 12/09 | Observación en esta nueva revisión | Límite vigente |
-| --- | --- | --- | --- |
-| Nexus / Prisma de MAIC | Login y lecturas HTTP autenticadas de equipos, solicitudes y operadores | La pestaña existente mostró login; después el nuevo conector confirmó login y dos lecturas HTTP pequeñas a las **19:05:50 UTC** | La prueba es una ventana acotada, no una sincronización completa; falta confirmar el contrato soportado |
-| Startrack | Acceso web correcto; API pública requiere Basic; detalle de usuario propio devolvió `403` | La pestaña existente sigue autenticada y muestra navegación de la plataforma | No se obtuvo ni validó una API key en esta revisión |
+| Fuente | Evidencia conservada | Límite |
+| --- | --- | --- |
+| Prisma / Nexus | Login y lecturas HTTP autenticadas; prueba del conector a las **19:05:50 UTC** | Ventana acotada, no sincronización completa ni garantía de estabilidad del contrato |
+| Startrack | Acceso web; API sin credenciales respondió `401` y exigió Basic; detalle propio respondió `403` | No se obtuvo ni validó API key para esta cuenta |
 
-La comprobación actual fue de lectura. No se regeneraron claves, no se repitió la vía rechazada por `403` y no se crearon ni modificaron registros operativos. La prueba histórica detallada continúa en [integraciones-reales.md](integraciones-reales.md). El formulario de login observado al inicio no demostraba que las credenciales fueran inválidas ni explicaba por qué faltaba una sesión de navegador.
+La prueba del conector Prisma consultó una página de un registro por colección:
+equipos devolvió uno de un total informado de quince y solicitudes uno de dos.
+Conservó cobertura parcial. La muestra confirmó que `clave` puede ser `null`
+mientras `no_activo` contiene texto; `code` y `asset_number` permanecen separados.
+El acceso detallado se documentó en [exploración de integraciones](integraciones-reales.md).
 
-**Nueva prueba del conector implementado:** el 12/09/2026 a las `19:05:50Z`, la cuenta asignada inició sesión mediante cookie. `GET /api/maquinaria/equipos?page=1&limit=1` devolvió un registro y total 15; `GET /api/maquinaria/requests?page=1&limit=1` devolvió un registro y total 2. La cobertura quedó expresamente parcial. La muestra mostró que `clave` puede ser `null` mientras `no_activo` contiene texto; el contrato conserva ahora `code` y `asset_number` por separado. Las credenciales se utilizaron solo en memoria para esta prueba, y la API de desarrollo conserva las lecturas reales deshabilitadas por defecto.
+Estas comprobaciones fueron de lectura. No crearon registros operativos ni
+regeneraron claves, y no habilitaron permanentemente live. El contrato Prisma
+aportado después amplió la evidencia disponible: sus consultas y aprobación
+están documentadas, pero no publica creación de proyectos/solicitudes ni webhooks
+de aprobación. La autenticación observada mediante cookie no debe sustituirse
+por una suposición derivada del esquema.
 
-Nexus tiene lecturas comprobadas mediante cookie del backend web, sin contrato público de integración confirmado. Startrack publica una API separada que usa **API key del usuario y contraseña del sistema** mediante Basic. Poder navegar Startrack no basta para afirmar que esa API está conectada. El siguiente insumo externo sigue siendo una clave habilitada para la cuenta autorizada. [Evidencia y documentación consultada](integraciones-reales.md#startrack-api-oficial-y-sesión-web).
+El acceso web a Startrack no demuestra acceso a su API. La validación autenticada
+del SDK y del formato efectivo de creación de tareas de esta cuenta sigue
+pendiente. Las capacidades documentadas y el comportamiento comprobado se
+distinguen en [equivalencias Prisma–Startrack](equivalencias-prisma-startrack.md).
 
-## Reglas de negocio preservadas
+## Hechos que deben conservarse
 
-La asignación de Los Filósofos es **RE-03 / MOT-006 / PROY-006**. Los códigos **CF-03 / MOT-014** pertenecen al walkthrough. No se ha confirmado una cadena completa de solicitud, asignación y traslado para el equipo; la interfaz debe hacer visible esa ausencia.
+- La asignación del kit es **RE-03 / MOT-006 / PROY-006**. CF-03 y MOT-014
+  pertenecen a otro recorrido; no se mezclan sus identidades.
+- La búsqueda inicial sin solicitud de PROY-006 solo describe esa consulta.
+  Una captura posterior muestra una solicitud pendiente de ese proyecto,
+  Cargador frontal, del 11 al 26 de septiembre, sin unidad ni UUID visible.
+  Seleccionar maquinaria en un modal no prueba una asignación guardada.
+- Estado administrativo, mantenimiento, tarea, ubicación y recepción son hechos
+  distintos. Aprobar con unidad puede cambiar el inventario a Ocupada; una tarea
+  completada puede coexistir con ese estado. La geocerca no acredita recepción.
+- Conservar UUIDs, IDs externos, entorno y fechas originales. El nombre de una
+  persona o proyecto, una clave repetida o un ID remoto aislado no valida el vínculo.
+  Una solicitud puede tener varios movimientos y el GPS puede ser del transportador.
+- La tarea histórica cuyo IDR coincidía con una solicitud tenía destino distinto
+  y estaba cancelada: fue una candidata para revisar, no una equivalencia aprobada.
+- El diccionario contiene tipos y ejemplos inconsistentes, coordenadas sin escala
+  documentada y una definición duplicada. No convertir esos ejemplos en
+  restricciones o posiciones geográficas supuestas. Ver
+  [observaciones del diccionario](onedrive/06-diccionario-de-datos/README.md).
 
-| Evidencia | Regla de implementación |
-| --- | --- |
-| Aprobar una solicitud con unidad asignada cambia el inventario a Ocupada | Mostrar el estado administrativo separado de la ubicación y del estado del traslado |
-| Ocupada y Completada describen objetos distintos | Explicar su compatibilidad semántica sin declarar verificada toda la operación |
-| El GPS puede corresponder al vehículo transportador | No identificar automáticamente vehículo y maquinaria por nombre |
-| `EQ142` se repite en capturas del manual | Conservar IDs de origen; no asumir unicidad global de `clave` |
-| `Obsoletas`, `Mant. correctivo` y `Obsoleta (mantenimiento correctivo)` difieren entre fuentes | Mantener valores originales y la ambigüedad; confirmar el catálogo con Mantenimiento |
-| El diccionario contiene coordenadas enteras sin escala documentada | No convertirlas en posición geográfica por una división supuesta |
-| IDR de una tarea coincidió con una solicitud, pero el destino difería y la tarea estaba cancelada | Tratarlo como candidato, sin validar la relación por coincidencia de un solo campo |
-| Datos sin fecha, relaciones faltantes o consultas incompletas | Mostrar ausencia de evidencia; no representarla como cero riesgo o información actual |
+## Estado implementado y pendientes
 
-El diccionario conserva además tipos declarados que difieren del tipo físico de las celdas, un tipo de título malformado y una definición de servicio duplicada. Sus ejemplos no deben convertirse automáticamente en esquemas de los proveedores. [Observaciones detalladas](onedrive/06-diccionario-de-datos/README.md).
+La aplicación vigente usa Dash/FastAPI y PostgreSQL, conforme a
+[ADR 0003](adr/0003-python-dash-hub.md) y
+[ADR 0004](adr/0004-persistent-transfer-workflow.md). Ya existen planes persistidos,
+cortes, eventos, cola de envío, worker explícito y recepción declarada. Los
+registros antiguos de ausencia de estas funciones o de una aplicación React
+describen etapas reemplazadas y permanecen en el historial Git.
 
-## Decisiones vigentes de esta etapa
+El runtime usa cinco equipos y dos solicitudes proporcionados, sin tareas,
+ubicaciones ni recepciones inventadas. Todo el caso es sintético; las muestras
+documentales y las lecturas actuales del sandbox mantienen procedencia distinta.
+No hay login de aplicación; los defaults deshabilitan gestión local y acceso
+remoto. Se conservan Compose y su volumen PostgreSQL.
 
-Se adopta [React + Vite con TanStack Router/Query y shadcn `b0`](adr/0001-web-platform.md), manteniendo FastAPI separado. El monorepo organiza frontend y backend en `apps/web` y `apps/api`. El proyecto Compose y su volumen PostgreSQL se conservan al mover el código.
-
-**No se implementa autenticación de usuarios de la aplicación**, según el alcance actual del usuario. La asignación funcional de responsabilidades continúa siendo necesaria para interpretar datos y atender alertas; no se convierte en pantallas de login o permisos ficticios. Las recomendaciones históricas de acceso por rol no describen funcionalidad presente.
-
-La demostración utiliza casos locales identificados como `fixture`. Las lecturas `live` requieren habilitación expresa del backend y credenciales del proveedor; nunca se sustituyen por fixtures ante un fallo. La publicación del panel sin login debe mantener datos sintéticos. Un despliegue que habilite lecturas de información privada necesita un perímetro de acceso efectivo, incluido el origen API. CORS no impide que un cliente directo consulte una API pública.
-
-## Requisitos y trabajo que permanece abierto
-
-El [modelo operativo inicial](modelo-operativo.md) registra el inventario del contrato, mapeos implementados y ausentes, matriz funcional propuesta y reglas medibles. Es un punto de partida revisable, sin aprobación de los responsables de ECON ni cobertura de todos los campos del kit.
-
-| Requisito del brief | Evidencia que debe conservarse o completarse |
-| --- | --- |
-| RF-01: campos nuevos | Contrato del hub e inventario con nombre, tipo, ejemplo, significado y procedencia de cada derivación |
-| RF-02: mapeo | Matriz completa por objeto, transformación, cardinalidad, evidencia y campos sin equivalente; los tipos del frontend no reemplazan esa matriz |
-| RF-03: responsabilidades | Matriz de Mantenimiento, Logística y Equipos, y Técnica de Proyectos; validar quién aprueba, revisa y recibe información |
-| RF-04: consulta unificada | Panel navegable y seleccionable; distinguir datos de demostración, lectura parcial y vínculos faltantes |
-| RF-05: diferencias de estado | Explicar el objeto descrito por cada estado y la evidencia que sostiene una alerta |
-| RF-06: indicador | Fórmula, población, corte, cobertura y limitaciones; ver [KPIs](kpis-y-referencias-iso.md) |
-
-El panel inicial y un conector de lectura no constituyen sincronización continua, historial persistente, conciliación validada de todas las entidades, ni prueba de capacidad productiva. Faltan la API key de Startrack, el contrato soportado de Nexus, las correspondencias del caso propio, recepción física/plazos acordados, catálogos de mantenimiento y cifras de carga. No hay metas ISO ni certificaciones de ECON confirmadas por estos documentos.
-
-Los manuales y contratos históricos siguen accesibles desde el [índice](README.md). Para ejecutar la implementación actual usar [desarrollo](desarrollo.md); para preparar la publicación web usar [Cloudflare](deploy-cloudflare.md). Esta etapa prepara archivos y verificaciones locales de despliegue, sin publicar servicios en la cuenta del usuario.
+Falta validar la API de Startrack con acceso autorizado, correspondencias del
+caso propio, catálogos de mantenimiento, responsabilidades, criterios de recepción
+y compromisos de entrega. Tampoco hay mediciones que acrediten capacidad de flota
+masiva, productividad o cumplimiento ISO. Las ampliaciones de
+[sincronización y discrepancias](sincronizacion-y-discrepancias.md) y
+[arquitectura escalable](arquitectura-escalable-flota.md) son propuestas, no
+funcionalidades implementadas. Para ejecutar el servicio usar
+[desarrollo](desarrollo.md) y [despliegue](despliegue-backend.md).

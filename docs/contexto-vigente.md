@@ -6,6 +6,16 @@ para continuar el trabajo; los registros anteriores conservan valor histórico.
 
 ## Última mejora de interfaz
 
+La entrega documental posterior incorpora [gráficos y diagramas](entregables-visuales.md),
+[trazabilidad RF/RNF](matriz-requisitos-entregables.md) y un resumen de
+[decisiones técnicas](decisiones-tecnicas.md) de dos páginas en PDF. Los gráficos
+usan las muestras suministradas; no agregan registros a la aplicación.
+Las propuestas de [sincronización](sincronizacion-y-discrepancias.md) y
+[escala de flota](arquitectura-escalable-flota.md) permanecen separadas del código
+implementado. Se retiraron las guías reemplazadas de FastAPI inicial, Cloudflare
+estático y modelo operativo de ejemplos inventados; sus versiones siguen en Git.
+Las fuentes originales de OneDrive se conservan sin cambios.
+
 La corrección más reciente del usuario pide retirar las cards de conteos y
 comenzar por las decisiones que necesita Gerencia. La portada muestra ahora
 proyecto, revisión necesaria, evidencia y siguiente paso por solicitud. El
