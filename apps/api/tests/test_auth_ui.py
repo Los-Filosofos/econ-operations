@@ -9,6 +9,7 @@ from plotly.utils import PlotlyJSONEncoder
 
 from app.core.auth import Role
 from app.dashboard.auth_views import DENIED, safe_next
+from app.models.workflow import WorkflowOverview
 from tests.test_auth import add_user, build_app, login, open_client
 
 ROUTE = [("root", "children"), ("view", "data")]
@@ -288,3 +289,36 @@ def test_without_auth_required_the_header_names_the_local_session(tmp_path):
         shell = text(route(client, "/")["root"]["children"])
         assert "Sesión local sin autenticación" in shell
         assert "/administracion" not in text(render(client, "/")["navigation"]["children"])
+        # There is no login to show: /login goes home instead of offering a useless form.
+        assert route(client, "/login")["root"]["children"]["props"]["href"] == "/"
+
+
+def test_reception_form_follows_declare_reception_permission(app):
+    """A sent live movement offers the receipt form to gerencia_proyecto and logistica only."""
+    from tests.test_workflow_ui import action, fields
+
+    with open_ready(app) as client:
+        for role in (Role.logistica, Role.gerencia_proyecto, Role.lectura):
+            add_user(app, f"{role.value}@example.com", role)
+        login(client, "logistica@example.com")
+        assert action(client, "save", fields())["ok"]
+        overview = WorkflowOverview.model_validate(
+            workflow_snapshot(client)["workflow-snapshot"]["data"]["overview"]
+        )
+        sent = overview.movements[0].model_copy(
+            update={"mode": "live", "state": "sent", "job_id": "test-job"}
+        )
+        live = WorkflowOverview(
+            available=True, message="Registro de prueba", management_enabled=True, movements=[sent]
+        )
+        snapshot = {"mode": "live", "overview": live.model_dump(mode="json")}
+        path = f"/operaciones/{sent.id}"
+        expected = {Role.logistica: True, Role.gerencia_proyecto: True, Role.lectura: False}
+        for role, can_declare in expected.items():
+            login(client, f"{role.value}@example.com")
+            page = render(client, path, "?mode=live", None, snapshot)
+            serialized = text(page["content"]["children"])
+            assert ('"field": "receiver"' in serialized) is can_declare, role
+            assert ('"action": "receipt"' in serialized) is can_declare, role
+            if role is Role.lectura:
+                assert DENIED in serialized

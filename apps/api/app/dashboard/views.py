@@ -951,10 +951,10 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
                         else "Sin sincronización registrada",
                     ),
                     (
-                        "Gestión local",
-                        "Habilitada"
+                        "Gestión de movimientos",
+                        "Habilitada para esta sesión"
                         if workflow and workflow.management_enabled
-                        else "Solo consulta: no habilitada en esta conexión",
+                        else "Solo consulta: el rol o el servidor no la habilitan",
                     ),
                     (
                         "Envío a Startrack",

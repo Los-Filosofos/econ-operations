@@ -257,11 +257,12 @@ def operations(workflow: "WorkflowOverview | None", context: QueryContext):
             mb="md",
         )
     )
-    content.append(hint(workflow.message))
-    if workflow.available and allowed and not workflow.management_enabled:
-        content.append(hint(READ_ONLY))
     if not workflow.available:
+        # The empty state already carries the message; do not repeat it as a hint.
         return [*content, empty("Registro no disponible", workflow.message)]
+    content.append(hint(workflow.message))
+    if allowed and not workflow.management_enabled:
+        content.append(hint(READ_ONLY))
     if workflow.coverage and not workflow.coverage.is_complete:
         content.append(hint(workflow.coverage.note, role="status"))
     movements = workflow.movements

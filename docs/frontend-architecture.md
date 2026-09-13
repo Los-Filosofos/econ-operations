@@ -57,7 +57,9 @@ Grid y el template Plotly `econ`:
 Tipografía Inter (OFL) servida localmente; radios pequeños, superficies claras
 y `focusRing: auto`. Los gráficos Plotly usan `figure()` del tema (sin zoom,
 ejes fijos, leyenda por texto) y siempre tienen una tabla alternativa; ver
-[definiciones analíticas](analitica-decisiones.md).
+[definiciones analíticas](analitica-decisiones.md). Capturas de referencia
+verificadas a 1280 y 390 px en `docs/screenshots/`
+(`2026-09-13-<página>-<ancho>.png`).
 
 Los iconos son Tabler (`tabler:*`) cargados por el navegador desde
 `api.iconify.design`. Acompañan texto en navegación y acciones y nunca son el

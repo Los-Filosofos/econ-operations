@@ -206,7 +206,6 @@ def header_user(user: User | None, auth_required: bool):
         shadow="md",
         width=240,
         position="bottom-end",
-        keepMounted=True,
     )
 
 

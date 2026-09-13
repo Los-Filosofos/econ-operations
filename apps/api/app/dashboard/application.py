@@ -283,7 +283,10 @@ def create_dashboard(server: FastAPI) -> Dash:
         path = (path or "/").rstrip("/") or "/"
         user = current_user()
         if path == "/login":
-            return (redirect("/"), "redirect") if user else (login_page(search), "login")
+            # Without AUTH_REQUIRED there is nothing to sign in to; the header says so.
+            if user or not settings.auth_required:
+                return redirect("/"), "redirect"
+            return login_page(search), "login"
         if user is None and settings.auth_required:
             return redirect(login_target(path, search)), "redirect"
         if current == "app":
