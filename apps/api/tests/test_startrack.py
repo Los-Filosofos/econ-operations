@@ -669,3 +669,29 @@ def test_unpaged_report_record_overflow_is_visible():
             )
     finally:
         client.close()
+
+
+def test_job_object_keeps_documented_duration_and_closing_evidence():
+    """Fields from the official Job Data Object are retained as strings, never interpreted."""
+    from app.integrations.startrack import StartrackJob
+
+    job = StartrackJob.model_validate(
+        {
+            "id": "job-1",
+            "objective": "Traslado",
+            "start_date": "2026-09-13",
+            "duration": "5400",
+            "poi_name": "Proyecto Zeta",
+            "completed_lat": "13.69",
+            "completed_lon": "-89.19",
+            "assigned_user_remote_ids": ["MOT-006"],
+            "job_type_remote_id": "TRASLADO",
+            "phone_number": "not-retained",
+        }
+    )
+    assert job.duration == "5400"
+    assert job.poi_name == "Proyecto Zeta"
+    assert (job.completed_lat, job.completed_lon) == ("13.69", "-89.19")
+    assert job.assigned_user_remote_ids == ["MOT-006"]
+    assert job.job_type_remote_id == "TRASLADO"
+    assert "phone_number" not in job.model_dump()
