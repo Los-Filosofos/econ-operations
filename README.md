@@ -66,8 +66,9 @@ magnitudes y desviaciones escalas secuencial y divergente
 (`app/dashboard/assets/icons`), sin peticiones a terceros. La cookie de sesión es
 `Secure` por defecto: `SESSION_HTTPS_ONLY=false` solo para desarrollo local por HTTP.
 La portada usa un lienzo HTML accesible con Roboto Mono y siluetas SVG locales,
-lugares de 56 px, maquinaria de 32 px, aristas rectas, autoencuadre,
-desplazamiento y detalle contextual de nodos y conexiones; no añade una
+lugares de 80 px, maquinaria de 48 px, aristas rectas, autoencuadre,
+desplazamiento y detalle contextual de nodos y conexiones. Al seleccionar una
+entidad, el lienzo ocupa 68% y el detalle 32% en escritorio; no añade una
 dependencia de grafos.
 
 El modo `fixture` contiene cinco máquinas y dos solicitudes extraídas del

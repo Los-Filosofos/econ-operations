@@ -43,9 +43,11 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
   las unidades vinculadas por IDs exactos, y los traslados activos permanecen
   visibles. Una unidad sin vínculo no se atribuye a una base ni se considera
   disponible por inferencia. Las aristas nacen sólo de IDs y correspondencias verificadas.
-  La ficha seleccionada expresa estado, proyecto, período, origen, recorrido y
-  faltantes con iconos y códigos operativos; conserva UUID y claves técnicas en
-  el modelo sin mostrarlos como contenido ordinario.
+  En escritorio, la selección divide el viewport en 68% de lienzo y 32% de
+  detalle; proyecto y maquinaria miden 80 y 48 px. La ficha expresa estado,
+  proyecto, período, origen, recorrido y faltantes acreditados con iconos y
+  códigos operativos; conserva UUID y claves técnicas en el modelo sin
+  mostrarlos como contenido ordinario.
   El resto de rutas conserva su navegación, tablas y detalles operativos
   ([arquitectura](frontend-architecture.md)).
 - Interfaz con dash-mantine-components, iconos Tabler locales y AG Grid

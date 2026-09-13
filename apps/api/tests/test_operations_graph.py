@@ -7,10 +7,13 @@ from pathlib import Path
 from plotly.utils import PlotlyJSONEncoder
 
 from app.dashboard.operations_graph import (
+    MACHINE_RADIUS,
+    PLACE_RADIUS,
     _machine_detail,
     build_operations_graph,
     operations_graph_view,
 )
+from app.dashboard.theme import GRAPH_THEME
 from app.integrations.fixtures import fixture_records
 from app.models.hub import (
     AlertRecord,
@@ -85,6 +88,9 @@ def test_fixture_graph_has_one_project_five_unique_machines_and_one_exact_assign
     ]
     assert edge.source.endswith("66faacde-728c-4378-8b46-dbfb38254e03")
     assert edge.target.endswith("39723f32-8bb5-4158-a415-2a3d49b0993b")
+    project = places[0]
+    machine = next(node for node in machines if node.key == edge.source)
+    assert project.x < machine.x
 
 
 def test_unassigned_machines_are_not_grouped_or_connected_to_invented_places():
@@ -224,8 +230,19 @@ def test_full_page_graph_has_local_assets_straight_edges_and_no_tables_or_metric
         assert svg.startswith("<svg") and "<path" in svg
     css = (assets / "style.css").read_text(encoding="utf-8")
     script = (assets / "operations-graph.js").read_text(encoding="utf-8")
-    assert "width: 56px; height: 56px" in css
-    assert "width: 32px" in css and "height: 32px" in css
+    assert PLACE_RADIUS == 40 and MACHINE_RADIUS == 24
+    assert "width: 80px; height: 80px" in css
+    assert "width: 48px" in css and "height: 48px" in css
+    assert "right: 32%" in css and "width: 32%" in css
+    assert GRAPH_THEME == {
+        "background": "#111513",
+        "panel": "#161B18",
+        "border": "#39413B",
+        "text_primary": "#F1F0EA",
+        "text_secondary": "#A8AEA7",
+        "line": "#8E948C",
+        "warning": "#C8942C",
+    }
     assert 'font-family: "Roboto Mono"' in css
     assert "RobotoMono-wght.ttf" in css
     assert (assets / "RobotoMono-wght.ttf").stat().st_size > 100_000
@@ -235,12 +252,14 @@ def test_full_page_graph_has_local_assets_straight_edges_and_no_tables_or_metric
     assert "prefers-reduced-motion" in css and "graph-edge--active" in css
     assert "pointerdown" in script and "wheel" in script and "keydown" in script
     assert "selectEdge" in script and "data-edge-selection" in script
+    assert "focusDetail" in script and 'querySelector("[data-graph-close]")?.focus()' in script
 
 
 def test_place_selection_reveals_only_related_machines_and_connection_context():
     payload = serialized(operations_graph_view(hub_fixture()))
     assert "graph-node--collection" not in payload
     assert "graph-edge-label" in payload
+    assert "Asignación registrada" in payload
     assert "Evidencia de la relación" in payload
     assert "Relación documental · la geometría no mide tiempo ni distancia" in payload
     assets = Path(__file__).parents[1] / "app" / "dashboard" / "assets"
@@ -250,6 +269,38 @@ def test_place_selection_reveals_only_related_machines_and_connection_context():
     assert "data-expanded-place" in script and "data-always-visible" in payload
     assert ".graph-node--machine {" in css and "visibility: hidden" in css
     assert ".graph-node--machine.is-expanded" in css
+
+
+def test_project_detail_matches_normalized_fixture_evidence_without_invented_fields():
+    payload = serialized(operations_graph_view(hub_fixture()))
+    assert "Proyecto / obra" in payload and "Flujo operativo" in payload
+    assert "Maquinaria relacionada" in payload and "Por identificadores exactos" in payload
+    assert "Fecha documental" in payload
+    assert "12/09/2026; hora no disponible" in payload
+    assert "Asignación verificada" in payload
+    assert "Solicitud pendiente" in payload and "Solicitud aprobada" in payload
+    assert "Obsoleta" in payload and "graph-detail-signal--attention" in payload
+    assert "Relaciones verificadas por identidad técnica" in payload
+    assert "Base central" not in payload and "Tiempo estimado" not in payload
+
+
+def test_machine_detail_omits_unobserved_location_transfer_and_receipt():
+    hub = hub_fixture()
+    graph = build_operations_graph(hub)
+    request = next(request for request in hub.requests if request.machinery_id)
+    machine = next(node for node in graph.nodes if node.entity_id == request.machinery_id)
+    payload = serialized(
+        _machine_detail(
+            machine,
+            hub,
+            WorkflowOverview(available=True, complete=True, message="Registro consultado"),
+            graph,
+        )
+    )
+    assert "Ubicación" not in payload
+    assert "Traslado" not in payload
+    assert "Recepción" not in payload
+    assert "GPS" not in payload
 
 
 def test_machine_detail_counts_distinct_projects_from_exact_visible_evidence():

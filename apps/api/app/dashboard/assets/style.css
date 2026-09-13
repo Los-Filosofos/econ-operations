@@ -49,11 +49,11 @@ main:focus { outline: none; }
 }
 
 /* Full-viewport operations graph. The regular shell remains intact for all other routes. */
-.application-shell.graph-mode { background: #0a0d0c; }
+.application-shell.graph-mode { background: var(--graph-shell-bg, #111513); }
 .application-shell.graph-mode .mantine-AppShell-root {
   --app-shell-header-height: 0px !important;
   --app-shell-navbar-width: 0px !important;
-  background: #0a0d0c;
+  background: var(--graph-shell-bg, #111513);
 }
 .application-shell.graph-mode .mantine-AppShell-header,
 .application-shell.graph-mode .mantine-AppShell-navbar,
@@ -73,13 +73,14 @@ main:focus { outline: none; }
 .application-shell.graph-mode #content { width: 100%; min-height: 100dvh; }
 
 .operations-graph {
-  --graph-bg: #0a0d0c;
-  --graph-surface: rgba(20, 24, 22, .96);
-  --graph-line: #59635e;
-  --graph-text: #e8e6df;
-  --graph-muted: #9aa09b;
+  --graph-bg: #111513;
+  --graph-surface: #161b18;
+  --graph-border: #39413b;
+  --graph-line: #8e948c;
+  --graph-text: #f1f0ea;
+  --graph-muted: #a8aea7;
   --graph-blue: #78aec1;
-  --graph-amber: #cfa65e;
+  --graph-amber: #c8942c;
   --graph-red: #d66b67;
   position: relative;
   width: 100%;
@@ -136,8 +137,8 @@ main:focus { outline: none; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   text-overflow: ellipsis;
-  background: rgba(10, 13, 12, .82);
-  border: 1px solid rgba(214, 222, 216, .11);
+  background: color-mix(in srgb, var(--graph-bg) 88%, transparent);
+  border: 1px solid var(--graph-border);
   border-radius: 2px;
   backdrop-filter: blur(10px);
 }
@@ -156,8 +157,8 @@ main:focus { outline: none; }
   z-index: 9;
   display: flex;
   overflow: hidden;
-  background: rgba(16, 20, 18, .94);
-  border: 1px solid rgba(222, 226, 219, .14);
+  background: var(--graph-surface);
+  border: 1px solid var(--graph-border);
   border-radius: 2px;
   box-shadow: none;
 }
@@ -192,7 +193,7 @@ main:focus { outline: none; }
   z-index: 1;
   height: 1px;
   pointer-events: none;
-  background: rgba(150, 162, 155, .42);
+  background: color-mix(in srgb, var(--graph-line) 58%, transparent);
   transform-origin: 0 50%;
   transition: opacity 160ms ease, filter 160ms ease;
   visibility: hidden;
@@ -243,13 +244,13 @@ main:focus { outline: none; }
   z-index: 2;
   min-width: max-content;
   padding: 5px 8px;
-  color: #b9c1bc;
+  color: var(--graph-muted);
   font: 300 8px/1 "Roboto Mono", ui-monospace, monospace;
   letter-spacing: .12em;
   word-spacing: .16em;
   pointer-events: auto;
-  background: rgba(10, 13, 12, .94);
-  border: 1px solid rgba(208, 216, 210, .13);
+  background: var(--graph-bg);
+  border: 1px solid var(--graph-border);
   border-radius: 2px;
   cursor: pointer;
   transform: translate(-50%, -50%) rotate(var(--edge-counter-angle));
@@ -292,18 +293,18 @@ main:focus { outline: none; }
   top: 50%;
   left: 50%;
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   place-items: center;
   overflow: hidden;
-  background: #151918;
-  border: 1px solid #59645e;
+  background: var(--graph-surface);
+  border: 1px solid var(--graph-line);
   border-radius: 50%;
   box-shadow: none;
   transform: translate(-50%, -50%);
   transition: border-color 160ms ease;
 }
-.graph-node--place .graph-node-disc { width: 56px; height: 56px; }
+.graph-node--place .graph-node-disc { width: 80px; height: 80px; }
 .graph-node-disc img {
   display: block;
   width: 86%;
@@ -321,7 +322,7 @@ main:focus { outline: none; }
 }
 .graph-node-label {
   position: absolute;
-  top: 23px;
+  top: 31px;
   left: 50%;
   width: 190px;
   color: var(--graph-text);
@@ -336,7 +337,7 @@ main:focus { outline: none; }
   transform: translateX(-50%) scaleY(1.07);
   transform-origin: top center;
 }
-.graph-node-label--place { top: 35px; }
+.graph-node-label--place { top: 49px; }
 .graph-node-label-main,
 .graph-node-label-meta { display: block; }
 .graph-node-label-main { color: #efeee8; }
@@ -348,8 +349,8 @@ main:focus { outline: none; }
 }
 .graph-node-incident {
   position: absolute;
-  top: -21px;
-  right: -22px;
+  top: -29px;
+  right: -30px;
   display: grid;
   width: 16px;
   height: 16px;
@@ -363,7 +364,7 @@ main:focus { outline: none; }
 }
 .graph-tooltip {
   position: absolute;
-  bottom: 29px;
+  bottom: 41px;
   left: 50%;
   z-index: 12;
   width: max-content;
@@ -379,8 +380,8 @@ main:focus { outline: none; }
   white-space: normal;
   pointer-events: none;
   opacity: 0;
-  background: rgba(14, 18, 16, .98);
-  border: 1px solid rgba(255, 255, 255, .16);
+  background: var(--graph-surface);
+  border: 1px solid var(--graph-border);
   border-radius: 4px;
   box-shadow: none;
   transform: translate(-50%, -6px);
@@ -424,7 +425,7 @@ main:focus { outline: none; }
   font-family: "Roboto Mono", ui-monospace, monospace;
   font-weight: 300;
   background: var(--graph-surface);
-  border: 1px solid rgba(255, 255, 255, .14);
+  border: 1px solid var(--graph-border);
   border-radius: 2px;
   box-shadow: none;
   backdrop-filter: blur(16px);
@@ -486,6 +487,10 @@ main:focus { outline: none; }
   border: 1px solid #555e59;
 }
 .graph-detail-status--maintenance { color: #e2bd78; border-color: rgba(207, 166, 94, .7); }
+.graph-detail-status--attention {
+  color: var(--graph-amber);
+  border-color: var(--graph-amber);
+}
 .graph-detail-status--issue { color: #ed9691; border-color: rgba(214, 107, 103, .75); }
 .graph-detail-status--transfer { color: #a7cfdd; border-color: rgba(120, 174, 193, .75); }
 .graph-detail-visual-grid {
@@ -610,6 +615,8 @@ main:focus { outline: none; }
 .graph-detail-signal--active strong { color: #aecabd; }
 .graph-detail-signal--maintenance .ui-icon,
 .graph-detail-signal--maintenance strong { color: #e2bd78; }
+.graph-detail-signal--attention .ui-icon,
+.graph-detail-signal--attention strong { color: var(--graph-amber); }
 .graph-detail-signal--issue .ui-icon,
 .graph-detail-signal--issue strong { color: #ed9691; }
 .graph-detail-signal--transfer .ui-icon,
@@ -645,6 +652,27 @@ main:focus { outline: none; }
 }
 .graph-empty h1 { margin: 0 0 8px; font-size: 22px; }
 .graph-empty p { margin: 0; color: var(--graph-muted); font-size: 13px; }
+
+@media (min-width: 48em) {
+  .operations-graph[data-selection] .operations-graph-viewport,
+  .operations-graph[data-edge-selection] .operations-graph-viewport { right: 32%; }
+  .operations-graph[data-selection] .graph-meta,
+  .operations-graph[data-edge-selection] .graph-meta {
+    right: calc(32% + 20px);
+    max-width: none;
+  }
+  .operations-graph[data-selection] .graph-controls,
+  .operations-graph[data-edge-selection] .graph-controls { right: calc(32% + 20px); }
+  .graph-detail {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 32%;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 0;
+  }
+}
 
 @media (max-width: 47.99em) {
   .graph-meta { right: 14px; left: 14px; max-width: none; }

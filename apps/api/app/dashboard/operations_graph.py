@@ -12,17 +12,27 @@ from unicodedata import normalize
 from dash import html
 
 from app.dashboard.components import icon
+from app.dashboard.theme import GRAPH_THEME
 from app.models.hub import EquipmentRecord, HubResponse, Provenance, RequestRecord, TransferRecord
 from app.models.operations import MovementRecord
 from app.models.workflow import WorkflowOverview
 
-PLACE_RADIUS = 28
-MACHINE_RADIUS = 16
+PLACE_RADIUS = 40
+MACHINE_RADIUS = 24
 MODE_LABELS = {"fixture": "Muestras proporcionadas", "live": "Sandbox actual · sintético"}
 READABLE_SOURCE_STATES = {"fixture", "connected", "partial"}
 ACTIVE_TRANSFER_ROLES = {"pending", "active", "in_progress", "in progress", "en curso"}
 ACTIVE_TRANSFER_STATES = {"PENDIENTE", "PENDING", "ACTIVE", "IN_PROGRESS", "EN CURSO"}
 MONTHS = ("ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC")
+GRAPH_STYLE = {
+    "--graph-bg": GRAPH_THEME["background"],
+    "--graph-surface": GRAPH_THEME["panel"],
+    "--graph-border": GRAPH_THEME["border"],
+    "--graph-text": GRAPH_THEME["text_primary"],
+    "--graph-muted": GRAPH_THEME["text_secondary"],
+    "--graph-line": GRAPH_THEME["line"],
+    "--graph-amber": GRAPH_THEME["warning"],
+}
 
 
 @dataclass
@@ -138,6 +148,18 @@ def _provider(provenance: Provenance | None) -> tuple[str, str | None]:
         "test_case": "Prueba interna",
     }[provenance.evidence_kind]
     return name, f"{nature} · {provenance.environment}"
+
+
+def _observation(provenance: Provenance | None, age: str) -> tuple[str, str]:
+    if provenance and provenance.observed_on:
+        return "Fecha documental", f"{provenance.observed_on:%d/%m/%Y}; hora no disponible"
+    if provenance and provenance.observed_at:
+        return "Última observación", age
+    return "Observación", "Sin fecha disponible"
+
+
+def _status_tone(value: str | None) -> str:
+    return "attention" if (value or "").strip().upper() in {"OBSOLETA", "OBSOLETE"} else "neutral"
 
 
 def _project_label(project_id: str, graph: OperationsGraph) -> str:
@@ -374,7 +396,7 @@ def build_operations_graph(hub: HubResponse) -> OperationsGraph:
 
     for project in project_nodes:
         group = sorted(grouped[project.key], key=lambda value: value.entity_id)
-        offsets = ((145, 0), (112, -66), (112, 66), (205, -66), (205, 66), (230, 0))
+        offsets = ((240, 0), (205, -75), (205, 75), (315, -75), (315, 75), (345, 0))
         for index, node in enumerate(group):
             lap, position = divmod(index, len(offsets))
             dx, dy = offsets[position]
@@ -446,9 +468,9 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
         if getattr(record, "project_name", None)
     }
     equipment_by_id = {candidate.entity_id: candidate for candidate in connected}
-    provider, provider_context = _provider(
-        node.project_records[0].provenance if node.project_records else None
-    )
+    provenance = node.project_records[0].provenance if node.project_records else None
+    provider, provider_context = _provider(provenance)
+    observation_label, observation_value = _observation(provenance, node.age)
     return [
         html.Div(
             [
@@ -477,15 +499,23 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
                 ),
                 _visual_fact("clipboard-list", "Solicitudes", len(requests), "En esta lectura"),
                 _visual_fact("database", "Origen", provider, provider_context),
-                _visual_fact("eye-check", "Observación", node.age),
+                _visual_fact("eye-check", observation_label, observation_value),
             ],
             className="graph-detail-visual-grid",
         ),
         html.Section(
             [
-                html.H3("Asignaciones verificadas"),
+                html.H3("Asignación verificada"),
                 html.Ul(
-                    [_signal("bulldozer", item.label, item.status) for item in connected],
+                    [
+                        _signal(
+                            "bulldozer",
+                            item.label,
+                            item.status.capitalize(),
+                            tone=_status_tone(item.status),
+                        )
+                        for item in connected
+                    ],
                     className="graph-detail-signals",
                 )
                 if connected
@@ -719,7 +749,9 @@ def _machine_detail(
         if project_labels
         else "Sin proyecto confirmado"
     )
-    provider, provider_context = _provider(item.provenance if item else None)
+    provenance = item.provenance if item else None
+    provider, provider_context = _provider(provenance)
+    observation_label, observation_value = _observation(provenance, node.age)
     active_transfer = any(_active_transfer(transfer) for transfer in transfers)
     status_tone = (
         "issue"
@@ -728,25 +760,14 @@ def _machine_detail(
         if item and (item.maintenance_status or item.maintenance_is_stopped is True)
         else "transfer"
         if active_transfer
-        else "neutral"
+        else _status_tone(node.status)
     )
 
     missing = []
     if item is None:
         missing.append(_signal("alert-circle", "Ficha de maquinaria", "Fuera de la lectura"))
-    elif item.location is None:
-        missing.append(_signal("eye-check", "Ubicación", "Sin confirmar"))
     if not project_ids:
         missing.append(_signal("layout-dashboard", "Proyecto", "Sin relación confirmada"))
-    if not transfers:
-        missing.extend(
-            [
-                _signal("truck", "Traslado", "Sin tarea vinculada"),
-                _signal("clipboard-check", "Recepción", "Sin traslado evaluable"),
-            ]
-        )
-    elif all(transfer.receipt is None for transfer in transfers):
-        missing.append(_signal("clipboard-check", "Recepción", "Sin constancia vinculada"))
     if workflow is None or not workflow.available:
         missing.append(_signal("database", "Historial ECON", "No disponible"))
     elif not workflow.complete:
@@ -771,7 +792,12 @@ def _machine_detail(
                     ]
                 ),
                 html.Span(
-                    [icon("alert-triangle", 14) if status_tone == "issue" else None, node.status],
+                    [
+                        icon("alert-triangle", 14)
+                        if status_tone in {"issue", "attention"}
+                        else None,
+                        node.status.capitalize(),
+                    ],
                     className=f"graph-detail-status graph-detail-status--{status_tone}",
                 ),
             ],
@@ -797,7 +823,7 @@ def _machine_detail(
                     _period(item.assignment_starts_on, item.assignment_ends_on) if item else None,
                 ),
                 _visual_fact("database", "Origen", provider, provider_context),
-                _visual_fact("eye-check", "Observación", node.age),
+                _visual_fact("eye-check", observation_label, observation_value),
                 *(
                     [_visual_fact("eye-check", "Ubicación", item.location.label)]
                     if item and item.location
@@ -1113,11 +1139,9 @@ def _edge_component(edge: GraphEdge, nodes: dict[str, GraphNode]):
         else f"Asignación verificada entre {source.label} y {target.label}"
     )
     count = len(edge.transfer_ids) if edge.kind == "transfer" else len(edge.request_ids)
-    label = (
-        f"TRASLADO · {count or 1} EVIDENCIA"
-        if edge.kind == "transfer"
-        else f"ASIGNACIÓN · {count or 1} SOLICITUD"
-    )
+    label = "Asignación registrada"
+    if edge.kind == "transfer":
+        label = f"TRASLADO · {count or 1} EVIDENCIA"
     return html.Div(
         [
             html.Span(className="graph-edge-pulse", **{"aria-hidden": "true"})
@@ -1345,6 +1369,7 @@ def graph_status(hub: HubResponse | None, title: str, message: str):
             _controls(),
         ],
         className="operations-graph operations-graph--status",
+        style=GRAPH_STYLE,
         **{"data-layout-key": f"status:{hub.mode if hub else 'unknown'}"},
     )
 
@@ -1413,5 +1438,6 @@ def operations_graph_view(hub: HubResponse, workflow: WorkflowOverview | None = 
             *[_edge_detail(edge, nodes, hub) for edge in graph.edges],
         ],
         className="operations-graph",
+        style=GRAPH_STYLE,
         **{"data-layout-key": layout_key},
     )
