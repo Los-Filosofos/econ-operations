@@ -12,9 +12,9 @@ from test_decision_priorities import receipt
 
 from app.core.config import Settings
 from app.dashboard.context import QueryContext
-from app.dashboard.decision_analytics import has_confirmed_task, request_counts, states_figure
+from app.dashboard.decision_analytics import has_confirmed_task, states_figure
 from app.dashboard.decision_priorities import decision_items
-from app.dashboard.decision_views import overview
+from app.dashboard.views import overview
 from app.main import create_app
 from app.models import metadata
 from app.models.operations import Movement
@@ -58,8 +58,6 @@ def test_partial_registry_does_not_count_absence_or_recommend_another_plan(hub):
     machine = next(item for item in hub.equipment if item.id == request.machinery_id)
     machine.machinery_status = "OCUPADA"
     partial = WorkflowOverview(available=True, message="Partial registry")
-    counts = request_counts(hub, QueryContext(), partial)
-    assert counts.total == 2 and counts.without_confirmed_task is None
     decision = next(
         item for item in decision_items(hub, QueryContext(), partial) if item.request == request
     )
@@ -74,7 +72,6 @@ def test_partial_registry_preserves_known_task_and_does_not_close_unseen_work(hu
     movement = confirmed_movement(hub).model_copy(update={"receipt": receipt()})
     partial = registry(movement).model_copy(update={"complete": False})
     assert has_confirmed_task(hub, request, partial)
-    assert request_counts(hub, QueryContext(), partial).without_confirmed_task is None
     decision = next(
         item for item in decision_items(hub, QueryContext(), partial) if item.request == request
     )

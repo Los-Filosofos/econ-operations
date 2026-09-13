@@ -10,14 +10,13 @@ from app.dashboard.context import QueryContext
 from app.dashboard.decision_analytics import (
     DAY_MS,
     has_confirmed_task,
-    request_counts,
     request_states,
     requests_in_scope,
     states_figure,
     usage_figure,
     usage_timeline,
 )
-from app.dashboard.decision_views import overview
+from app.dashboard.views import overview
 from app.integrations.fixtures import fixture_records
 from app.models.hub import AlertRecord, HubResponse, HubScope, HubSummary, SourceStatus
 from app.models.operations import MovementRecord
@@ -90,8 +89,9 @@ def confirmed_movement(hub):
 
 
 def test_provided_requests_support_only_absolute_counts_and_source_periods(hub):
-    counts = request_counts(hub, QueryContext(), registry())
-    assert (counts.total, counts.unassigned, counts.without_confirmed_task) == (2, 1, 2)
+    selected = requests_in_scope(hub, QueryContext(), registry())
+    assert len(selected) == 2 and sum(not request.machinery_id for request in selected) == 1
+    assert len(requests_in_scope(hub, QueryContext(filter="unlinked"), registry())) == 2
     assert request_states(hub.requests) == [("APROBADA", 1), ("PENDIENTE", 1)]
     timeline = usage_timeline(hub.requests)
     assert [(item.starts_on, item.ends_on) for item in timeline.periods] == [
@@ -100,7 +100,7 @@ def test_provided_requests_support_only_absolute_counts_and_source_periods(hub):
     ]
     assert not timeline.excluded
     assert hub.data_as_of is None
-    assert counts.total != hub.scope.equipment_total
+    assert len(selected) != hub.scope.equipment_total
 
 
 @pytest.mark.parametrize("field", ["starts_on", "ends_on", "approved_at"])
@@ -141,19 +141,16 @@ def test_scope_counts_follow_returned_search_population_and_display_filter(hub):
     context = QueryContext(filter="unassigned")
     unassigned = requests_in_scope(hub, context, registry())
     assert len(unassigned) == 1 and unassigned[0].machinery_id is None
-    assert request_counts(hub, context, registry()).total == 1
-    assert request_counts(hub, context, registry()).unassigned == 1
     assert usage_timeline(unassigned).periods[0].starts_on == date(2026, 9, 16)
     # A backend search has already removed the other source request.
     hub.requests = unassigned
-    counts = request_counts(hub, QueryContext(query="selected backend population"), registry())
-    assert counts.total == 1
-    assert counts.total != hub.scope.requests_total
+    selected = requests_in_scope(hub, QueryContext(query="selected backend population"), registry())
+    assert len(selected) == 1 and len(selected) != hub.scope.requests_total
 
 
 def test_assignment_count_does_not_require_equipment_record_within_bounded_read(hub):
     hub.equipment = []
-    assert request_counts(hub, QueryContext(), registry()).unassigned == 1
+    assert len(requests_in_scope(hub, QueryContext(filter="unassigned"), registry())) == 1
 
 
 def test_pending_filter_uses_backend_alert_ids_without_comparing_source_dates_to_today(hub):
@@ -176,21 +173,23 @@ def test_pending_filter_uses_backend_alert_ids_without_comparing_source_dates_to
 
 
 def test_unavailable_source_and_unavailable_registry_are_not_zero(hub):
-    counts = request_counts(hub, QueryContext(), registry(available=False))
-    assert counts.total == 2 and counts.without_confirmed_task is None
-    assert request_counts(hub, QueryContext()).without_confirmed_task is None
+    assert len(requests_in_scope(hub, QueryContext(), registry(available=False))) == 2
+    payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
+    assert "Registro de tareas sin confirmar" in payload
     hub.sources[0].status = "error"
-    counts = request_counts(hub, QueryContext(), registry())
-    assert counts.total is None and counts.unassigned is None
-    assert counts.without_confirmed_task is None
     assert requests_in_scope(hub, QueryContext()) == []
+    payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
+    assert "origen no disponible" in payload and "decision-request-usage" not in payload
 
 
 def test_valid_empty_scope_is_zero_but_cross_mode_snapshot_is_unavailable(hub):
     hub.requests = []
-    counts = request_counts(hub, QueryContext(), registry())
-    assert (counts.total, counts.unassigned, counts.without_confirmed_task) == (0, 0, 0)
-    assert request_counts(hub, QueryContext(mode="live"), registry()).total is None
+    assert requests_in_scope(hub, QueryContext(), registry()) == []
+    payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
+    assert "Sin solicitudes para representar" in payload
+    assert requests_in_scope(hub, QueryContext(mode="live"), registry()) == []
+    payload = json.dumps(overview(hub, QueryContext(mode="live")), cls=PlotlyJSONEncoder)
+    assert "origen no disponible" in payload
 
 
 def test_sent_task_links_by_source_request_and_current_assignment_not_names(hub):
@@ -198,7 +197,6 @@ def test_sent_task_links_by_source_request_and_current_assignment_not_names(hub)
     workflow = registry(movement)
     request = next(request for request in hub.requests if request.machinery_id)
     assert has_confirmed_task(hub, request, workflow)
-    assert request_counts(hub, QueryContext(), workflow).without_confirmed_task == 1
     unlinked = requests_in_scope(hub, QueryContext(filter="unlinked"), workflow)
     assert len(unlinked) == 1 and unlinked[0].id != request.id
     # A new assignment, even with the same display name, is not the sent task's assignment.

@@ -5,10 +5,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html import escape
 
-import plotly.graph_objects as go
-
-from app.dashboard.analytics import BLUE, GRID, MUTED, operations_for, readable
+from app.dashboard.analytics import operations_for, readable
 from app.dashboard.context import QueryContext
+from app.dashboard.theme import figure, state_color
 from app.models.hub import HubResponse, RequestRecord
 from app.models.operations import MovementRecord
 from app.models.workflow import WorkflowOverview
@@ -17,13 +16,6 @@ from app.services.hub import BUSINESS_TIMEZONE
 
 DAY_MS = 86_400_000
 MONTHS = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
-
-
-@dataclass(frozen=True)
-class RequestCounts:
-    total: int | None
-    unassigned: int | None
-    without_confirmed_task: int | None
 
 
 @dataclass(frozen=True)
@@ -82,23 +74,6 @@ def requests_in_scope(
             request for request in hub.requests if not has_confirmed_task(hub, request, workflow)
         ]
     return [operation.request for operation in operations_for(hub, context.filter)]
-
-
-def request_counts(
-    hub: HubResponse, context: QueryContext, workflow: WorkflowOverview | None = None
-) -> RequestCounts:
-    if context.mode != hub.mode or not readable(hub):
-        return RequestCounts(None, None, None)
-    requests = requests_in_scope(hub, context, workflow)
-    return RequestCounts(
-        total=len(requests),
-        unassigned=sum(not request.machinery_id for request in requests),
-        without_confirmed_task=(
-            sum(not has_confirmed_task(hub, request, workflow) for request in requests)
-            if workflow is not None and workflow.available and workflow.complete
-            else None
-        ),
-    )
 
 
 def request_states(requests: list[RequestRecord]) -> list[tuple[str, int]]:
@@ -166,44 +141,26 @@ def request_axis_label(request: RequestRecord) -> str:
     return f"{escape(request.machinery_type or 'Solicitud')}<br>{escape(status)}"
 
 
-def _figure(height: int = 290) -> go.Figure:
-    figure = go.Figure()
-    figure.update_layout(
-        template="plotly_white",
-        height=height,
-        font={"family": "Inter, sans-serif", "size": 12, "color": MUTED},
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        margin={"l": 8, "r": 24, "t": 12, "b": 26},
-        showlegend=False,
-        dragmode=False,
-        hoverlabel={"bgcolor": "white", "font_size": 12},
-    )
-    figure.update_xaxes(fixedrange=True, zeroline=False, gridcolor=GRID, automargin=True)
-    figure.update_yaxes(fixedrange=True, zeroline=False, showgrid=False, automargin=True)
-    return figure
-
-
-def states_figure(states: list[tuple[str, int]]) -> go.Figure:
-    figure = _figure(max(290, len(states) * 44 + 60))
+def states_figure(states: list[tuple[str, int]]):
+    chart = figure(max(200, len(states) * 40 + 80))
     if not states:
-        return figure
+        return chart
     labels = [escape(state) if state.strip() else "Sin estado informado" for state, _ in states]
     # Categories are source values, even when their display labels coincide.
     identifiers = [f"state-{index}" for index in range(len(states))]
-    figure.add_bar(
+    chart.add_bar(
         x=[count for _, count in states],
         y=identifiers,
         customdata=labels,
         orientation="h",
-        width=0.42,
-        marker_color=BLUE,
+        width=0.36,
+        marker_color=[state_color(state) for state, _ in states],
         text=[str(count) for _, count in states],
         textposition="outside",
         cliponaxis=False,
         hovertemplate="%{customdata}<br>%{x} solicitud(es)<extra></extra>",
     )
-    figure.update_yaxes(
+    chart.update_yaxes(
         autorange="reversed",
         categoryorder="array",
         categoryarray=identifiers,
@@ -211,28 +168,28 @@ def states_figure(states: list[tuple[str, int]]) -> go.Figure:
         tickvals=identifiers,
         ticktext=labels,
     )
-    figure.update_xaxes(
+    chart.update_xaxes(
         title_text="Solicitudes",
         dtick=1,
         rangemode="tozero",
         range=[0, max(c for _, c in states) * 1.3],
     )
-    return figure
+    return chart
 
 
-def usage_figure(timeline: UsageTimeline) -> go.Figure:
+def usage_figure(timeline: UsageTimeline):
     periods = timeline.periods
-    figure = _figure(max(290, len(periods) * 46 + 70))
+    chart = figure(max(200, len(periods) * 44 + 90))
     if not periods:
-        return figure
+        return chart
     identifiers = [period.request.id for period in periods]
-    figure.add_bar(
+    chart.add_bar(
         base=[period.starts_on.isoformat() for period in periods],
         x=[period.calendar_days * DAY_MS for period in periods],
         y=identifiers,
         orientation="h",
-        width=0.4,
-        marker_color=BLUE,
+        width=0.32,
+        marker_color=[state_color(period.request.status) for period in periods],
         customdata=[
             [
                 escape(period.request.provenance.source_id or period.request.id),
@@ -254,7 +211,7 @@ def usage_figure(timeline: UsageTimeline) -> go.Figure:
     span = (end - start).days
     step = max(1, (span + 5) // 6)
     ticks = [start + timedelta(days=offset) for offset in range(0, span + 1, step)]
-    figure.update_xaxes(
+    chart.update_xaxes(
         type="date",
         range=[start.isoformat(), end.isoformat()],
         tickmode="array",
@@ -262,7 +219,7 @@ def usage_figure(timeline: UsageTimeline) -> go.Figure:
         ticktext=[short_date(tick, year=start.year != end.year) for tick in ticks],
         title_text=f"Uso solicitado · {start.year}" if start.year == end.year else "Uso solicitado",
     )
-    figure.update_yaxes(
+    chart.update_yaxes(
         categoryorder="array",
         categoryarray=identifiers,
         autorange="reversed",
@@ -270,4 +227,4 @@ def usage_figure(timeline: UsageTimeline) -> go.Figure:
         tickvals=identifiers,
         ticktext=[request_axis_label(period.request) for period in periods],
     )
-    return figure
+    return chart
