@@ -85,8 +85,7 @@ def test_overview_charts_ignore_list_filters_and_keep_exclusions_visible(hub):
     payload = json.dumps(
         overview(hub, QueryContext(), registry()), cls=PlotlyJSONEncoder, ensure_ascii=False
     )
-    assert "2 solicitudes leídas" in payload
-    assert "1 períodos solicitados" in payload
+    assert "decision-request-usage" in payload
     assert "1 solicitudes con fechas no representables" in payload
     assert "invalid" in payload
     filtered = json.dumps(
@@ -94,7 +93,7 @@ def test_overview_charts_ignore_list_filters_and_keep_exclusions_visible(hub):
         cls=PlotlyJSONEncoder,
         ensure_ascii=False,
     )
-    assert "2 solicitudes leídas" in filtered
+    assert filtered == payload
     assert "1 solicitudes con fechas no representables" in filtered
 
 

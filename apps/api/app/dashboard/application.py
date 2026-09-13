@@ -33,10 +33,8 @@ from app.dashboard.theme import (
     BRAND,
     FAMILY_COLORS,
     MANTINE_THEME,
-    NAV_SHADES,
     PAPER,
     SHELL_VARIABLES,
-    SURFACE,
 )
 from app.dashboard.views import (
     REQUEST_FILTERS,
@@ -167,8 +165,8 @@ function(ticks, snapshot, status, path, search) {
   let short = "leyendo…";
   let state = "neutral";
   if (mine && snapshot.hub && mode === "fixture") {
-    short = "Muestra documental";
-    text = short;
+    short = "Muestra";
+    text = "Muestra documental";
   } else if (mine && snapshot.hub && snapshot.hub.data_as_of) {
     short = ago(snapshot.hub.data_as_of);
     text = "Última lectura " + short;
@@ -341,6 +339,7 @@ def read_status():
                             leftSection=html.Span(
                                 id="read-status-dot",
                                 className="state-dot",
+                                hidden=True,
                                 style={"background": FAMILY_COLORS["neutral"]},
                                 **{"aria-hidden": "true"},
                             ),
@@ -427,18 +426,11 @@ def app_shell(auth_required: bool):
     )
     navbar = dmc.AppShellNavbar(
         [
-            html.Div(
-                [
-                    dmc.Text("Maquinaria y proyectos", fw=600, size="lg"),
-                    dmc.Text("Grupo ECON", size="sm"),
-                ],
-                className="sidebar-heading",
-            ),
             html.Nav(id="navigation", **{"aria-label": "Navegación principal"}),
         ],
         p="sm",
         className="econ-sidebar",
-        style={"background": NAV_SHADES[9], "borderRight": "none"},
+        style={"background": BRAND},
     )
     stores = [
         dcc.Store(id="snapshot", storage_type="memory"),
@@ -471,7 +463,7 @@ def app_shell(auth_required: bool):
             px=0,
         ),
         className="econ-workspace",
-        style={"background": SURFACE},
+        style={"background": PAPER},
     )
     return html.Div(
         [
@@ -479,8 +471,8 @@ def app_shell(auth_required: bool):
             dmc.AppShell(
                 [header, navbar, main],
                 header={"height": 68},
-                navbar={"width": 244, "breakpoint": "sm", "collapsed": {"mobile": True}},
-                padding={"base": 12, "md": 16},
+                navbar={"width": 212, "breakpoint": "sm", "collapsed": {"mobile": True}},
+                padding={"base": 16, "md": 28},
             ),
             dmc.Drawer(
                 html.Nav(id="mobile-navigation-links", **{"aria-label": "Navegación principal"}),
@@ -584,27 +576,33 @@ def create_dashboard(server: FastAPI) -> Dash:
             return no_update, no_update
         return app_shell(settings.auth_required), "app"
 
-    @dashboard.callback(
+    dashboard.clientside_callback(
+        """function(clicks, path, opened) {
+          return window.dash_clientside.callback_context.triggered_id === "burger"
+            ? !opened : false;
+        }""",
         Output("mobile-navigation", "opened"),
         Input("burger", "n_clicks"),
         Input("url", "pathname"),
         State("mobile-navigation", "opened"),
         prevent_initial_call=True,
     )
-    def toggle_navigation(_clicks, _path, opened):
-        # The drawer owns focus trapping, Escape, backdrop and focus return.
-        return not opened if ctx.triggered_id == "burger" else False
+    # Pure presentation stays in the browser: no HTTP request or session SQL read.
+    # The drawer still owns focus trapping, Escape, backdrop and focus return.
+    dashboard.clientside_callback(
+        'function(opened) { return opened ? "true" : "false"; }',
+        Output("burger", "aria-expanded"),
+        Input("mobile-navigation", "opened"),
+    )
 
-    @dashboard.callback(Output("burger", "aria-expanded"), Input("mobile-navigation", "opened"))
-    def sync_burger(opened):
-        return "true" if opened else "false"
-
-    @dashboard.callback(
+    dashboard.clientside_callback(
+        """function(path) {
+          return (path || "").replace(/\\/$/, "") === "/administracion"
+            ? {display: "none"} : {};
+        }""",
         Output("data-status", "style"),
         Input("url", "pathname"),
     )
-    def data_status_visibility(path):
-        return {"display": "none"} if (path or "").rstrip("/") == "/administracion" else {}
 
     @dashboard.callback(
         Output(SEARCH_PATTERN, "value"),

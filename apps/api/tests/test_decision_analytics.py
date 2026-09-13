@@ -303,15 +303,17 @@ def test_repeated_display_names_remain_separate_exact_request_rows(hub):
     }
 
 
-def test_overview_serializes_two_charts_and_accessible_original_data_without_fake_kpis(hub):
+def test_overview_prioritizes_assignment_agenda_and_accessible_evidence(hub):
     component = overview(hub, QueryContext(), registry())
     payload = json.dumps(component, cls=PlotlyJSONEncoder, ensure_ascii=False)
-    assert "decision-request-states" in payload and "decision-request-usage" in payload
-    assert "Ver datos de los gráficos" in payload
+    assert "decision-request-usage" in payload
+    assert "decision-request-states" not in payload and "executive-summary" not in payload
+    assert "Datos de la agenda" in payload
     assert "no son plazos de entrega" in payload
     assert "Operación" in payload and "Acciones por solicitud" in payload
     assert "decision-count" not in payload and "Solicitudes en vista" not in payload
-    assert "Solicitudes por estado" in payload
+    assert "Agenda de uso y asignación" in payload
+    assert "CF-03<br>Aprobada" in payload and "Sin unidad<br>Pendiente" in payload
     for request in hub.requests:
         assert request.provenance.source_id in payload
     assert "porcentaje" not in payload and "utilización" not in payload

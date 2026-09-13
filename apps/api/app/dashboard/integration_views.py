@@ -61,7 +61,7 @@ TREATMENT_ICONS = {
 }
 NO_VALUE = "No informado"
 NO_FIELD = "Sin campo equivalente"
-INTRO = "Prisma → ECON → Startrack. Campos, eventos y tiempos de cada solicitud."
+INTRO = "Sigue una solicitud desde su origen hasta la respuesta del traslado."
 
 
 def request_options(hub: HubResponse):
@@ -110,36 +110,21 @@ def treatment_view(treatment: str):
     )
 
 
-def steps(trace: IntegrationTrace):
-    return [
-        dmc.StepperStep(
-            label=f"{position}. {stage.title}",
-            description=STAGE_STATES[stage.state][1],
-            icon=icon(STAGE_ICONS[stage.key], 18),
-            completedIcon=icon(STAGE_ICONS[stage.key], 18),
-        )
-        for position, stage in enumerate(trace.stages, start=1)
-    ]
-
-
 def stepper(trace: IntegrationTrace):
-    """Horizontal on the desktop, vertical on a phone; the same four stages either way."""
-    active = sum(1 for stage in trace.stages if stage.state == "done")
-    return html.Div(
+    """Each stage keeps its own state; no inferred percentage or sequential completion."""
+    return html.Ol(
         [
-            dmc.Stepper(
-                steps(trace),
-                active=active,
-                orientation=orientation,
-                iconSize=34,
-                size="sm",
-                my="md",
-                visibleFrom="sm" if orientation == "horizontal" else None,
-                hiddenFrom="sm" if orientation == "vertical" else None,
-                **{"aria-label": "Etapas del recorrido de los datos"},
+            html.Li(
+                [
+                    html.H3(stage.title),
+                    state_text(STAGE_STATES[stage.state][1], STAGE_STATES[stage.state][0]),
+                    dmc.Text(stage.summary, size="sm"),
+                ],
             )
-            for orientation in ("horizontal", "vertical")
-        ]
+            for stage in trace.stages
+        ],
+        className="trace-flow",
+        **{"aria-label": "Etapas del recorrido de los datos"},
     )
 
 
@@ -292,6 +277,7 @@ def trace_panel(hub: HubResponse, context: QueryContext, workflow, request_id: s
             [
                 dmc.TabsList(
                     [
+                        dmc.TabsTab("Recorrido", value="overview"),
                         *[
                             dmc.TabsTab(
                                 stage.title,
@@ -303,6 +289,36 @@ def trace_panel(hub: HubResponse, context: QueryContext, workflow, request_id: s
                         dmc.TabsTab("Tiempos", value="times"),
                         dmc.TabsTab("Mapa de campos", value="fields"),
                     ]
+                ),
+                dmc.TabsPanel(
+                    [
+                        stepper(trace),
+                        html.Div(
+                            [
+                                dmc.Title("Qué falta resolver", order=2, size="h4"),
+                                dmc.List(
+                                    [dmc.ListItem(rule) for rule in current.rules],
+                                    size="sm",
+                                    mt="sm",
+                                )
+                                if current and current.rules
+                                else hint(
+                                    current.summary
+                                    if current
+                                    else "Las cuatro etapas tienen evidencia. "
+                                    "Revisa llegada y recepción por separado."
+                                ),
+                                link(
+                                    "Revisar solicitud y asignación",
+                                    context.request_href(trace.request_id),
+                                    mt="md",
+                                    display="block",
+                                ),
+                            ],
+                            className="trace-next",
+                        ),
+                    ],
+                    value="overview",
                 ),
                 *[
                     dmc.TabsPanel(stage_section(position, stage, context), value=stage.key)
@@ -321,7 +337,7 @@ def trace_panel(hub: HubResponse, context: QueryContext, workflow, request_id: s
                 ),
             ],
             id={"type": "integration-stage", "request": trace.request_id},
-            value=current.key if current else trace.stages[-1].key,
+            value="overview",
             persistence=trace.mode,
             persistence_type="session",
             keepMounted=False,

@@ -3,7 +3,6 @@
 from urllib.parse import unquote
 
 import dash_mantine_components as dmc
-from dash import html
 
 from app.core.auth import Permission, can
 from app.dashboard.admin_views import admin_page
@@ -18,7 +17,7 @@ from app.dashboard.analytics import (
 from app.dashboard.auth_views import current_user
 from app.dashboard.components import (
     accordion,
-    back_link,
+    breadcrumbs,
     disclosure,
     empty,
     facts,
@@ -36,12 +35,12 @@ from app.dashboard.components import (
     state_text,
 )
 from app.dashboard.context import QueryContext
+from app.dashboard.coverage_analytics import coverage_figure, coverage_rows
 from app.dashboard.decision_analytics import (
     graph,
     matching_current_movements,
     request_states,
     requests_in_scope,
-    states_figure,
     usage_figure,
     usage_timeline,
 )
@@ -56,7 +55,7 @@ from app.dashboard.evidence_views import (
     request_timeline,
     source_comparison,
 )
-from app.dashboard.indicator_views import duration_text, indicators_page
+from app.dashboard.indicator_views import indicators_page
 from app.dashboard.integration_views import integration_page
 from app.dashboard.inventory_analytics import inventory_status_panel
 from app.dashboard.suggestion_views import conflicts_section, suggestions_section
@@ -70,7 +69,6 @@ from app.dashboard.workflow_views import (
     workflow_table,
 )
 from app.models.hub import EquipmentRecord, HubResponse, RequestRecord
-from app.services.indicators import APPROVED, PENDING, compute_indicators
 
 MODES = {"fixture": "Muestras proporcionadas", "live": "Sandbox actual (sintético)"}
 # Only the lists let `q` narrow what is shown; every other page keeps the origin as text.
@@ -330,8 +328,8 @@ def decision_cards(hub, context, workflow):
                 "autoHeight": True,
                 "cellStyle": {"whiteSpace": "normal"},
             },
-            "project": {"width": 140, "minWidth": 120, "flex": 0},
-            "equipment": {"width": 90, "minWidth": 80, "flex": 0},
+            "project": {"minWidth": 200, "flex": 1, "wrapText": True, "autoHeight": True},
+            "equipment": {"width": 125, "minWidth": 125, "flex": 0, "filter": False},
             "evidence": {
                 "width": 250,
                 "minWidth": 190,
@@ -341,7 +339,7 @@ def decision_cards(hub, context, workflow):
                 "cellStyle": {"whiteSpace": "normal"},
                 "tooltipField": "evidence_detail",
             },
-            "action": {"width": 140, "minWidth": 130, "flex": 0},
+            "action": {"width": 155, "minWidth": 155, "flex": 0, "filter": False},
         },
     )
 
@@ -362,124 +360,16 @@ def registry_hint(workflow):
     return None
 
 
-def executive_summary(hub: HubResponse, context: QueryContext, workflow=None):
-    """Observed workload, administrative exceptions and one measured approval; no averages."""
-    requests = requests_in_scope(hub, context, workflow)
-    pending = [request for request in requests if request.status.strip().upper() in PENDING]
-    active_items = [
-        item
-        for item in decision_items(hub, context, workflow)
-        if item.request.status.strip().upper() in PENDING | APPROVED
-    ]
-    obsolete = {
-        item.equipment.id: item.equipment
-        for item in active_items
-        if item.equipment is not None
-        and item.equipment.machinery_status.strip().upper() == "OBSOLETA"
-    }
-    unobserved = {
-        item.request.machinery_id
-        for item in active_items
-        if item.request.machinery_id and item.equipment is None
-    }
-    report = compute_indicators(hub, workflow)
-    approval = next(result for result in report.indicators if result.sheet.id == "approval_time")
-    by_id = {request.id: request for request in requests}
-    latest = max(
-        (row for row in approval.rows if row.status == "evaluable" and row.subject_id in by_id),
-        key=lambda row: (by_id[row.subject_id].approved_at, row.subject_id),
-        default=None,
-    )
-    measured = by_id[latest.subject_id] if latest is not None else None
-    pending_value = (
-        f"{len(pending)} solicitud{'es' if len(pending) != 1 else ''}"
-        if requests
-        else "Sin solicitudes"
-    )
-    obsolete_value = (
-        f"{len(obsolete)} unidad{'es' if len(obsolete) != 1 else ''}"
-        if obsolete or (requests and not unobserved)
-        else "Sin confirmar"
-        if unobserved
-        else "Sin asignaciones"
-    )
-    obsolete_note = ", ".join(equipment_label(unit) for unit in list(obsolete.values())[:3])
-    if len(obsolete) > 3:
-        obsolete_note += f" y {len(obsolete) - 3} más"
-    if obsolete:
-        obsolete_note += " · estado administrativo"
-    if unobserved:
-        obsolete_note += f" · {len(unobserved)} unidades asignadas fuera de la lectura"
-    readings = [
-        (
-            "Pendientes de decisión",
-            pending_value,
-            f"Estado PENDIENTE · {len(requests)} solicitudes leídas"
-            if requests
-            else "No hay filas de solicitud para revisar.",
-            context.request_href(pending[0].id)
-            if len(pending) == 1
-            else context.href("/solicitudes"),
-        ),
-        (
-            "Unidades asignadas OBSOLETA",
-            obsolete_value,
-            obsolete_note.strip(" ·") or "Estado administrativo; no afirma una falla.",
-            context.equipment_href(next(iter(obsolete)))
-            if len(obsolete) == 1
-            else context.href("/maquinaria"),
-        ),
-        (
-            "Última aprobación medida",
-            duration_text(float(latest.values["seconds"]))
-            if latest is not None
-            else "Sin medición",
-            f"{measured.project_name or 'Sin proyecto'} · {instant(measured.approved_at)}"
-            if measured is not None
-            else "Sin aprobación con fechas comparables en esta lectura.",
-            context.request_href(measured.id)
-            if measured is not None
-            else context.href("/indicadores"),
-        ),
-    ]
-    return html.Div(
-        [
-            dmc.Text("Lectura ejecutiva · en esta lectura", size="xs", c="dimmed"),
-            html.Dl(
-                [
-                    html.Div(
-                        [
-                            html.Dt(label),
-                            html.Dd(
-                                link(value, href, size="xl", fw=600), className="executive-value"
-                            ),
-                            html.Dd(note),
-                        ],
-                        className="executive-metric",
-                    )
-                    for label, value, note, href in readings
-                ],
-                className="executive-summary",
-            ),
-        ]
-    )
-
-
 def decisions(hub: HubResponse, context: QueryContext, workflow=None):
-    """Executive reading, observed request-state and period charts, then the work queue."""
+    """Source periods with assignment context, then the evidence-backed work queue."""
     context = QueryContext(mode=context.mode)
     content = [heading("Operación")]
     if context.mode != hub.mode or not readable(hub):
         return [*content, unavailable(hub, context, "Operación")]
-    content.append(executive_summary(hub, context, workflow))
     requests = requests_in_scope(hub, context, workflow)
     timeline = usage_timeline(requests)
     states = request_states(requests)
-    state_chart = states_figure(states)
     agenda_chart = usage_figure(timeline)
-    chart_height = min(480, max(260, state_chart.layout.height, agenda_chart.layout.height))
-    state_chart.update_layout(height=chart_height)
-    agenda_chart.update_layout(height=chart_height)
     rows = [
         [
             link(
@@ -508,42 +398,23 @@ def decisions(hub: HubResponse, context: QueryContext, workflow=None):
         for item in timeline.excluded
     )
     content.append(
-        dmc.Grid(
-            [
-                dmc.GridCol(
-                    section(
-                        "Solicitudes por estado",
-                        hint(f"{len(requests)} solicitudes leídas · estados registrados"),
-                        graph("decision-request-states", state_chart)
-                        if states
-                        else hint("Sin solicitudes en esta lectura."),
-                    ),
-                    span={"base": 12, "lg": 5},
-                    className="request-state-panel",
-                ),
-                dmc.GridCol(
-                    section(
-                        "Agenda de uso",
-                        hint(
-                            f"{len(timeline.periods)} períodos solicitados · "
-                            "no son plazos de entrega"
-                        ),
-                        graph("decision-request-usage", agenda_chart)
-                        if timeline.periods
-                        else hint("Sin períodos válidos para representar en esta lectura."),
-                        hint(
-                            f"{len(timeline.excluded)} solicitudes con fechas no representables.",
-                            role="status",
-                        )
-                        if timeline.excluded
-                        else None,
-                    ),
-                    span={"base": 12, "lg": 7},
-                    className="request-agenda-panel",
-                ),
-            ],
-            gutter="md",
-            className="operational-charts",
+        section(
+            "Agenda de uso y asignación",
+            hint("Fechas de uso solicitadas; no son plazos de entrega."),
+            state_legend([request.status for request in requests]),
+            graph("decision-request-usage", agenda_chart)
+            if timeline.periods
+            else hint(
+                "Sin solicitudes en esta lectura."
+                if not requests
+                else "Sin períodos válidos para representar en esta lectura."
+            ),
+            hint(
+                f"{len(timeline.excluded)} solicitudes con fechas no representables.", role="status"
+            )
+            if timeline.excluded
+            else None,
+            className="page-section agenda-panel",
         )
     )
     content.append(
@@ -556,7 +427,7 @@ def decisions(hub: HubResponse, context: QueryContext, workflow=None):
     content.append(
         accordion(
             disclosure(
-                "Ver datos de los gráficos",
+                "Datos de la agenda",
                 simple_table(
                     ["Estado de solicitud", "Solicitudes"],
                     [[state, count] for state, count in states],
@@ -847,10 +718,14 @@ def task_record(task, item: EquipmentRecord):
 
 def request_detail(hub: HubResponse, context: QueryContext, identifier: str, workflow=None):
     request = next((item for item in hub.requests if item.id == identifier), None)
-    back = back_link("Volver a solicitudes", context.href("/solicitudes", filter=context.filter))
+    trail = breadcrumbs(
+        "Solicitudes",
+        context.href("/solicitudes", filter=context.filter),
+        request.machinery_type if request and request.machinery_type else "Detalle",
+    )
     if request is None:
         return [
-            back,
+            trail,
             empty(
                 "Solicitud fuera de la consulta",
                 "Comprueba el origen y limpia la búsqueda para ampliar el alcance.",
@@ -891,7 +766,7 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
         "no permiten elegirla automáticamente.",
     )
     return [
-        back,
+        trail,
         heading(
             f"Solicitud de {request.machinery_type}"
             if request.machinery_type
@@ -1042,10 +917,14 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
 
 def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str, workflow=None):
     item = next((item for item in hub.equipment if item.id == identifier), None)
-    back = back_link("Volver a maquinaria", context.href("/maquinaria", filter=context.filter))
+    trail = breadcrumbs(
+        "Maquinaria",
+        context.href("/maquinaria", filter=context.filter),
+        equipment_label(item) if item else "Detalle",
+    )
     if item is None:
         return [
-            back,
+            trail,
             empty(
                 "Equipo fuera de la consulta",
                 "Comprueba el origen y limpia la búsqueda para ampliar el alcance.",
@@ -1054,7 +933,7 @@ def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str, w
     related = [request for request in hub.requests if request.machinery_id == item.id]
     movements = equipment_movements(hub, item, workflow)
     return [
-        back,
+        trail,
         heading(f"{equipment_label(item)} · {item.name}", "Evidencia de la maquinaria consultada."),
         interpretation_section(item, movements),
         conflicts_section(hub, item, workflow, context),
@@ -1098,6 +977,7 @@ def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str, w
 
 
 def sources(hub: HubResponse, context: QueryContext, workflow=None):
+    chart = coverage_figure(hub)
     totals = {
         key: value if value is not None else "total desconocido"
         for key, value in [
@@ -1156,7 +1036,38 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
     return [
         heading(
             "Fuentes y cobertura",
-            "Procedencia de las solicitudes, unidades y tareas disponibles en esta consulta.",
+        ),
+        section(
+            "Cobertura de la consulta",
+            hint("Cada barra representa el total informado de su colección en Prisma."),
+            graph("source-coverage", chart)
+            if chart is not None
+            else hint("Fuente no disponible; no se puede medir la cobertura de esta lectura."),
+            hint(
+                "Startrack se revisa por separado: sin lectura confirmada "
+                "no hay un total de tareas."
+            ),
+            accordion(
+                disclosure(
+                    "Ver datos de cobertura",
+                    simple_table(
+                        ["Registro", "Leídos", "Total informado", "Fuera de la lectura"],
+                        [
+                            [
+                                label,
+                                loaded,
+                                total if total is not None else "Desconocido",
+                                total - loaded
+                                if total is not None and total >= loaded
+                                else "No determinable",
+                            ]
+                            for label, loaded, total in coverage_rows(hub)
+                        ],
+                        caption="Cobertura por colección; el total desconocido no es cero",
+                    ),
+                )
+            ),
+            className="page-section coverage-panel",
         ),
         simple_table(
             ["Fuente", "Estado", "Última lectura", "Situación"],
@@ -1183,10 +1094,6 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
                 for source in hub.sources
             ],
             caption="Estado de las fuentes de esta lectura",
-        ),
-        hint(
-            f"Solicitudes: {hub.scope.requests_returned} de {totals['requests']}. "
-            f"Maquinaria: {hub.scope.equipment_returned} de {totals['equipment']}."
         ),
         accordion(
             disclosure("Procedencia y acceso a las fuentes", *records),

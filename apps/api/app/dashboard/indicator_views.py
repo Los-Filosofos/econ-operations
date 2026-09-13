@@ -38,7 +38,7 @@ from app.dashboard.components import (
 )
 from app.dashboard.context import QueryContext
 from app.dashboard.decision_analytics import graph
-from app.dashboard.theme import FAMILY_COLORS, PAPER, SEQUENTIAL, figure
+from app.dashboard.theme import FAMILY_COLORS, MEASURE, PAPER, figure
 from app.models.hub import EquipmentRecord, HubResponse, RequestRecord
 from app.models.indicators import IndicatorResult, IndicatorRow, IndicatorsReport
 from app.models.workflow import WorkflowOverview
@@ -783,45 +783,45 @@ def _approval_interval(result: IndicatorResult, row: IndicatorRow, hub: HubRespo
     if ticks[-1] != end:
         ticks.append(end)
     duration = row.values["seconds"]
-    chart = figure(250)
+    chart = figure(230)
     chart.update_layout(meta={"comparable": 1, "displayed": 1, "kind": "interval"})
-    chart.add_bar(
-        x=[duration * 1000],
-        base=[local(created)],
-        y=[row.subject_id],
-        orientation="h",
-        width=0.28,
-        marker_color=SEQUENTIAL[3],
-        text=[f"{duration:g} s"],
-        textposition="inside",
-        insidetextanchor="middle",
-        textfont={"color": PAPER, "size": 17},
-        customdata=[
-            [
-                escape(row.source_id or row.subject_id),
-                _business_time(created),
-                _business_time(approved),
-            ]
-        ],
-        hovertemplate=(
-            "Solicitud %{customdata[0]}<br>Creada: %{customdata[1]}<br>"
-            "Aprobada: %{customdata[2]}<extra></extra>"
-        ),
-    )
     chart.add_scatter(
         x=[local(created), local(approved)],
         y=[row.subject_id, row.subject_id],
-        mode="markers+text",
-        marker={"color": SEQUENTIAL[4], "size": 9},
-        text=[f"Creada {created:%H:%M:%S}", f"Aprobada {approved:%H:%M:%S}"],
-        textposition=["top left", "bottom right"],
+        mode="lines+markers",
+        line={"color": MEASURE, "width": 2},
+        marker={"color": MEASURE, "size": 10, "symbol": ["circle-open", "diamond"]},
+        customdata=[
+            [escape(row.source_id or row.subject_id), label, _business_time(moment)]
+            for moment, label in ((created, "Creada"), (approved, "Aprobada"))
+        ],
+        hovertemplate=(
+            "Solicitud %{customdata[0]}<br>%{customdata[1]}: %{customdata[2]}<extra></extra>"
+        ),
         cliponaxis=False,
-        hoverinfo="skip",
     )
-    if duration == 0:
+    for moment, label, shift, anchor in (
+        (created, "Creada", 38, "left"),
+        (approved, "Aprobada", -38, "right"),
+    ):
         chart.add_annotation(
-            x=local(created), y=row.subject_id, text="0 s", showarrow=False, yshift=30
+            x=local(moment),
+            y=row.subject_id,
+            text=f"{label} {moment:%H:%M:%S}",
+            showarrow=False,
+            yshift=shift,
+            xanchor=anchor,
+            font={"size": 12},
         )
+    chart.add_annotation(
+        x=local(created + (approved - created) / 2),
+        y=row.subject_id,
+        text=duration_text(duration),
+        showarrow=False,
+        yshift=16,
+        bgcolor=PAPER,
+        font={"color": MEASURE, "size": 17},
+    )
     chart.update_xaxes(
         type="date",
         range=[local(start), local(end)],
@@ -830,11 +830,7 @@ def _approval_interval(result: IndicatorResult, row: IndicatorRow, hub: HubRespo
         ticktext=[tick.strftime("%H:%M") for tick in ticks],
         title_text=f"{created:%d/%m/%Y} · Hora de El Salvador",
     )
-    chart.update_yaxes(
-        tickmode="array",
-        tickvals=[row.subject_id],
-        ticktext=[_chart_label(row, result, hub, 1)],
-    )
+    chart.update_yaxes(showticklabels=False)
     return chart
 
 
@@ -892,7 +888,7 @@ def hours_figure(result: IndicatorResult, hub: HubResponse | None = None) -> go.
         y=identifiers,
         orientation="h",
         width=0.36,
-        marker_color=SEQUENTIAL[2],
+        marker_color=MEASURE,
         text=[f"{value:g} {unit}" for value in values],
         textposition="outside",
         cliponaxis=False,
@@ -1051,55 +1047,6 @@ def sla_card(sla: ProposedSla):
     )
 
 
-def sla_charts(proposed: Iterable[ProposedSla], prefix: str):
-    """Reference targets from the proposal, separated by clock; never performance."""
-    proposed = list(proposed)
-    labels = {
-        "S1": "Aprobación",
-        "S2": "Asignación de unidad",
-        "S3": "Envío de tarea",
-        "S4": "Recepción",
-        "S5": "Revisión de falla con paro",
-        "S6": "Frescura del registro",
-    }
-    clocks = (
-        ("business", "Horas hábiles propuestas", ("S1", "S2", "S3")),
-        ("elapsed", "Horas corridas propuestas", ("S4", "S6")),
-        ("pending", "Horas propuestas · calendario por acordar", ("S5",)),
-    )
-    blocks = []
-    for key, title, identifiers in clocks:
-        selected = [sla for sla in proposed if sla.id in identifiers]
-        if not selected:
-            continue
-        values = [
-            float(sla.threshold.split(" h", 1)[0].removeprefix("≤").strip()) for sla in selected
-        ]
-        chart = figure(max(150, len(selected) * 42 + 70))
-        chart.add_scatter(
-            x=values,
-            y=[sla.id for sla in selected],
-            mode="markers+text",
-            marker={"color": SEQUENTIAL[3], "size": 12, "symbol": "diamond"},
-            text=[f"≤ {value:g} h" for value in values],
-            textposition="middle right",
-            cliponaxis=False,
-            customdata=[[escape(sla.name), escape(sla.threshold_text)] for sla in selected],
-            hovertemplate="%{customdata[0]}<br>%{customdata[1]}<extra></extra>",
-        )
-        chart.update_xaxes(
-            range=[0, 28], tickmode="array", tickvals=[0, 4, 8, 12, 16, 20, 24], title_text=title
-        )
-        chart.update_yaxes(
-            tickmode="array",
-            tickvals=[sla.id for sla in selected],
-            ticktext=[labels[sla.id] for sla in selected],
-            autorange="reversed",
-        )
-        blocks.append(graph(f"{prefix}-{key}", chart))
-    return blocks
-
-
 def no_sla_card(result: IndicatorResult):
     """Administrative facts need an action, without an empty SLA card."""
     return hint(result.sheet.decision)
@@ -1156,7 +1103,7 @@ def _business_duration(row: IndicatorRow, identifier: str) -> str:
     if not isinstance(value, int | float) or isinstance(value, bool) or not isfinite(value):
         return "No calculable"
     if field == "seconds":
-        return f"{value:g} s"
+        return duration_text(value)
     if field == "days_since_end":
         return f"{value:g} días"
     if abs(value) < 1 / 60:
@@ -1354,9 +1301,9 @@ def business_rows(result: IndicatorResult, hub: HubResponse, context: QueryConte
 
 def business_table(result: IndicatorResult, hub: HubResponse, context: QueryContext):
     overrides = {
-        "record": {"minWidth": 240, "flex": 2},
+        "record": {"minWidth": 240, "flex": 2, "wrapText": True, "autoHeight": True},
         "duration": {"width": 150, "minWidth": 130, "flex": 0},
-        "note": {"minWidth": 190, "flex": 2},
+        "note": {"minWidth": 190, "flex": 2, "wrapText": True, "autoHeight": True},
     }
     for field in (
         "created",
@@ -1368,7 +1315,7 @@ def business_table(result: IndicatorResult, hub: HubResponse, context: QueryCont
         "read",
         "observed",
     ):
-        overrides[field] = {"minWidth": 165, "flex": 1}
+        overrides[field] = {"minWidth": 175, "flex": 1, "wrapText": True, "autoHeight": True}
     table = grid(
         f"indicator-business-{result.sheet.id}",
         business_rows(result, hub, context),
@@ -1390,13 +1337,14 @@ def indicator_block(
     _, family = status_label(result)
     no_cases = status_label(result)[0] == NO_CASES
     if result.evaluable_count:
-        headline = f"{result.evaluable_count} de {len(result.rows)} registros se pueden evaluar."
+        headline = (
+            f"{result.evaluable_count} de {len(result.rows)} registros con datos suficientes."
+        )
         if result.partial_count or result.not_evaluable_count:
-            headline += " Los demás conservan su motivo en la tabla."
+            headline += " Consulta los faltantes en la tabla."
     else:
         headline = _business_reason(result.reason) or "No hay registros evaluables en esta lectura."
     details = [
-        business_table(result, hub, context) if result.rows else None,
         hint("Fechas en hora de El Salvador. A continuación se conservan los campos originales.")
         if result.rows and sheet.dates
         else None,
@@ -1428,31 +1376,36 @@ def indicator_block(
     if chart is not None:
         meta = chart.layout.meta
         chart_note = (
-            "Intervalo observado entre creación y aprobación; no representa una tendencia."
+            None
             if meta.get("kind") == "interval"
             else f"Las {meta['displayed']} mayores duraciones de {meta['comparable']} comparables."
             if meta["displayed"] < meta["comparable"]
-            else f"{meta['comparable']} duraciones comparables, ordenadas de mayor a menor."
+            else None
         )
     return html.Article(
         [
             dmc.Title(DISPLAY_TITLES[sheet.id], order=2, size="h4", id=title_id),
             dmc.Text(
-                DECISION_PROMPTS[sheet.id] if result.evaluable_count else REQUIRED_DATA[sheet.id],
+                REQUIRED_DATA[sheet.id],
                 size="sm",
                 mt="xs",
             )
-            if not no_cases
+            if not result.rows and not no_cases
             else None,
             hint(headline, role="status"),
             state_text("Sin casos en los registros leídos", family) if no_cases else None,
             graph(f"indicator-chart-{sheet.id}", chart) if chart is not None else None,
             hint(chart_note) if chart_note else None,
-            dmc.Text("Referencia SLA propuesta", size="sm", fw=600, mt="lg") if proposed else None,
-            *sla_charts(proposed, f"indicator-sla-{sheet.id}"),
-            hint("Umbral pendiente de acuerdo. No se calcula cumplimiento.") if proposed else None,
+            section(
+                {"request": "Solicitudes", "equipment": "Maquinaria", "movement": "Movimientos"}[
+                    sheet.grain
+                ],
+                business_table(result, hub, context),
+            )
+            if result.rows
+            else None,
             accordion(
-                disclosure("Ver registros, evidencia y cálculo", *details),
+                disclosure("Definición y datos de origen", *details),
                 mt="md",
             ),
         ],
@@ -1483,8 +1436,12 @@ def indicators_page(hub: HubResponse, context: QueryContext, workflow: WorkflowO
     )
     method = [
         dmc.Title("SLA propuestos", order=2, size="h4"),
-        hint("Objetivos para acordar con ECON; estos puntos no son resultados ni cumplimiento."),
-        *sla_charts(SLAS, "sla-overview"),
+        hint("Objetivos pendientes de acuerdo con ECON. No se calcula cumplimiento."),
+        simple_table(
+            ["Objetivo", "Responsable", "Umbral propuesto"],
+            [[sla.name, sla.audience, sla.threshold] for sla in SLAS],
+            caption="SLA propuestos; no son resultados de la operación",
+        ),
         hint("S5 propone 4 h para revisar una falla; su calendario todavía debe acordarse."),
         accordion(
             disclosure(
@@ -1514,9 +1471,8 @@ def indicators_page(hub: HubResponse, context: QueryContext, workflow: WorkflowO
         ),
     ]
     return [
-        heading("Indicadores", "Elige la pregunta que necesitas resolver."),
+        heading("Indicadores"),
         hint(
-            f"{len(available)} de {len(report.indicators)} preguntas tienen datos evaluables. "
             f"{cutoff}{registry_note}",
             role="status",
         ),
@@ -1547,7 +1503,7 @@ def indicators_page(hub: HubResponse, context: QueryContext, workflow: WorkflowO
             keepMounted=False,
             persistence=f"indicators-{hub.mode}",
             persistence_type="memory",
-            className="analysis-tabs",
+            className="analysis-tabs indicator-tabs",
         ),
     ]
 

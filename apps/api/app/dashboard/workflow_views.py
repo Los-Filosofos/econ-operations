@@ -21,7 +21,7 @@ from app.dashboard.analytics import instant
 from app.dashboard.auth_views import ROLE_LABELS, current_user, denied, permitted
 from app.dashboard.components import (
     accordion,
-    back_link,
+    breadcrumbs,
     disclosure,
     empty,
     facts,
@@ -372,11 +372,42 @@ def movements_panel(
     movements: list[MovementRecord], *, total: int, page: int, page_size: int, context: QueryContext
 ):
     """One ledger page as rows with its visible window; the search only filters this page."""
+    if total == 0:
+        return [
+            section(
+                "Todavía no hay traslados preparados",
+                dmc.Text(
+                    "Las muestras documentales incluyen solicitudes y maquinaria, pero no "
+                    "aportan tareas de Startrack, ubicaciones GPS ni recepciones. "
+                    "Tampoco hay planes locales guardados en este origen."
+                    if context.mode == "fixture"
+                    else "No hay movimientos guardados en ECON para este origen. "
+                    "Esto no confirma que no existan tareas o recepciones en los proveedores.",
+                    size="sm",
+                    maw="80ch",
+                ),
+                dmc.Text(
+                    "Abre una solicitud para revisar su aprobación y la unidad asignada. "
+                    "Desde su detalle, los roles autorizados pueden preparar el traslado.",
+                    size="sm",
+                    maw="80ch",
+                    mt="md",
+                ),
+                link(
+                    "Revisar solicitudes",
+                    context.href("/solicitudes"),
+                    fw=600,
+                    mt="md",
+                    display="inline-block",
+                ),
+                hint("En este origen solo se guardan planes locales; no se envían a Startrack.")
+                if context.mode == "fixture"
+                else None,
+            ),
+        ]
     pages = max(1, ceil(total / page_size))
     first = (page - 1) * page_size + 1
-    if total == 0:
-        coverage = "Sin movimientos registrados en este origen."
-    elif not movements:
+    if not movements:
         coverage = f"Sin movimientos en la página {page} de {pages}; {total} registrados."
     else:
         coverage = (
@@ -405,10 +436,20 @@ def movements_panel(
             "La búsqueda no consulta otras páginas."
         )
     registry = (
-        "Población completa."
+        "Todos los movimientos guardados en ECON para este origen están en esta página. "
+        "Esto no acredita cobertura de los proveedores."
         if page == 1 and total <= len(movements)
         else "Registro paginado: la ausencia en esta página no acredita ausencia en otras."
     )
+    if not shown:
+        return [
+            hint(coverage, role="status"),
+            empty(
+                "Sin coincidencias en esta página" if context.query else "Página sin movimientos",
+                "Cambia la búsqueda o consulta otra página del registro.",
+            ),
+            link("Limpiar búsqueda", context.href("/operaciones")) if context.query else None,
+        ]
     rows = [
         {
             "reference": markdown_link(
@@ -442,23 +483,12 @@ def movements_panel(
             "receipt": {"width": 135},
             "next": {"width": 170},
         },
-        no_rows_message="Sin movimientos registrados"
-        if total == 0
-        else "Sin coincidencias en esta página",
     )
     # The server already pages the ledger; a second, client-side pager would mislead.
     table.dashGridOptions = {**table.dashGridOptions, "pagination": False}
     return [
         html.Div(dmc.Text(f"{coverage} {registry}", size="xs", c="dimmed", my="xs"), role="status"),
         table,
-        link(
-            "Abrir solicitudes para preparar un traslado",
-            context.href("/solicitudes"),
-            mt="sm",
-            display="block",
-        )
-        if total == 0
-        else None,
     ]
 
 
@@ -484,9 +514,9 @@ def operations(workflow: WorkflowOverview | None, context: QueryContext):
                 if allowed
                 else denied(),
                 dmc.Text(
-                    f"Última sincronización: {instant(workflow.last_sync_at)}"
+                    f"Última lectura guardada: {instant(workflow.last_sync_at)}"
                     if workflow.last_sync_at
-                    else "Sin sincronización registrada",
+                    else "Sin lectura guardada",
                     size="xs",
                     c="dimmed",
                 ),
@@ -821,8 +851,10 @@ def movement_content(
 
 
 def movement_detail(workflow: WorkflowOverview | None, context: QueryContext, identifier: str):
-    back = back_link("Volver a operaciones", context.href("/operaciones", filter=context.filter))
-    return [back, *movement_content(workflow, context, identifier)]
+    trail = breadcrumbs(
+        "Operaciones", context.href("/operaciones", filter=context.filter), "Movimiento"
+    )
+    return [trail, *movement_content(workflow, context, identifier)]
 
 
 def resolution_reason(value) -> str:

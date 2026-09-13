@@ -36,9 +36,10 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
   y no se recrean ([ADR 0003](adr/0003-python-dash-hub.md)).
 - Todo el caso usa **datos sintéticos**. `fixture` son ejemplos del archivo;
   `live` es una lectura actual del sandbox. Nunca se sustituyen entre sí.
-- La portada abre con pendientes de decisión, unidades OBSOLETA asignadas y
-  última aprobación medida, siempre dentro de la lectura. Le siguen los gráficos
-  de estados y agenda de uso y después la tabla de asuntos, evidencia y acción.
+- La portada abre con la agenda de uso a todo el ancho, identificando proyecto,
+  unidad asignada y estado de solicitud. Después muestra asuntos, evidencia y
+  acción. Se retiraron los conteos destacados y el gráfico de estados; el tiempo
+  de aprobación se consulta en Indicadores.
   `/resumen` y `/decisiones`
   son alias de la portada; no duplican entradas del menú. Cabecera y navegación
   permanecen visibles. Se retiró el frontend del mapa a petición del usuario.
@@ -59,8 +60,11 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
   operaciones, fuentes y administración existen `/integracion` (traza),
   `/indicadores` (resultados por fila) y `/decisiones` (alias de Resumen).
   Indicadores muestra una pregunta activa con gráfico antes de sus registros;
-  una aprobación aislada tiene una cronología. Los SLA propuestos se visualizan
-  por tipo de reloj, sin cálculo de cumplimiento.
+  una aprobación aislada tiene una cronología. Sus registros están visibles y
+  los SLA propuestos quedan en tablas de referencia, sin cálculo de cumplimiento.
+  La navegación lateral tiene fondo azul ECON y conserva sus enlaces. Integración
+  abre con las etapas de la traza y los datos pendientes; Fuentes compara registros
+  leídos y no incluidos, conservando los totales desconocidos.
 - Credenciales solo en el servidor; lecturas y escrituras remotas deshabilitadas
   por defecto; no publicar acceso live sin protección.
 - La autenticación y los roles se administran en la aplicación

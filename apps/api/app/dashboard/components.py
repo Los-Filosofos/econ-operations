@@ -80,7 +80,7 @@ def flatten(children):
 def section(title: str, *children, **props):
     return html.Section(
         [dmc.Title(title, order=2, size="h4", mb="sm"), *flatten(children)],
-        className="page-section",
+        className=props.pop("className", "page-section"),
         **props,
     )
 
@@ -129,8 +129,22 @@ def link(label, href: str, **props):
     return dmc.Anchor(label, href=href, size=props.pop("size", "sm"), **props)
 
 
-def back_link(label: str, href: str):
-    return link(dmc.Group([icon("arrow-left", 16), label], gap=6, wrap="nowrap"), href, mt="sm")
+def breadcrumbs(parent: str, href: str, current: str):
+    return html.Nav(
+        html.Ol(
+            [
+                html.Li(link(parent, href)),
+                html.Li(
+                    [
+                        html.Span("/", className="breadcrumb-separator", **{"aria-hidden": "true"}),
+                        html.Span(current, **{"aria-current": "page"}),
+                    ]
+                ),
+            ]
+        ),
+        className="page-breadcrumbs",
+        **{"aria-label": "Ruta de navegación"},
+    )
 
 
 def empty(title="Sin registros en esta consulta", description="Prueba con otra búsqueda."):

@@ -70,16 +70,12 @@ para inferir relaciones.
 La portada y sus alias reutilizan la lectura del hub y el registro del navegador;
 la función de presentación no consulta proveedores por su cuenta. Conservan
 `mode` y no aplican `q` ni `filter`. Agenda y acciones comparten población y se
-presentan con prioridad visual: lectura ejecutiva, gráficos de estados y agenda,
-y después la tabla de asuntos. En escritorio los dos gráficos comparten una fila;
-en pantallas pequeñas se apilan.
-
-La lectura ejecutiva antepone tres señales a la tabla: solicitudes pendientes
-según el estado original, unidades únicas OBSOLETA vinculadas a solicitudes
-activas y la última aprobación con duración evaluable de I1. La tercera muestra
-una observación identificada, no un promedio ni cumplimiento de SLA. OBSOLETA
-es una condición administrativa: no se interpreta como falla o paro. Conteos
-y ausencias se limitan a las filas de esta lectura; no describen la flota completa.
+presentan con prioridad visual: agenda a todo el ancho y después la tabla de
+asuntos. Cada franja conserva el ID de la solicitud, muestra proyecto, unidad
+asignada (o su ausencia), estado e intervalo. Los datos originales se pueden
+desplegar debajo de las acciones. No hay tarjetas de conteos ni gráfico de
+distribución de estados en la portada. OBSOLETA sigue siendo una condición
+administrativa que requiere revisar la asignación, no una afirmación de falla.
 
 | Bloque | Qué muestra | Regla y límite |
 | --- | --- | --- |
@@ -94,8 +90,10 @@ no codifica estado.
 
 ## Presentación de indicadores
 
-La página presenta una pregunta activa con el gráfico antes de los registros.
-Una aprobación aislada se representa como intervalo creado–aprobado, con hitos
+La página presenta una pregunta activa con el gráfico antes de los registros,
+que permanecen visibles; la evidencia técnica y el método se despliegan aparte.
+Una aprobación aislada se representa como dos hitos unidos por una línea fina,
+creado–aprobado, con la duración rotulada
 y un eje de reloj en El Salvador redondeado a minutos completos. Varias duraciones
 se comparan mediante barras. La escala usa segundos, minutos u horas según la
 magnitud. Cada gráfico conserva acceso a sus filas y evidencia; no se promedian
@@ -104,10 +102,54 @@ registros ni se rellenan ausencias.
 Los conteos y tablas conservan la población de la lectura. Indicadores sin casos
 o sin evidencia suficiente muestran el motivo y el dato requerido; no se presentan
 como cero problemas. Cobertura, definiciones y SLA propuestos se consultan aparte.
-Los umbrales propuestos se representan con gráficos de puntos separados por
-reloj hábil, corrido o por acordar. Siguen pendientes de acuerdo con ECON;
+Los umbrales propuestos se presentan como tablas de referencia en una pestaña
+separada. Siguen pendientes de acuerdo con ECON; no se grafican como resultados,
 no se calcula cumplimiento ni se superponen como metas sobre otro tipo de reloj.
 La portada no repite estas fichas ni sus explicaciones.
+
+## Cobertura y recorrido de integración
+
+Fuentes compara los registros leídos con el total informado de cada colección
+de Prisma. Las barras apiladas al 100 % comparan la proporción consultada de cada
+colección, con numerador y denominador junto a cada barra: 2/2 y 5/15 no son
+colecciones del mismo tamaño. La parte rayada representa
+registros fuera de la lectura, no equipos indisponibles. Un total ausente o menor
+que los registros devueltos no genera un resto; se etiqueta como desconocido o
+inconsistente, sin porcentaje. Una colección vacía (0/0) tampoco recibe un
+porcentaje; 0/N con N positivo sí representa 0 %. Si Prisma no se pudo leer,
+no se dibuja un gráfico de ceros.
+La tabla alternativa conserva numerador, total y resto. Startrack no recibe un
+denominador inventado ni se incorpora a esos conteos.
+
+Integración abre con un recorrido de cuatro etapas. Cada etapa conserva el
+estado que entrega `build_trace`; no se deduce un porcentaje de avance ni la
+completitud de etapas previas. Los pendientes y el enlace a la solicitud se ven
+antes del detalle técnico. Los instantes y duraciones siguen en la pestaña
+Tiempos: la falta de eventos no produce una cronología ficticia.
+
+## Elección del gráfico y del color
+
+| Pregunta | Representación | Alternativas evaluadas |
+| --- | --- | --- |
+| ¿Cuándo se solicita usar cada unidad? | Intervalos de calendario por solicitud; naranja pendiente y verde aprobada, siempre rotulados | Una línea de tendencia implicaría observaciones sucesivas de una variable; un circular perdería las fechas y los solapamientos |
+| ¿Cuánto tardó esta aprobación? | Hitos creado/aprobado unidos, duración exacta en el detalle | Una barra aislada no compara casos; velocímetro o semáforo exigirían una meta validada |
+| ¿Qué registros llevan más tiempo? | Barras horizontales ordenadas, origen cero y unidad común; hasta diez filas identificadas | Puntos serían válidos para comparar posiciones, pero las barras permiten leer directamente las duraciones desde cero. Sin muestra suficiente, histograma o caja no describen una distribución útil |
+| ¿Qué proporción de cada colección se consultó? | Barras al 100 % con conteos explícitos; grafito leído y trama gris fuera de la consulta | Dos circulares dificultan comparar coberturas; juntar solicitudes y equipos en un circular inventaría una población común |
+| ¿Cuántos equipos tienen cada estado administrativo? | Barras ordenadas con conteos y estados originales | El circular sería posible solo para la lectura, pero categorías pequeñas o iguales se comparan mejor con longitudes; nunca representa la flota completa |
+| ¿En qué etapa falta evidencia de integración? | Lista de etapas con estado y motivo | Un embudo o Sankey exigiría cantidades comparables y flujos observados entre etapas; no se infieren desde estados |
+
+Las mediciones sin categoría de estado usan grafito (`MEASURE` en `theme.py`):
+la longitud o posición expresa la magnitud. El azul ECON sigue en identidad y
+acciones. Verde, naranja, violeta y rojo conservan su significado de estado;
+no se usa rojo para una duración larga sin un límite de negocio validado.
+La trama y las etiquetas distinguen datos fuera de la consulta incluso sin color.
+Las escalas secuencial y divergente quedan para intensidad o desviación reales,
+no para colorear arbitrariamente cada barra.
+
+La revisión se apoya en la guía de la ONS sobre
+[color según su función](https://service-manual.ons.gov.uk/data-visualisation/colours/using-colours-in-charts)
+y la guía de Government Analysis Function sobre
+[cuándo usar gráficos circulares](https://analysisfunction.civilservice.gov.uk/support/communicating-analysis/introduction-to-data-visualisation-e-learning/module-9-pie-charts/).
 
 ## Responsabilidad del código y futuras mediciones
 

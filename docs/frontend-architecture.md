@@ -21,7 +21,7 @@ decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
 | `/maquinaria/{id}` | Comparación de evidencia por fuente, interpretación de estados y ubicación fechada | `read` |
 | `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción | `read`; cola y sincronización exigen `manage_transfers`, recepción `declare_reception` |
 | `/integracion` | Visor por etapas con campos y reglas; tiempos y mapeo en pestañas, selección conservada durante la sesión | `read` |
-| `/indicadores` | Una pregunta activa con gráfico primero: intervalo de una aprobación o barras de duraciones; SLA propuestos visuales por tipo de reloj y registros en detalle | `read` |
+| `/indicadores` | Hitos de una aprobación o barras de duraciones, registros visibles y SLA propuestos en tablas de referencia | `read` |
 | `/fuentes` | Procedencia, alcance y estado de las consultas | `read` |
 | `/administracion` | Alta, rol, activación y contraseña de usuarios | `manage_users` (solo `admin`) |
 
@@ -46,12 +46,20 @@ El frontend del mapa se retiró a petición del usuario.
 
 ## Presentación y paleta
 
-La navegación usa una barra lateral oscura y el área de trabajo una superficie
+La navegación usa una barra lateral azul ECON y el área de trabajo una superficie
 clara; los estados son texto legible, con icono solo para incidencias, sin
 píldoras ni puntos decorativos. El rol de la sesión se consulta en el menú de cuenta.
-La paleta `navigation` y las variables de superficie se definen en `theme.py`.
+Las variables de superficie se definen en `theme.py`. El enlace activo usa un
+tono azul más oscuro con texto y borde blancos; se retiró el encabezado redundante.
 Las tablas ocupan el ancho de trabajo; los análisis usan una superficie única,
 sin laterales de explicación ni series de tarjetas.
+
+La portada prioriza una agenda de uso con asignación a todo el ancho y la tabla
+de acciones. Indicadores mantiene visibles los registros que sustentan el gráfico;
+los SLA se consultan en tablas, sin gráficos de umbrales propuestos. Integración
+abre en «Recorrido», con estados independientes por etapa y pendientes explícitos.
+`coverage_analytics.py` presenta en Fuentes la cobertura de cada colección de
+Prisma, sin convertir datos ausentes en ceros. Todos conservan acceso a evidencia.
 El sondeo de estado lee solo metadatos del último corte y no carga su JSON de
 proveedores. Mientras hay lecturas en curso, no dispara otra actualización
 automática; el registro tampoco se vuelve a leer si ya tiene la misma versión.
@@ -67,7 +75,8 @@ Grid y el template Plotly `econ`:
 | --- | --- | --- |
 | Marca y acciones primarias | Azul ECON `#144f81` (`primaryColor: econ`, tono 7) | Solo identidad, enlaces y botón principal; **el azul no codifica estado** |
 | Estados (cualitativa) | `pending #eb6834`, `active #199e70`, `busy #4a3aa7`, `issue #d03b3b`, `neutral #868e96` | `state_family` mapea `PENDIENTE/QUEUED/SENDING…`, `APROBADA/DISPONIBLE/SENT/COMPLETADA…`, `OCUPADA/ASIGNADA`, `FAILED/BLOCKED/RECHAZADA/UNKNOWN`; lo no reconocido es `neutral`. `issue` siempre va con icono y texto |
-| Magnitudes | Secuencial azul `#86b6ef → #0d366b` (`SEQUENTIAL`) | Un solo tono; más oscuro es más |
+| Cantidades y duraciones | Grafito `#49515b` (`MEASURE`) | La longitud o posición expresa la magnitud; no el estado |
+| Intensidad | Secuencial azul `#86b6ef → #0d366b` (`SEQUENTIAL`) | Reservada para datos donde la intensidad del color realmente codifique magnitud |
 | Desviación frente a meta | Divergente `#0d366b … #f0efec … #b3261e` (`DIVERGING`) | Neutro `#f0efec` en el cero; azul por debajo, rojo por encima |
 
 Tipografía Public Sans (OFL), servida localmente y compartida con Plotly y
@@ -147,6 +156,12 @@ cambiar origen o búsqueda, o terminar una acción del flujo, vuelve a
 consultarla. Un store separado conserva `WorkflowOverview` por modo. Planes,
 cortes, eventos y recepciones persisten en PostgreSQL: el store del navegador
 es una proyección, no el registro durable.
+
+Los enlaces internos de las tablas AG Grid conservan el documento y los stores
+al abrir solicitudes, maquinaria y movimientos. Los enlaces externos, descargas
+y clics con modificadores mantienen su comportamiento nativo. Abrir/cerrar el
+menú móvil, su atributo `aria-expanded` y la visibilidad del estado de lectura
+son callbacks del navegador: no necesitan una consulta de sesión al servidor.
 
 **Refresco sin botón.** No existe un botón Actualizar: el `dcc.Interval`
 `status-poll` sondea `GET /api/v1/status?mode=…` cada 15 segundos

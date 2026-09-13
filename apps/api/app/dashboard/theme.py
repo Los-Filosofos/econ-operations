@@ -11,6 +11,9 @@ import plotly.io as pio
 BRAND = "#144f81"
 INK, MUTED, LINE, SURFACE = "#1f2933", "#5c6470", "#dfe5ea", "#f1f4f7"
 PAPER = "#ffffff"
+# A measured amount is not an operational state or a brand action.
+MEASURE = "#49515b"
+CHART_INK = "#111820"
 FONT = "Public Sans, sans-serif"
 NAV_SHADES = [
     "#eef4f8", "#d2e0ea", "#aec4d4", "#8faec3", "#688fa9",
@@ -99,6 +102,11 @@ def state_family(value: str | None) -> str:
 
 def state_color(value: str | None) -> str:
     return FAMILY_COLORS[state_family(value)]
+
+
+def state_label_color(value: str | None) -> str:
+    """At least 4.5:1 against the state fill for small labels inside calendar bars."""
+    return PAPER if state_family(value) in {"busy", "issue"} else CHART_INK
 
 
 pio.templates["econ"] = go.layout.Template(

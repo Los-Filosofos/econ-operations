@@ -9,7 +9,7 @@ from dash import dcc
 
 from app.dashboard.analytics import operations_for, readable
 from app.dashboard.context import QueryContext
-from app.dashboard.theme import figure, state_color
+from app.dashboard.theme import figure, state_color, state_label_color
 from app.models.hub import HubResponse, RequestRecord
 from app.models.operations import MovementRecord
 from app.models.workflow import WorkflowOverview
@@ -154,7 +154,10 @@ def request_axis_label(request: RequestRecord) -> str:
     project = request.project_name or "Proyecto sin nombre"
     if len(project) > 18:
         project = project[:15].rstrip() + "…"
-    return f"{escape(project)}<br>{escape(status)}"
+    unit = request.machinery_asset_number or (
+        "Unidad asignada" if request.machinery_id else "Sin unidad"
+    )
+    return f"{escape(project.split(' - ')[0])}<br>{escape(unit)}<br>{escape(status)}"
 
 
 def states_figure(states: list[tuple[str, int]]):
@@ -195,7 +198,8 @@ def states_figure(states: list[tuple[str, int]]):
 
 def usage_figure(timeline: UsageTimeline):
     periods = timeline.periods
-    chart = figure(min(480, max(180, len(periods) * 36 + 80)))
+    chart = figure(max(215, len(periods) * 58 + 90))
+    chart.update_layout(uniformtext={"minsize": 12, "mode": "hide"})
     if not periods:
         return chart
     identifiers = [period.request.id for period in periods]
@@ -204,8 +208,16 @@ def usage_figure(timeline: UsageTimeline):
         x=[period.calendar_days * DAY_MS for period in periods],
         y=identifiers,
         orientation="h",
-        width=0.32,
+        width=0.3,
         marker_color=[state_color(period.request.status) for period in periods],
+        text=[
+            f"{short_date(period.starts_on)} – {short_date(period.ends_on)}" for period in periods
+        ],
+        textposition="inside",
+        insidetextanchor="middle",
+        insidetextfont={
+            "color": [state_label_color(period.request.status) for period in periods],
+        },
         customdata=[
             [
                 escape(period.request.provenance.source_id or period.request.id),
@@ -241,10 +253,7 @@ def usage_figure(timeline: UsageTimeline):
         categoryarray=identifiers,
         autorange="reversed",
         tickmode="array",
-        tickvals=identifiers[:: max(1, (len(periods) + 9) // 10)],
-        ticktext=[
-            request_axis_label(period.request)
-            for period in periods[:: max(1, (len(periods) + 9) // 10)]
-        ],
+        tickvals=identifiers,
+        ticktext=[request_axis_label(period.request) for period in periods],
     )
     return chart
