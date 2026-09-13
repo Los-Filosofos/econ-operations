@@ -20,6 +20,7 @@ decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
 | `/maquinaria` | Inventario consultado, incluidos equipos sin solicitud, con filtros y acceso por ID | `read` |
 | `/maquinaria/{id}` | Comparación de evidencia por fuente, interpretación de estados y ubicación fechada | `read` |
 | `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción | `read`; cola y sincronización exigen `manage_transfers`, recepción `declare_reception` |
+| `/integracion` | Traza de una solicitud: datos leídos de Prisma, transformación de ECON, payload preparado para Startrack, respuesta del proveedor y tiempos del traslado | `read` |
 | `/fuentes` | Procedencia, alcance y estado de las consultas | `read` |
 | `/administracion` | Alta, rol, activación y contraseña de usuarios | `manage_users` (solo `admin`) |
 
@@ -101,8 +102,14 @@ responsable, instante con zona y referencia de constancia.
 
 ## Estado, errores y habilitaciones
 
-La URL conserva `mode`, `q` y `filter`. Se rechazan modos desconocidos,
-parámetros duplicados, filtros inválidos y búsquedas mayores de 100 caracteres.
+La URL conserva `mode`, `q` y `filter`. El **origen de datos (`mode`) se
+conserva en la URL en todas las páginas**, incluidos los detalles, `/fuentes`,
+`/integracion` y `/administracion`. El **buscador (`q`) solo se muestra en
+Resumen, Solicitudes, Maquinaria y Operaciones**, que son las páginas con una
+población filtrable; las páginas de detalle, `/integracion`, `/fuentes` y
+`/administracion` no lo presentan, porque ahí no filtraba nada. Se rechazan
+modos desconocidos, parámetros duplicados, filtros inválidos y búsquedas
+mayores de 100 caracteres.
 Aplicar (o Enter en Buscar) y las pestañas de filtro actualizan la URL;
 Atrás/Adelante sincroniza los controles. Abrir un detalle desde una lista
 conserva el modo pero no limita el registro por la búsqueda.

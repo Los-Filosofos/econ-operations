@@ -107,6 +107,7 @@ sesión pero sin el permiso de la operación, la respuesta es `403`. Con
 | `PATCH /api/v1/users/{user_id}` | Cambia nombre, rol, estado o contraseña. `409` al desactivar la propia cuenta o dejar el sistema sin `admin` activo; una contraseña nueva cierra las sesiones previas. |
 | `GET /api/v1/hub` | Consulta maquinaria, solicitudes y evidencia relacionada. Revisar `sources`, `scope`, `operation_evidence` y procedencia. |
 | `GET /api/v1/operations` | Lee una página de planes e historial locales, 100 movimientos por defecto. Revisar `available`, `complete`, `coverage` y `message`. |
+| `GET /api/v1/integration/{request_id}` | Devuelve la misma traza que la página `/integracion`: `stages` (Prisma entrega, ECON normaliza, Startrack recibe, Startrack devuelve), `field_map` campo a campo con su tratamiento y `timeline` con los instantes registrados. Admite `mode`. Solo lectura: no prepara, no encola y no envía nada; sin movimiento guardado el `payload` queda en `null` y se devuelve la preparación con sus faltantes. `401` sin sesión, `403` sin permiso `read`, `404` si la solicitud no está en la lectura acotada de ese origen. |
 | `GET /api/v1/operations/catalogs` | Consulta catálogos acotados de Startrack. Siempre es live; no declara selector de modo. Añadir `mode=fixture` no cambia el origen. |
 | `POST /api/v1/operations/plans` | Guarda correspondencias y preparación local (`manage_transfers`). Un 201 puede ser un plan `blocked`; revisar `preparation`. |
 | `POST /api/v1/operations/{movement_id}/queue` | Revalida un plan live y lo encola (`manage_transfers`). No envía el POST a Startrack en esa petición. |
@@ -117,6 +118,12 @@ sesión pero sin el permiso de la operación, la respuesta es `403`. Con
 
 - `mode` admite `fixture` y `live`; en GET con selector el valor predeterminado
   es `fixture`. Los cuerpos POST que lo requieren deben proporcionarlo.
+  `GET /api/v1/integration/{request_id}` también lo admite y, como el resto del
+  hub, no mezcla orígenes: una traza `fixture` nunca completa huecos con
+  lecturas `live`.
+- `integration.request_id` acepta el ID del modelo de lectura
+  (`nexus:request:…`) o el ID original de Prisma, hasta 200 caracteres. Un
+  nombre de proyecto o de máquina no identifica una solicitud.
 - `hub.search` admite hasta 100 caracteres, sin distinguir mayúsculas. Busca
   IDs, código, número de activo, nombre, empresa y proyecto de equipos; ID y
   proyecto de solicitudes. Conserva sus relaciones mediante `maquinaria_id`
@@ -227,6 +234,7 @@ principal en 8050 conserva su configuración y PostgreSQL.
 | `201` | Plan o usuario guardado (plan: recuperado por identidad; revisar si quedó `draft` o `blocked`). |
 | `401` | Sin sesión válida: iniciar sesión en `POST /api/v1/auth/login`. |
 | `403` | La sesión no tiene el permiso de la operación (`manage_transfers`, `declare_reception` o `manage_users`). |
+| `404` | El recurso direccionado por la ruta no existe en el modo indicado; hoy lo usa `GET /api/v1/integration/{request_id}`. No significa que la solicitud no exista en Prisma: puede no estar en la población leída de ese modo. |
 | `409` | Rechazo del flujo: gestión/live deshabilitados, dependencia no disponible, identidad/estado incompatible, registro no encontrado, evidencia inválida, email repetido o cambio que dejaría sin administrador. El contrato actual usa 409 también para estas causas. |
 | `422` | Validación estructural: modo inválido, campo requerido ausente, longitud excesiva, fecha mal formada o campos adicionales en cuerpos estrictos. |
 | `429` | Demasiados intentos de login desde la misma IP; esperar quince minutos. |
