@@ -185,7 +185,7 @@ metas ISO de ECON; esas referencias no son RF/RNF del reto.
 
 ## Coherencia documental al cerrar la entrega
 
-La [revisión de contexto](revision-contexto.md), la
+El [contexto vigente](contexto-vigente.md), la
 [guía de analítica](analitica-decisiones.md) y el
 [diccionario vigente](diccionario-modelo-econ.md) describen la documentación
 actualizada. El inventario anterior de modelo operativo queda sustituido por el

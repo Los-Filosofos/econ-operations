@@ -1,25 +1,21 @@
 # ECON Python Hub
 
-Dash + Plotly + AG Grid Community on FastAPI, with SQLModel + Alembic and PostgreSQL for the integration store. The hub endpoint remains a read projection; the separate operations service persists plans, source snapshots, a dispatch outbox and evidence. An explicit CLI worker performs bounded synchronization. No application login is implemented. All business data for this project is synthetic sandbox data; file samples and current provider reads remain separate evidence.
+Dash + Plotly + AG Grid Community on FastAPI, with SQLModel + Alembic and PostgreSQL for the integration store. The hub endpoint remains a read projection; the separate operations service persists plans, source snapshots, a dispatch outbox and evidence. An explicit CLI worker performs bounded synchronization. All business data for this project is synthetic sandbox data; file samples and current provider reads remain separate evidence.
 
 From the repository root:
 
-```powershell
-if (-not (Test-Path apps/api/.env)) {
-    Copy-Item apps/api/.env.example apps/api/.env
-}
+```sh
+[ -f apps/api/.env ] || cp apps/api/.env.example apps/api/.env
 docker compose up -d --wait db
 uv sync --project apps/api --locked
-.\scripts\dev.ps1
+uv run --directory apps/api alembic upgrade head
+./scripts/dev.sh   # PowerShell: .\scripts\dev.ps1
 ```
 
 Do not overwrite an existing `.env`; retain its database settings. Configuration loads `apps/api/.env` regardless of the working directory. Open `http://localhost:8050` for Dash and `http://localhost:8050/docs` for the typed OpenAPI contract. Both use one server and the shared `app/services/hub.py` read service. UI code and local assets live in `app/dashboard`; the URL carries the origin, search and display filter. Snapshots are scoped to each browser in memory. See [the dashboard architecture](../../docs/frontend-architecture.md).
 
-```powershell
-uv run --directory apps/api ruff check .
-uv run --directory apps/api ruff format --check .
-uv run --directory apps/api pytest
-uv run --directory apps/api alembic upgrade head
+```sh
+./scripts/check.sh   # ruff check, ruff format --check, pytest; --container builds the image
 ```
 
 The health tests use temporary SQLite files; normal development uses the existing PostgreSQL Docker service. Schema migrations still run explicitly, never on server startup. `DATABASE_URL` accepts `postgres://`, `postgresql://` and `postgresql+psycopg://`: the first two select the installed psycopg driver without changing credentials, hostname, database or SSL options. Other explicit driver schemes are preserved. CI without a local `.env` must supply `DATABASE_URL` before importing the application.
@@ -51,7 +47,9 @@ Administrative availability is not physical availability. Task completion, GPS/g
 
 ## Nexus live reads
 
-Live mode is disabled until the server operator explicitly sets `ALLOW_LIVE_READS=true` and configures `NEXUS_EMAIL` and `NEXUS_PASSWORD`. Because the application has no login, enabling live mode makes its allowed upstream data readable by anyone who can reach this API. Leave live reads disabled on a public fixture deployment. The browser receives no upstream credentials; `VITE_*` variables must never contain them.
+Live mode is disabled until the server operator explicitly sets `ALLOW_LIVE_READS=true` and configures `NEXUS_EMAIL` and `NEXUS_PASSWORD`. Leave live reads disabled on a public fixture deployment. The browser never receives upstream credentials.
+
+<!-- TODO(auth): document which roles may read live data and manage operations once the login phase lands. -->
 
 The connector contacts only `https://econ-key.maic.ai`. It authenticates through the observed `/api/auth/login` endpoint and keeps the cookie in a process-local HTTP client. The hub reads equipment and requests; the workflow can read exact request/equipment details, and optional methods expose projects and operators. It performs no business writes. Redirects and environment proxies are disabled.
 
@@ -69,11 +67,11 @@ A `401` allows one serialized reauthentication and one repeat of that safe GET. 
 
 To inspect the supplied approved request without any network calls:
 
-```powershell
+```sh
 uv run --directory apps/api python -m app.cli.prepare_transfer --request-source-id 46d2573e-08d3-4855-971d-2fbf9564e135
 ```
 
-An optional `--mapping` local JSON file supplies the explicit mapping for a reviewable draft. This does not create records in Prisma or Startrack. Prisma's supplied contract does not expose project/request creation or approval webhooks; Startrack's documented webhooks forward vehicle telemetry. See [current context](../../docs/contexto-vigente.md) and [Astra evaluations](../../docs/evaluaciones-astra.md).
+An optional `--mapping` local JSON file supplies the explicit mapping for a reviewable draft. This does not create records in Prisma or Startrack. Prisma's supplied contract does not expose project/request creation or approval webhooks; Startrack's documented webhooks forward vehicle telemetry. See [current context](../../docs/contexto-vigente.md).
 
 ## Persistent workflow
 

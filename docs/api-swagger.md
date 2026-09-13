@@ -31,7 +31,7 @@ de aprobación. El flujo actual prepara movimientos desde registros existentes.
 Desde la raíz, con el entorno local preparado según [desarrollo](desarrollo.md):
 
 ```powershell
-.\scripts\dev.ps1
+./scripts/dev.sh   # o .\scripts\dev.ps1 en PowerShell
 ```
 
 En otra terminal:
@@ -56,8 +56,9 @@ RE-03/MOT-006/PROY-006. Buscar RE-03 no debe fabricar esa operación.
 `fixture` lee ejemplos proporcionados y evidencia local de ese mismo modo,
 sin consultas a proveedores. `live` lee el sandbox sintético; está deshabilitado
 por defecto y nunca usa fixtures como sustituto. Ningún parámetro del navegador
-habilita proveedores. No hay login de aplicación ni botón Authorize para sus
-credenciales: estas permanecen en configuración del servidor.
+habilita proveedores. Las credenciales de proveedores permanecen en la
+configuración del servidor y no se introducen en Swagger.
+<!-- TODO(auth): documentar cómo autenticarse en Swagger (cookie de sesión o esquema de seguridad) cuando el login esté implementado. -->
 
 ## Operaciones disponibles
 

@@ -168,8 +168,8 @@ detalla instalación, ciclos CLI y límites de cobertura.
 `ALLOW_LOCAL_MANAGEMENT` permite gestión local; `ALLOW_LIVE_READS`, lecturas;
 `ALLOW_LIVE_WRITES`, envío; `AUTO_QUEUE_TRANSFERS`, encolado automático de planes
 válidos. Inicialmente son `false`. La UI no concede esos permisos. No se habilitan
-credenciales ni se ejecutan escrituras por seguir este documento. Sin login de
-aplicación, la gestión permanece local y live no debe publicarse sin protección.
+credenciales ni se ejecutan escrituras por seguir este documento. La gestión
+permanece local y live no debe publicarse por defecto.
 
 La creación autenticada en Startrack continúa pendiente de validar credenciales,
 permisos, IDs y codificación de listas aceptada por la cuenta. Las pruebas locales

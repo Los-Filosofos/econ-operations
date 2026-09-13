@@ -344,7 +344,7 @@ La asignación del kit **RE-03 / MOT-006 / PROY-006** permanece aparte. Una capt
 posterior muestra PROY-006, Cargador frontal, 11–26 de septiembre de 2026,
 Pendiente y sin maquinaria, pero no su UUID. No se intercambian sus IDs con los
 de PROY-014/CF-03 para completar la demostración. Ver
-[identidad y muestras](contexto-vigente.md#identidad-muestras-y-fechas) y
+[identidad y muestras](contexto-vigente.md#identidad-y-muestras) y
 [casos suministrados](onedrive/04-casos-de-uso.md).
 
 ## Responsabilidades propuestas para confirmar
@@ -366,9 +366,9 @@ Una misma persona podría ejercer distintos roles, sin que los IDs se fusionen.
 | Recepción de la máquina y constancia | Responsable receptor del proyecto | Gerencia de Proyecto | Logística; operador | Control de Costos |
 | Validación económica posterior | Control de Costos | Responsable de Control de Costos | Proyecto; Logística | Gerencia correspondiente |
 
-La recepción actual guarda una declaración y su referencia; no existe login
-de aplicación que certifique la identidad del declarante. El acuerdo de quién
+La recepción actual guarda una declaración y su referencia. El acuerdo de quién
 puede recibir y qué documento lo acredita sigue siendo una decisión operativa.
+<!-- TODO(auth): indicar si el usuario autenticado que registra la recepción queda vinculado a la declaración. -->
 
 ## Lagunas que deben resolverse antes de ampliar la equivalencia
 

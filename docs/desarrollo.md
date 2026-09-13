@@ -5,21 +5,23 @@ Se usa Python 3.13 y uv; `apps/api/uv.lock` fija las dependencias.
 
 ## Preparar y ejecutar
 
-```powershell
+```sh
 uv sync --project apps/api --locked
-if (-not (Test-Path -LiteralPath apps/api/.env)) {
-    Copy-Item -LiteralPath apps/api/.env.example -Destination apps/api/.env
-}
+[ -f apps/api/.env ] || cp apps/api/.env.example apps/api/.env
 docker compose up -d --wait db
 uv run --directory apps/api alembic upgrade head
-.\scripts\dev.ps1
+./scripts/dev.sh
 ```
+
+En PowerShell, `Copy-Item apps/api/.env.example apps/api/.env` si falta el
+`.env` y `.\scripts\dev.ps1` para arrancar.
 
 La copia conserva los `.env` existentes. Compose conserva `econ-backend`, el
 volumen `econ-backend_postgres18_data` y PostgreSQL en `127.0.0.1:54329`.
 Las migraciones se ejecutan explícitamente, no al arrancar.
 
-Usar `scripts/dev.ps1 -Port 8051` para otro puerto. En cualquier plataforma:
+Usar `scripts/dev.sh 8051` o `scripts/dev.ps1 -Port 8051` para otro puerto.
+Sin scripts:
 
 ```sh
 uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050 --reload
@@ -35,13 +37,13 @@ uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050 --
 | `/health/live` | Proceso disponible |
 | `/health/ready` | Conexión con la base |
 
-Para una demo temporal sin Docker, usar una terminal PowerShell separada:
+Para una demo temporal sin Docker, en una terminal separada:
 
-```powershell
-$env:DATABASE_URL = 'sqlite://'
-$env:ALLOW_LIVE_READS = 'false'
-.\scripts\dev.ps1
+```sh
+DATABASE_URL='sqlite://' ALLOW_LIVE_READS='false' ./scripts/dev.sh
 ```
+
+En PowerShell: `$env:DATABASE_URL = 'sqlite://'; $env:ALLOW_LIVE_READS = 'false'; .\scripts\dev.ps1`.
 
 Esto no modifica el `.env` ni PostgreSQL. Las muestras no requieren
 almacenamiento; SQLite en memoria permite el control de salud. Para probar el
@@ -89,8 +91,8 @@ DataFrames globales modificables. El navegador no autoriza los conectores.
 
 ## Verificaciones
 
-```powershell
-.\scripts\check.ps1 -Container
+```sh
+./scripts/check.sh --container   # PowerShell: .\scripts\check.ps1 -Container
 ```
 
 Comandos equivalentes:
@@ -108,4 +110,4 @@ La imagen contiene los assets; construirla no hace un despliegue remoto.
 
 `ALLOW_LIVE_READS=false` sigue siendo el valor predeterminado. Credenciales
 solo en el servidor, nunca en `dcc.Store`, URLs o assets. La API key de
-Startrack sigue pendiente; [ver evidencia](revision-contexto.md).
+Startrack sigue pendiente; ver [integraciones](integraciones-reales.md).

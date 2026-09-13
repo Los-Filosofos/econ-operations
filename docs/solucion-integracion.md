@@ -41,7 +41,7 @@ flowchart LR
 ```
 
 - `apps/api/app/dashboard`: páginas, formularios, navegación y tablas. Dash y
-  FastAPI comparten el servicio Python; no hay frontend React ni `apps/web`.
+  FastAPI comparten el mismo servicio Python.
 - `app/api`: contratos HTTP tipados. El hub consulta las fuentes;
   `/api/v1/operations` permite consultar movimientos y, con gestión local
   habilitada, guardar planes, ponerlos en cola, sincronizar y registrar recepción.
@@ -143,11 +143,11 @@ Desde la raíz del repositorio, conservar el `.env` existente y su `DATABASE_URL
 Si falta, partir de `apps/api/.env.example`. No modificar el nombre del proyecto
 Compose ni borrar su volumen.
 
-```powershell
+```sh
 uv sync --project apps/api --locked
 docker compose up -d --wait db
 uv run --directory apps/api alembic upgrade head
-.\scripts\dev.ps1
+./scripts/dev.sh   # PowerShell: .\scripts\dev.ps1
 ```
 
 La migración es explícita y se ejecuta sobre la base indicada por `DATABASE_URL`.
@@ -171,11 +171,14 @@ comprobar la conexión y la migración antes de guardar o sincronizar.
 
 Prisma utiliza `NEXUS_EMAIL` y `NEXUS_PASSWORD`. Startrack utiliza
 `STARTRACK_API_KEY` y `STARTRACK_PASSWORD`. No introducir secretos en formularios,
-URLs, código, capturas, registros o variables `VITE_*`. Una sesión abierta de
+URLs, código, capturas o registros. Una sesión abierta de
 Startrack en el navegador no prueba que las credenciales de su API funcionen.
 
-La aplicación no tiene login. La gestión HTTP exige conexión loopback, nombre de
-host local y controles de origen; un indicador del navegador no concede permisos.
+<!-- TODO(auth): sustituir este párrafo por la relación entre roles de usuario y habilitaciones del servidor. -->
+La autenticación y los roles se administran en la aplicación; las habilitaciones
+de esta tabla siguen siendo del servidor. La gestión HTTP exige conexión
+loopback, nombre de host local y controles de origen; un indicador del navegador
+no concede permisos.
 No publicar el servicio con live habilitado ni reenviar un origen público hacia
 la gestión local. CORS no sustituye una barrera de acceso a datos privados.
 En despliegues públicos de muestras, mantener las cuatro habilitaciones en
@@ -222,7 +225,7 @@ correspondencias nuevas a partir de coincidencias de nombres.
 
 ## Validación y trabajo pendiente con proveedores
 
-`scripts/check.ps1` ejecuta Ruff, formato y pytest. Las pruebas de integración
+`scripts/check.sh` (o `check.ps1`) ejecuta Ruff, formato y pytest. Las pruebas de integración
 usan respuestas HTTP controladas y bases SQLite aisladas; incluyen concurrencia
 de reclamaciones, idempotencia, resultados ambiguos, aislamiento de evidencia y
 separación de recepción. Sus IDs artificiales viven en tests y no se sirven como

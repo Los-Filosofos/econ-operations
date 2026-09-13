@@ -1,6 +1,6 @@
 # Integración real: exploración de Nexus y Startrack
 
-> Registro de la exploración inicial. Para la implementación posterior consultar [revisión de contexto](revision-contexto.md); para el manual HTML completo y las nuevas conclusiones de diseño, [investigación ampliada](investigacion-manuales-y-diseno.md). Las afirmaciones de trabajo pendiente de este registro conservan su alcance histórico.
+> Registro fechado de la exploración de conectividad. Es evidencia de acceso y contratos observados; el estado implementado está en [contexto vigente](contexto-vigente.md). Las afirmaciones de trabajo pendiente conservan su alcance histórico.
 
 Verificado el **12 de septiembre de 2026**, mediante Chrome, código JavaScript servido a ese navegador, documentación oficial y consultas HTTP pequeñas. Se utilizó únicamente la cuenta asignada a Rodrigo Trujillo / Los Filósofos. Los resultados corresponden a los entornos entregados, no a una validación de producción.
 

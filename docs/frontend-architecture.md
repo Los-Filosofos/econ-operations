@@ -34,10 +34,11 @@ rectos. Se mantienen salto al contenido, foco visible, etiquetas, encabezados,
 teclado de AG Grid y desplazamiento horizontal de tablas. Los gráficos Plotly
 tienen tablas alternativas; ver [definiciones analíticas](analitica-decisiones.md).
 
-La [revisión de interfaz](revision-frontend-2026-09-12.md) mejora la legibilidad
-y la comparación de fuentes. Los iconos SVG locales acompañan texto en navegación
-y acciones, con tamaño y trazo coherentes; no codifican estados ni sustituyen
-etiquetas. Se reducen contenedores anidados sin ocultar campos ni evidencia.
+Los iconos SVG locales acompañan texto en navegación y acciones, con tamaño y
+trazo coherentes; no codifican estados ni sustituyen etiquetas. Los contenedores
+anidados se reducen sin ocultar campos ni evidencia.
+
+<!-- TODO(ui): actualizar identidad visual, paleta y capturas cuando termine el rediseño de la interfaz. -->
 
 ## Servicios y módulos
 
@@ -98,9 +99,10 @@ mensajes de error omiten credenciales y cuerpos privados del proveedor.
 fallback entre modos. La fecha documental no inventa un instante de observación,
 tareas, GPS o recepciones.
 
-No hay login de aplicación. Las lecturas remotas, escrituras remotas y gestión
-local están deshabilitadas por defecto. La gestión exige habilitación del
-servidor, petición local y origen correspondiente; los flags del navegador no
+<!-- TODO(auth): describir aquí el flujo de inicio de sesión, los roles y qué rutas exigen cada rol. -->
+La autenticación y los roles se administran en la aplicación. Las lecturas
+remotas, escrituras remotas y gestión local están deshabilitadas por defecto.
+La gestión exige habilitación del servidor; los flags del navegador no
 otorgan permisos. Las credenciales permanecen en el backend. La ejecución
 periódica requiere iniciar el worker por CLI; navegar por el panel no lo inicia.
 
@@ -108,8 +110,8 @@ periódica requiere iniciar el worker por CLI; navegar por el panel no lo inicia
 
 Los comandos vigentes están en [desarrollo](desarrollo.md),
 [servicio Python](../apps/api/README.md) y
-[guía operativa](solucion-integracion.md). Ejecutar `scripts/check.ps1` para cambios
-de aplicación y `-Container` cuando corresponda validar la imagen. Los cambios de
+[guía operativa](solucion-integracion.md). Ejecutar `scripts/check.sh` (o `check.ps1`) para
+cambios de aplicación y `--container`/`-Container` para validar la imagen. Los cambios de
 interfaz requieren revisar escritorio, móvil, navegación por teclado, estados
 vacío/error y preservación de filtros. Las capturas de versiones anteriores no
 son evidencia visual de la portada actual.

@@ -79,8 +79,8 @@ se explican en [la guía operativa](solucion-integracion.md).
 ## Escala y operación pendientes
 
 Esta persistencia no acredita un historial completo de las fuentes ni capacidad
-para miles de vehículos. La [arquitectura de flota](arquitectura-escalable-flota.md)
-propone separar operación e histórico, medir carga y evaluar procesamiento
+para miles de vehículos. La [propuesta de escala](sincronizacion-y-discrepancias.md#escala-a-miles-de-vehículos-propuesta)
+plantea separar operación e histórico, medir carga y evaluar procesamiento
 paralelo; esas ampliaciones no están implementadas.
 
 Antes de dimensionar un despliegue, medir volumen y ritmo de eventos, retención,

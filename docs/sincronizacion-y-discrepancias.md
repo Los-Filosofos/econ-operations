@@ -4,9 +4,8 @@ Fecha: 12 de septiembre de 2026. **Propuesta de ampliación**, basada en el cód
 actual y los contratos consultados. No describe funcionalidades nuevas ya
 implementadas ni habilita conexiones. Todo el caso conserva datos sintéticos.
 
-Para el objetivo posterior de miles de vehículos y telemetría continua, consultar
-la [arquitectura escalable de flota](arquitectura-escalable-flota.md), que amplía
-esta propuesta con procesamiento distribuido y almacenamiento separado.
+La sección final resume la [escala a miles de vehículos](#escala-a-miles-de-vehículos-propuesta)
+con procesamiento distribuido y almacenamiento separado; también es propuesta.
 
 ## Resultado que buscamos
 
@@ -193,7 +192,8 @@ consumidores de esa IP. No constituye una garantía de latencia.
 
 Un receptor externo requiere una entrada de integración autenticada y aislada
 del panel. Esto se diseñará con el proveedor; no implica habilitar el dashboard
-live al público ni añadir ahora login de usuarios al alcance existente.
+live al público. La autenticación de usuarios de la aplicación es independiente
+de esa entrada de integración.
 
 ## Frontend y orden de desarrollo
 
@@ -241,3 +241,59 @@ la muestra operativa.
 
 Esta propuesta no modifica la matriz de equivalencias original ni convierte las
 capacidades documentadas en acceso validado al sandbox.
+
+## Escala a miles de vehículos (propuesta)
+
+Propuesta para telemetría continua de miles de vehículos. **No implementada ni
+validada con pruebas de carga.** Supuestos: un evento por intervalo, actividad
+24 horas y 1 KB (1.000 bytes) por evento; fórmula `vehículos × 86.400 / intervalo_s`.
+
+| Vehículos | Intervalo | Eventos/s | Eventos/día | Contenido/día |
+| ---: | ---: | ---: | ---: | ---: |
+| 1.000 | 30 s | 33,3 | 2,88 millones | 2,88 GB |
+| 5.000 | 30 s | 166,7 | 14,4 millones | 14,4 GB |
+| 10.000 | 10 s | 1.000 | 86,4 millones | 86,4 GB |
+
+Es contenido bruto antes de compresión, índices, réplicas y copias; el tamaño
+físico se mide, no se deduce. Se conservan Python, FastAPI y Dash; se separan
+recepción, procesamiento, operación y analítica:
+
+```mermaid
+flowchart LR
+    P[Prisma: cambios administrativos] --> I[Receptores FastAPI sin estado]
+    S[Startrack: eventos y conciliación] --> I
+    I --> K[Kafka gestionado: registro duradero]
+    K --> W[Trabajadores Python por partición]
+    W --> O[PostgreSQL: operación, estado actual, incidencias y outbox]
+    K --> H[Histórico analítico: ClickHouse]
+    K --> A[Archivo en almacenamiento de objetos]
+    O --> D[API de lectura y Dash]
+    H --> D
+    O --> Q[Ejecutor de acciones autorizadas] --> S
+```
+
+| Pieza | Criterio |
+| --- | --- |
+| Receptores | Confirmar solo tras aceptación duradera del evento; sin estado compartido en memoria |
+| Kafka | Clave por cuenta, entorno y entidad; orden solo dentro de la partición; permite reprocesar |
+| Trabajadores | Un evento GPS consulta el contexto local de su activo y evalúa solo las reglas afectadas; nunca recorre la flota ni consulta Prisma por cada posición |
+| PostgreSQL | IDs, mapeos con vigencia, movimientos, recepciones, último estado, incidencias y outbox transaccional; en un piloto puede alojar también telemetría con particiones temporales |
+| ClickHouse y archivo | Histórico y agregaciones con deduplicación controlada; retención acordada para auditoría |
+
+Reglas que no cambian con el volumen: entrega repetible exige idempotencia por
+destino (no hay transacción global entre Kafka, PostgreSQL, ClickHouse y
+Startrack); un POST incierto sigue en `unknown`; fechas de evento, recepción y
+procesamiento se guardan separadas y un dato tardío no rejuvenece el estado
+actual. El límite publicado de Startrack (240 peticiones por IP cada dos minutos)
+hace inviable consultar unidad por unidad: la telemetría debe llegar por envío
+de eventos habilitado por el proveedor, con consultas por lotes para recuperar
+huecos, que deben permanecer visibles.
+
+Pruebas mínimas antes de dimensionar infraestructura, con generadores sintéticos
+aislados y sin activar proveedores: sostener 1.000 eventos/s; ráfaga de 10.000
+eventos en un segundo; recuperación tras 15 minutos de parada (900.000 eventos
+acumulados, unos 2.000 eventos/s durante la recuperación); duplicados, desorden,
+eventos inválidos, cambio de asignación, caída de trabajadores y almacén
+indisponible; 1.000 sesiones de interfaz que actualizan cada 15 s (≈67
+solicitudes/s). Medir p95/p99 de recepción a resultado, antigüedad del evento
+pendiente más viejo, pérdida o duplicación de efectos y costo por volumen.

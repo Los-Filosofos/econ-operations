@@ -13,8 +13,8 @@ La implementación está definida en [ADR 0003](adr/0003-python-dash-hub.md),
 
 Desde la raíz del repositorio:
 
-```powershell
-.\scripts\check.ps1 -Container
+```sh
+./scripts/check.sh --container   # PowerShell: .\scripts\check.ps1 -Container
 docker build -t econ-hub apps/api
 ```
 
@@ -39,9 +39,11 @@ en un despliegue remoto la dirección loopback del Compose local.
 
 ## Variables de una demostración pública
 
-Configurar variables durante la ejecución, no al construir assets. Como el hub
-no tiene login de aplicación, una demostración pública conserva exclusivamente
-muestras y las cuatro habilitaciones desactivadas:
+Configurar variables durante la ejecución, no al construir assets. Una
+demostración pública conserva exclusivamente muestras y las cuatro
+habilitaciones desactivadas, con independencia de la autenticación de usuarios:
+
+<!-- TODO(auth): documentar aquí las variables de autenticación y roles (secreto de sesión, usuario administrador inicial) cuando la fase de login las defina. -->
 
 | Variable | Valor o criterio |
 | --- | --- |
@@ -59,8 +61,8 @@ muestras y las cuatro habilitaciones desactivadas:
 también normalizan `postgres://` y `postgresql://` a ese controlador sin cambiar
 usuario, contraseña, host, base o parámetros de conexión.
 
-No poner secretos en URLs del navegador, código, capturas, registros ni variables
-`VITE_*`. CORS no controla por sí solo quién puede consultar una API pública.
+No poner secretos en URLs del navegador, código, capturas ni registros.
+CORS no controla por sí solo quién puede consultar una API pública.
 La gestión HTTP está limitada a peticiones locales con validación de origen:
 publicar un proxy no crea un sistema de permisos ni autoriza live.
 
@@ -105,8 +107,8 @@ cola e historial no acredita todavía la creación autenticada en la cuenta
 Startrack, cuya validación sigue pendiente.
 
 No iniciar este worker live en una demostración pública de muestras. Las
-ampliaciones de [sincronización](sincronizacion-y-discrepancias.md) y
-[escala](arquitectura-escalable-flota.md) son propuestas, no procesos ya desplegados.
+ampliaciones de [sincronización y escala](sincronizacion-y-discrepancias.md)
+son propuestas, no procesos ya desplegados.
 
 ## Comprobaciones de la versión publicada
 
