@@ -1,0 +1,7 @@
+Campo del formulario,Prisma: campo exacto o ausencia,Modelo normalizado / regla de ECON,Campo API de Startrack,Clasificación y alcance
+Contacto: Nombre,"requested_by_name es solicitante; manager_name es gerente, sin confirmar quién recibe.",RequestRecord.requested_by no se convierte en contacto.,contact_name,"Manual; documentado, no soportado por el borrador actual."
+Contacto: Teléfono,No disponible en el objeto de solicitud leído.,Sin campo.,phone_number,"Manual; documentado, no soportado. No se obtiene del código MOT."
+Contacto: Email,No disponible en el objeto de solicitud leído.,Sin campo.,contact_email,"Manual; documentado, no soportado. No usar correo de autenticación."
+Notificaciones de estado: Emails,No hay destinatarios aprobados para la tarea en Prisma.,Sin campo de destinatarios.,notification_emails_csv,"Manual; documentado, no soportado por ECON."
+Notificaciones de estado: Teléfonos,No hay destinatarios aprobados para la tarea en Prisma.,Sin campo de destinatarios.,notification_phone_numbers_csv,"Manual; documentado, no soportado por ECON. El máximo de cinco y el prefijo de país son instrucciones visibles del formulario; requieren validar además las restricciones API."
+Activación de aviso al contacto,No deriva de aprobar la solicitud.,StartrackTaskDraft.notify_contact=False; transporte envía 0.,notify_contact,Decisión explícita implementada: ECON no solicita avisos al contacto ni envía listas de destinatarios. Las reglas propias de la cuenta deben verificarse aparte.

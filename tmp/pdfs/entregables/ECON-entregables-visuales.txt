@@ -1,0 +1,309 @@
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+1
+ECON: gráficos, procesos y arquitectura
+Entrega visual del reto | Prisma / Nexus + Startrack | 13 de septiembre de 2026
+La decisión: relacionar solicitud, máquina, traslado y recepción con evidencia trazable. La portada de Gerencia debe mostrar qué requiere
+atención y qué acción permite cada dato.
+Tres niveles de evidencia: los gráficos describen las muestras del archivo; los diagramas operativos sintetizan el kit; las arquitecturas
+distinguen código existente de ampliaciones propuestas.
+Contenido
+Dónde revisarlo
+Requisitos y responsabilidades
+Páginas 2-4: RF/RNF, alcance y RACI propuesta
+Gráficos de los datos suministrados
+Páginas 5-7: uso solicitado, estados y cobertura
+Procesos y diagramas técnicos
+Páginas 8-13: flujo, identidad, implementación, dónde vive cada estado, sincronización y escala
+Estados, indicador y pendientes
+Páginas 14-16: interpretación de casos, ficha RF-06 y recorrido de revisión
+No hay tareas, GPS ni recepciones en la muestra operativa del archivo. Los diagramas no rellenan esa ausencia. RF-04 y RF-05 conservan su brecha de demostración
+combinada.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+2
+Qué pide el reto: requisitos funcionales
+Síntesis del brief, sección 7. La matriz Markdown conserva la redacción original y la evidencia por requisito.
+Código
+Entregable
+Evidencia y límite
+RF-01
+Inventario de campos nuevos
+Inventario reproducible de campos públicos e internos, con tipos, ejemplos y procedencia; generado
+desde los modelos y verificado en CI (generar_diccionario.py --check). El código fija el tipo; la
+interpretación se documenta.
+RF-02
+Matriz de correspondencias
+Matriz completa del formulario de tarea y campos relevantes: directos, transformados, manuales y sin
+equivalente.
+RF-03
+Responsabilidades
+RACI propuesta para las tres gerencias; no está aprobada como política empresarial.
+RF-04
+Consulta unificada de estado y ubicación
+Interfaz y conectores implementados. Falta acreditar una tarea/GPS vinculados al caso con datos
+disponibles.
+RF-05
+Diferencia de estados y su resolución
+Caso documental Ocupada/Completada explicado. No se presenta como observación integrada de la
+muestra.
+RF-06
+Indicador operativo documentado
+Ficha de tiempo fuera de geocerca sin justificación. Definición disponible; valor no evaluable con la
+muestra.
+Fuente: docs/onedrive/02-brief-del-reto.md, sección 7. Trazabilidad completa: docs/matriz-requisitos-entregables.md.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+3
+Condiciones y formato de entrega
+ Código
+Condición
+Aplicación
+RNF-01
+Solo sandbox / datos suministrados
+Se conservan las muestras; no hay lecturas ni escrituras a proveedores durante la generación.
+RNF-02
+Matrices legibles y reutilizables
+Tablas Markdown exportadas a CSV y XLSX (output/matrices, con manifiesto y verificación en CI)
+y PDFs. Figuras PNG para consulta y SVG editables para reutilización.
+RNF-03
+Prototipo navegable
+Dash con solicitudes, operaciones y fuentes; verificar el recorrido y los límites de evidencia.
+RNF-04
+README de entrega
+Índice de documentos vigentes y guía de ejecución en el repositorio.
+Sección 9: matrices de mapeo y responsabilidades, diagrama de arquitectura y decisiones técnicas en PDF. Las decisiones técnicas tienen
+máximo dos páginas; se entregan también como archivo independiente.
+La presentación final tiene máximo diez diapositivas e incluye reflexión de aprendizaje. Este dossier es documentación visual, no una presentación
+terminada.
+El brief contiene comentarios editoriales que matizan algunos entregables; la matriz registra esa ambigüedad sin tratar los comentarios como reemplazo automático del
+cuerpo.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+4
+Quién actúa y quién responde
+RACI propuesta, derivada del TO-BE y el manual. R realiza; A aprueba o responde; C se consulta; I se informa. Debe validarse con ECON.
+Decisión o dato
+R
+A
+C
+I
+Proyecto, tipo y período de uso solicitados
+Gerencia de Proyecto
+Gerencia de Proyecto
+Logística y Equipo
+Control de Costos
+Aprobación, unidad, operador y tarifa en Prisma
+Logística y Equipo
+Gerencia de Logística y
+Equipo
+Gerencia de Proyecto;
+Mantenimiento
+Operador; Control de
+Costos
+Correspondencias POI/usuario/vehículo y
+programación del traslado
+Logística y Equipo
+Gerencia de Logística y
+Equipo
+Responsable del
+destino; operador;
+soporte de integración
+Gerencia de Proyecto
+Habilitación técnica, validación de contrato y envío
+conforme al plan
+Soporte de integración
+Gerencia de Logística y
+Equipo
+Administrador Startrack;
+Mantenimiento si hay
+restricción
+Gerencia de Proyecto
+Ejecución y evidencias de la tarea
+Operador o motorista
+confirmado
+Gerencia de Logística y
+Equipo
+Responsable del destino
+Gerencia de Proyecto
+Paro, diagnóstico y liberación de mantenimiento
+Mantenimiento
+Gerencia de
+Mantenimiento
+Logística; operador
+Gerencia de
+Proyecto; Control de
+Costos
+Recepción de la máquina y constancia
+Responsable receptor
+del proyecto
+Gerencia de Proyecto
+Logística; operador
+Control de Costos
+Validación económica posterior
+Control de Costos
+Responsable de Control
+de Costos
+Proyecto; Logística
+Gerencia
+correspondiente
+Consulta: sugerencia ECON de unidad para una
+solicitud pendiente (GET
+/api/v1/requests/{id}/suggestions; ECON
+recomienda, Prisma asigna)
+Logística y Equipo
+Gerencia de Logística y
+Equipo
+Mantenimiento;
+Gerencia de Proyecto
+Control de Costos
+Técnica de Proyectos figura como funciones de proyecto. Roles y permisos de sesión implementados (ADR 0005); el actor autenticado queda vinculado a planes, cola y
+recepción desde la migración 0004; la RACI empresarial sigue pendiente de validación. Fuente: matriz de equivalencias, sección de responsabilidades.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+5
+Cuándo se requiere maquinaria
+Planificación de las dos solicitudes suministradas de PROY-014.
+La solicitud aprobada tiene CF-03 asignada; la pendiente todavía requiere resolver la asignación. El intervalo representa uso solicitado, no
+compromiso de entrega.
+Fuente: ejemplos del OpenAPI Prisma; manifiesto con IDs y huellas en docs/assets/entregables/manifest.json.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+6
+Qué estados administrativos aparecen
+Distribución de los cinco equipos incluidos en el archivo.
+CF-03 figura OBSOLETA y requiere revisar su asignación. La etiqueta no permite deducir una avería; DISPONIBLE tampoco certifica capacidad física
+para cualquier trabajo.
+Fuente: campo estado del listado proporcionado. Son 5 registros de un total declarado de 15.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+7
+Qué cobertura sostiene la consulta
+El archivo de muestras conserva cantidades y ausencias por fuente.
+Las dos solicitudes están incluidas respecto del total del ejemplo. Esa cobertura no completa la integración: faltan muestras operativas de tareas y
+GPS Startrack.
+La fecha documental no equivale a un corte conjunto ni a una lectura actual del sandbox.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+8
+Del proyecto a la recepción
+Síntesis propia del proceso documentado; alcance centrado en maquinaria.
+El TO-BE propone que una solicitud aprobada viaje como tarea. ECON exige correspondencias y programación antes del envío. El proyecto declara
+la recepción con constancia.
+Fuentes: docs/onedrive/03-as-is.md, 03-to-be.md y 04-casos-de-uso.md. Los originales mantienen fases y actores fuera de esta síntesis.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+9
+Cómo se relacionan los registros
+Modelo conceptual de correspondencias; no es un esquema físico de base de datos.
+No se unen nombres. Una solicitud puede requerir varios movimientos; cada movimiento conserva su referencia y un ID de tarea confirmado
+cuando existe. El GPS puede pertenecer al transportador.
+Fuente: docs/equivalencias-prisma-startrack.md. Un maestro de correspondencias con vigencia histórica sigue propuesto.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+10
+Qué está implementado hoy
+Dash y FastAPI comparten reglas; CLI ejecuta sincronización explícita.
+El registro conserva movimientos, eventos, cortes y recepción en PostgreSQL, única infraestructura de estado (ADR 0006): cola, bloqueos e
+historial append-only. Las habilitaciones live permanecen separadas. La aceptación autenticada de creación Startrack todavía debe validarse.
+Fuentes: apps/api/README.md, docs/solucion-integracion.md, ADR 0004 y ADR 0006. Código implementado no equivale a validación productiva.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+11
+Dónde vive cada estado
+Cada estado pertenece a una plataforma; ECON conserva los suyos y no traduce ni iguala los ajenos.
+Prisma guarda solicitud, asignación (maquinaria_id, project_id y vigencia), maquinaria y mantenimiento; ECON guarda el envío del movimiento, la
+recepción declarada y el actor de cada transición; Startrack guarda la tarea (ID de estado más workflow_role) y la ubicación observada del vehículo
+rastreado. ECON solo lee Prisma y emite un único POST a Startrack; la recepción existe únicamente como declaración en ECON.
+Fuentes: docs/equivalencias-prisma-startrack.md (estados separados), ADR 0004, ADR 0006 y migración 0004. Sin webhooks ni escrituras en Prisma.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+12
+Cómo detectar cambios y discrepancias
+Ampliación propuesta: webhooks habilitados y consultas de conciliación.
+Comparar también cambios Prisma posteriores al envío. Conservar versiones y evidencia; un evento duplicado no debe repetir la acción. El
+responsable resuelve las diferencias que requieren decisión.
+Fuente: docs/sincronizacion-y-discrepancias.md. No hay un webhook de aprobaciones Prisma o cambios de tarea Startrack confirmado.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+13
+Cómo crecer a miles de vehículos
+Arquitectura objetivo: separar recepción, operación e histórico analítico.
+Hipótesis de prueba: 10.000 vehículos, un evento cada 10 s, producen 1.000 eventos/s medios. Hay que probar ráfagas, recuperación y límites del
+proveedor; no es capacidad demostrada.
+Fuente: docs/sincronizacion-y-discrepancias.md, sección de escala. Kafka y ClickHouse están propuestos; no instalados ni desplegados por esta entrega.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+14
+Interpretar diferencias sin borrar significado
+ Caso
+Hechos
+Interpretación y decisión
+Caso documental del brief
+Prisma: maquinaria Ocupada. Startrack: tarea
+Completada.
+Pueden ser compatibles: terminó el traslado y la maquinaria sigue
+asignada al proyecto. Conservar ambos estados y comprobar la recepción
+por separado.
+Muestra proporcionada
+CF-03
+Solicitud APROBADA y maquinaria OBSOLETA. Sin
+tarea ni GPS vinculados en el archivo.
+Revisar la asignación con Logística y Mantenimiento. No fabricar una tarea
+ni convertir OBSOLETA en avería o paro confirmado.
+Regla futura de cambio
+Prisma modifica la unidad después de que se envió
+el movimiento.
+Comparar la versión enviada y la actual; abrir incidencia para conciliar el
+traslado. No crear otra tarea automáticamente.
+RF-05: esta explicación documenta la interpretación y resolución semántica. Sigue faltando la demostración combinada del caso con IDs y
+observaciones de ambas fuentes.
+Los casos documentales no se convierten en filas operativas de la muestra. Fuente: brief, casos de uso y matriz de equivalencias.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+15
+RF-06: tiempo fuera de geocerca sin justificación
+Indicador propuesto por equipo y período. Unidad: horas. Estado actual: no evaluable con la muestra proporcionada.
+Elemento
+Definición
+Cálculo
+Duración de la unión de intervalos válidos fuera de la geocerca asignada, dentro del horario exigible, excluyendo salidas
+autorizadas o justificadas.
+Identidad
+Equipo, dispositivo, proyecto y geocerca con correspondencia vigente. No atribuir el recorrido del transportador a la actividad de la
+máquina.
+Evidencia
+Eventos fechados y válidos, horario acordado, justificaciones con intervalos y regla de interpolación/corte aprobada.
+Cobertura
+Mostrar horas evaluables y sin evidencia. Los huecos no cuentan como presencia, ausencia ni tiempo muerto. Evitar doble conteo
+de intervalos.
+Decisión
+Logística y Técnica de Proyectos revisan ubicación y autorización. Mantenimiento participa ante una restricción.
+Gráfico futuro
+Intervalos por equipo con categorías fuera justificado, fuera sin justificación y sin evidencia. No se dibuja una serie numérica antes
+de obtener esos intervalos.
+Estar fuera de geocerca no demuestra improductividad ni pérdida económica. Velocidad cero tampoco significa tiempo muerto para una máquina que trabaja estacionaria.
+
+ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026
+16
+Recorrido de revisión y pendientes
+1. Abrir la matriz de requisitos y seleccionar un caso del dataset suministrado. Separar las filas del archivo de las capturas históricas y del caso
+asignado al equipo.
+2. Revisar el gráfico de planificación y entrar a la solicitud. Verificar aprobación, unidad, estado administrativo y datos que faltan para el
+movimiento.
+3. Mostrar la matriz de equivalencias: qué viaja, qué se transforma y qué debe completar Logística. Abrir el plan y su historial; no presentar un
+borrador como tarea enviada.
+4. Explicar los estados de Prisma y Startrack como hechos separados. Cuando falte evidencia de la segunda fuente, dejarla visible. El indicador
+propuesto necesita datos adicionales.
+5. Distinguir arquitectura implementada y arquitectura de escala propuesta. El documento de decisiones técnicas adjunto ocupa dos páginas.
+Pendiente
+Quién debe resolverlo
+Caso con tarea, GPS y correspondencias verificadas
+Equipo de integración con MAIC / administrador Startrack
+RACI, estados, recepción y justificaciones
+Mantenimiento, Logística y Técnica de Proyectos
+Contrato de cambios, cuotas e historial
+Proveedores y equipo técnico
+Presentación de hasta 10 diapositivas con reflexión
+Equipo participante; este dossier no la sustituye
+Fuentes y archivos editables: docs/entregables-visuales.md. Matriz completa: docs/equivalencias-prisma-startrack.md y output/matrices (CSV/XLSX); diccionario:
+docs/diccionario-modelo-econ.md. No se modificaron datos de proveedores para producir estas figuras.

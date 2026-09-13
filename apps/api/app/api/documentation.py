@@ -59,6 +59,32 @@ OPENAPI_TAGS = [
             "La sincronización live puede enviar tareas solo con habilitación del servidor."
         ),
     },
+    {
+        "name": "Grafo operativo",
+        "description": (
+            "Nodos (máquina, proyecto, lugar, solicitud, movimiento, incidencia) y aristas con "
+            "evidencia y alcance (current, historical, unverifiable). Conflictos, tensiones y "
+            "faltantes se publican por separado; la cobertura es parcial y los proyectos son "
+            "nodos solo referenciados. Sin geometría, ETA ni cercanías."
+        ),
+    },
+    {
+        "name": "Sugerencias",
+        "description": (
+            "Unidades candidatas para una solicitud pendiente, por reglas explícitas y sin "
+            "puntajes ni presencia GPS. Recomendar no es asignar: la asignación se registra en "
+            "Prisma; ECON no escribe en los proveedores."
+        ),
+    },
+    {
+        "name": "Indicadores",
+        "description": (
+            "Fichas e indicadores calculables con las lecturas existentes, por fila y sin "
+            "promedios ni porcentajes: cada fila cita sus fechas de origen y la ausencia de un "
+            "dato es «no evaluable», nunca cero. Fixture no tiene corte de observación ni tareas "
+            "enviadas. Los conteos describen la lectura acotada, no la flota."
+        ),
+    },
 ]
 
 

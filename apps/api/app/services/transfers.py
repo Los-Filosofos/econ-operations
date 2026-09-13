@@ -12,6 +12,7 @@ from app.integrations.startrack import (
     UniqueIds,
 )
 from app.models.hub import EquipmentRecord, Provenance, RequestRecord
+from app.services.intervals import assignment_window_of, covers, usage_period_of
 
 
 class TransferMapping(BaseModel):
@@ -52,6 +53,39 @@ def compatible_evidence(left: Provenance, right: Provenance, *, source: bool = T
         and left.evidence_kind == right.evidence_kind
         and left.is_synthetic == right.is_synthetic
     )
+
+
+def _schedule_notes(
+    request: RequestRecord, equipment: EquipmentRecord | None, mapping: TransferMapping
+) -> list[str]:
+    """Relate the scheduled day with the usage period and the unit's assignment window.
+
+    These are notes for review, never blockers, and they stay outside the payload: the
+    schedule is a Logística decision and the usage period is not a delivery window.
+    """
+    notes: list[str] = []
+    placement = covers(usage_period_of(request), mapping.scheduled_date, "la fecha programada")
+    if placement.status == "not_verifiable":
+        notes.append(
+            f"Relación programación/período no verificable: falta {', '.join(placement.missing)}."
+        )
+    elif placement.status == "disjoint":
+        notes.append(
+            "La fecha programada está fuera del período de uso solicitado; "
+            "el período no es ventana de entrega."
+        )
+    if equipment is not None:
+        window = covers(
+            assignment_window_of(equipment), mapping.scheduled_date, "la fecha programada"
+        )
+        if window.status == "not_verifiable":
+            notes.append(
+                "Relación programación/asignación vigente no verificable: falta "
+                f"{', '.join(window.missing)}."
+            )
+        elif window.status == "disjoint":
+            notes.append("La programación no cae en la asignación vigente de la unidad; revisar.")
+    return notes
 
 
 def prepare_transfer(
@@ -133,6 +167,7 @@ def prepare_transfer(
             blockers.append("El mapeo referencia otro proyecto de origen.")
         if equipment is not None and mapping.machinery_source_id != equipment.provenance.source_id:
             blockers.append("El mapeo referencia otra maquinaria de origen.")
+        notes += _schedule_notes(request, equipment, mapping)
 
     draft = None
     if not blockers and not missing and equipment is not None and mapping is not None:

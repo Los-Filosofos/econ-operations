@@ -16,6 +16,7 @@ import pytest
 from app.core.database import build_engine
 from app.models import metadata
 from app.models.hub import EquipmentRecord, Provenance, RequestRecord
+from app.models.operations import Actor
 from app.services.evidence import _transfer
 from app.services.ledger import (
     MovementRecord,
@@ -323,3 +324,24 @@ def test_concurrent_observations_with_lock(ledger):
     assert len([e for e in final.events if e.kind == "task_state"]) == 8
     # Status is Status_7 (latest event_time)
     assert final.status == "Status_7"
+
+
+def test_observation_actor_is_recorded_without_changing_the_ordering_policy(ledger):
+    """The worker only states its kind; fact dates still decide the projected status."""
+    row = _sent_movement(ledger)
+    worker = Actor(kind="cli_worker")
+    fact = ledger.record_observation(
+        row.id,
+        "live",
+        **_task_obs(status="Fact", event_time=T0 + timedelta(hours=1), observed_at=T0),
+        actor=worker,
+    )
+    assert fact.events[-1].actor_kind == "cli_worker"
+    assert fact.events[-1].actor_user_id is None and fact.events[-1].actor_role is None
+    later_read = ledger.record_observation(
+        row.id,
+        "live",
+        **_task_obs(status="ReadOnly", event_time=None, observed_at=T0 + timedelta(hours=3)),
+    )
+    assert later_read.status == "Fact"
+    assert later_read.events[-1].actor_kind is None

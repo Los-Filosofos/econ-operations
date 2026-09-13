@@ -367,6 +367,62 @@ def diagrams():
     label(ax, 50, 57.5, "ARQUITECTURA OBJETIVO - NO DESPLEGADA NI VALIDADA EN CARGA")
     save_diagram(fig, "escala")
 
+    fig, ax = diagram_canvas()
+    label(ax, 15.5, 57.5, "PRISMA / NEXUS: administración")
+    label(ax, 50, 57.5, "ECON: envío, evidencia y recepción declarada")
+    label(ax, 84.5, 57.5, "STARTRACK: tarea y ubicación observada")
+    columns = {
+        "prisma": (
+            ("Solicitud", "status: PENDIENTE, APROBADA,\nRECHAZADA · approved_at"),
+            ("Asignación", "maquinaria_id de la solicitud;\nproject_id y vigencia del equipo"),
+            (
+                "Maquinaria y mantenimiento",
+                "estado: DISPONIBLE, OCUPADA, OBSOLETA\nactive_failure_status / is_paro",
+            ),
+        ),
+        "econ": (
+            ("Envío del movimiento", "state: draft, blocked, queued,\nsending, sent, unknown, failed"),
+            (
+                "Evidencia y actor",
+                "task_state y arrival con event_time,\nobserved_at, recorded_at; actor_*",
+            ),
+            ("Recepción declarada", "receiver, received_at, reference\ndeclared_by_* (sesión); nunca por GPS"),
+        ),
+        "startrack": (
+            ("Tarea", "status (ID) + workflow_role\n0 pendiente, 1 completada, 2 cancelada"),
+            ("Ubicación observada", "visita a POI del vehículo rastreado:\nvehicle_id, start_date, end_date"),
+            ("Vehículo rastreado", "puede ser el transportador;\nno es la máquina"),
+        ),
+    }
+    xs = {"prisma": 1, "econ": 36, "startrack": 71}
+    for key, rows in columns.items():
+        for y, (title, body) in zip((41, 27, 13), rows):
+            box(ax, xs[key], y, 28, 11, title, body)
+    # Prisma is only read: the request feeds the movement; assignment and
+    # administrative state are evidence.
+    arrow(ax, (29, 46.5), (36, 46.5))
+    label(ax, 32.5, 49.5, "GET")
+    arrow(ax, (29, 32.5), (36, 32.5))
+    label(ax, 32.5, 35.5, "GET")
+    arrow(ax, (29, 18.5), (36, 29.5), via=[(32.5, 18.5), (32.5, 29.5)])
+    label(ax, 32.5, 23.5, "GET")
+    # Startrack receives one POST and is read back as evidence; nothing feeds
+    # the declared receipt.
+    arrow(ax, (64, 46.5), (71, 46.5))
+    label(ax, 67.5, 50, "único\nPOST")
+    arrow(ax, (71, 43), (64, 35.5), via=[(67.5, 43), (67.5, 35.5)])
+    label(ax, 67.5, 39.5, "GET")
+    arrow(ax, (71, 30.5), (64, 30.5))
+    label(ax, 67.5, 28, "GET")
+    label(
+        ax,
+        50,
+        4,
+        "ECON no escribe en Prisma. Ningún estado se traduce a otro: ubicación observada"
+        " no es recepción; tarea completada no es máquina disponible.",
+    )
+    save_diagram(fig, "estados")
+
 
 def register_fonts():
     for name, weight in (("Econ", "normal"), ("Econ-Bold", "bold")):
@@ -414,7 +470,7 @@ def para(text, style="body"):
     return Paragraph(markup(text), STYLES[style])
 
 
-def tab(rows, widths):
+def tab(rows, widths, *, padding=7):
     data = [
         [para(str(v), "head" if i == 0 else "cell") for v in row]
         for i, row in enumerate(rows)
@@ -429,8 +485,8 @@ def tab(rows, widths):
                 ("LINEBELOW", (0, 1), (-1, -1), 0.35, colors.HexColor(LINE)),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), padding),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), padding),
             ]
         )
     )
@@ -444,7 +500,7 @@ def foot(canvas, doc):
     canvas.setFont("Econ", 7.5)
     canvas.setFillColor(colors.HexColor(MUTED))
     canvas.drawString(
-        38, 18, "ECON | Prisma + Startrack | Datos sintéticos | 12/09/2026"
+        38, 18, "ECON | Prisma + Startrack | Datos sintéticos | 13/09/2026"
     )
     canvas.drawRightString(w - 38, 18, str(doc.page))
 
@@ -492,7 +548,7 @@ def build_dossier():
     story = [
         para("ECON: gráficos, procesos y arquitectura", "title"),
         para(
-            "Entrega visual del reto | Prisma / Nexus + Startrack | 12 de septiembre de 2026"
+            "Entrega visual del reto | Prisma / Nexus + Startrack | 13 de septiembre de 2026"
         ),
         Spacer(1, 12),
         para(
@@ -514,11 +570,11 @@ def build_dossier():
                 ],
                 [
                     "Procesos y diagramas técnicos",
-                    "Páginas 8-12: flujo, identidad, implementación, sincronización y escala",
+                    "Páginas 8-13: flujo, identidad, implementación, dónde vive cada estado, sincronización y escala",
                 ],
                 [
                     "Estados, indicador y pendientes",
-                    "Páginas 13-15: interpretación de casos, ficha RF-06 y recorrido de revisión",
+                    "Páginas 14-16: interpretación de casos, ficha RF-06 y recorrido de revisión",
                 ],
             ],
             [width * 0.40, width * 0.60],
@@ -542,7 +598,7 @@ def build_dossier():
                 [
                     "RF-01",
                     "Inventario de campos nuevos",
-                    "Inventario reproducible de campos públicos e internos, con tipos, ejemplos y procedencia. El código fija el tipo; la interpretación se documenta.",
+                    "Inventario reproducible de campos públicos e internos, con tipos, ejemplos y procedencia; generado desde los modelos y verificado en CI (generar_diccionario.py --check). El código fija el tipo; la interpretación se documenta.",
                 ],
                 [
                     "RF-02",
@@ -593,7 +649,7 @@ def build_dossier():
                 [
                     "RNF-02",
                     "Matrices legibles y reutilizables",
-                    "Tablas Markdown y PDFs. Figuras PNG para consulta y SVG editables para reutilización.",
+                    "Tablas Markdown exportadas a CSV y XLSX (output/matrices, con manifiesto y verificación en CI) y PDFs. Figuras PNG para consulta y SVG editables para reutilización.",
                 ],
                 [
                     "RNF-03",
@@ -638,10 +694,10 @@ def build_dossier():
         para(
             "RACI propuesta, derivada del TO-BE y el manual. R realiza; A aprueba o responde; C se consulta; I se informa. Debe validarse con ECON."
         ),
-        tab(rows, [width * v for v in [0.30, 0.18, 0.18, 0.18, 0.16]]),
-        Spacer(1, 8),
+        tab(rows, [width * v for v in [0.34, 0.17, 0.17, 0.17, 0.15]], padding=4),
+        Spacer(1, 4),
         para(
-            "Técnica de Proyectos se representa mediante las funciones de proyecto; Mantenimiento y Logística conservan sus decisiones. No son permisos de aplicación implementados. Fuente: matriz de equivalencias, sección de responsabilidades.",
+            "Técnica de Proyectos figura como funciones de proyecto. Roles y permisos de sesión implementados (ADR 0005); el actor autenticado queda vinculado a planes, cola y recepción desde la migración 0004; la RACI empresarial sigue pendiente de validación. Fuente: matriz de equivalencias, sección de responsabilidades.",
             "small",
         ),
     ]
@@ -695,8 +751,16 @@ def build_dossier():
         "Qué está implementado hoy",
         "Dash y FastAPI comparten reglas; CLI ejecuta sincronización explícita.",
         "diagrama-actual.png",
-        "El registro conserva movimientos, eventos, cortes y recepción. Las habilitaciones live permanecen separadas. La aceptación autenticada de creación Startrack todavía debe validarse.",
-        "Fuentes: apps/api/README.md, docs/solucion-integracion.md y ADR 0004. Código implementado no equivale a validación productiva.",
+        "El registro conserva movimientos, eventos, cortes y recepción en PostgreSQL, única infraestructura de estado (ADR 0006): cola, bloqueos e historial append-only. Las habilitaciones live permanecen separadas. La aceptación autenticada de creación Startrack todavía debe validarse.",
+        "Fuentes: apps/api/README.md, docs/solucion-integracion.md, ADR 0004 y ADR 0006. Código implementado no equivale a validación productiva.",
+    )
+    visual_page(
+        story,
+        "Dónde vive cada estado",
+        "Cada estado pertenece a una plataforma; ECON conserva los suyos y no traduce ni iguala los ajenos.",
+        "diagrama-estados.png",
+        "Prisma guarda solicitud, asignación (maquinaria_id, project_id y vigencia), maquinaria y mantenimiento; ECON guarda el envío del movimiento, la recepción declarada y el actor de cada transición; Startrack guarda la tarea (ID de estado más workflow_role) y la ubicación observada del vehículo rastreado. ECON solo lee Prisma y emite un único POST a Startrack; la recepción existe únicamente como declaración en ECON.",
+        "Fuentes: docs/equivalencias-prisma-startrack.md (estados separados), ADR 0004, ADR 0006 y migración 0004. Sin webhooks ni escrituras en Prisma.",
     )
     visual_page(
         story,
@@ -835,7 +899,7 @@ def build_dossier():
         ),
         Spacer(1, 10),
         para(
-            "Fuentes y archivos editables: docs/entregables-visuales.md. Matriz completa y diccionario: ECON-diccionario-mapeo-y-manual-integracion.pdf. No se modificaron datos de proveedores para producir estas figuras.",
+            "Fuentes y archivos editables: docs/entregables-visuales.md. Matriz completa: docs/equivalencias-prisma-startrack.md y output/matrices (CSV/XLSX); diccionario: docs/diccionario-modelo-econ.md. No se modificaron datos de proveedores para producir estas figuras.",
             "small",
         ),
     ]
@@ -909,7 +973,7 @@ def main():
         )
     (QA / "qa.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report))
-    assert report[0]["pages"] == 15, (
+    assert report[0]["pages"] == 16, (
         "Review overflow in visual dossier and update contents only after QA"
     )
     assert report[1]["pages"] == 2, "Technical decisions must occupy at most two pages"

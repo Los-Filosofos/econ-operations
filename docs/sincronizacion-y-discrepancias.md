@@ -108,16 +108,24 @@ su historia anterior a otra máquina. El mapeo detallado de campos sigue en
 
 ## Reglas prioritarias
 
-Son reglas propuestas. Se aplican únicamente si hay identidad, cobertura y
-fechas suficientes; en caso contrario se muestra **no evaluable**.
+Son reglas propuestas, salvo la fila marcada como **señal implementada**. Se
+aplican únicamente si hay identidad, cobertura y fechas suficientes; en caso
+contrario se muestra **no evaluable** (en el hub, `overlap_not_verifiable`).
+
+Los cuatro intervalos del dominio —período de uso de la solicitud, asignación
+vigente de la unidad, programación del traslado e intervalo observado— se
+definen en [intervals.py](../apps/api/app/services/intervals.py) y se comparan
+de forma inclusiva por días, sin convertir uno en otro ni leer el reloj. Una
+fecha ausente, una cobertura parcial o un instante sin zona horaria produce
+«no verificable», nunca «sin conflicto».
 
 | Regla | Evidencia mínima y condición | Decisión que permite |
 | --- | --- | --- |
 | Asignación modificada después del envío | Solicitud y tarea vinculadas; comparación de unidad, proyecto o período con la versión enviada | Revisar el traslado existente y acordar modificación o cancelación; no crear otra tarea automáticamente |
 | Disponibilidad administrativa incompatible | Catálogo validado indica libre, pero existe asignación aprobada vigente incompatible con esa definición | Corregir la asignación o el estado en su fuente |
 | Restricción de uso con encendido observado | Restricción técnica vigente, sensor perteneciente a la máquina, encendido reciente y contexto de prueba/mantenimiento | Mantenimiento verifica si es una prueba autorizada o uso que requiere intervención |
-| Asignaciones solapadas | Misma unidad, dos asignaciones aprobadas incompatibles y períodos que se cruzan | Logística resuelve el conflicto de capacidad |
-| Presencia fuera del destino previsto | Vínculo GPS vigente, posición válida y reciente, geocerca acordada, etapa y traslado autorizado conocidos | Verificar destino o movimiento; excluir trayectos autorizados |
+| Asignaciones solapadas — **señal implementada** en el hub, no bloqueo | Dos solicitudes `APROBADA` con la misma `maquinaria_id` y períodos de uso que se cruzan (inclusivo por días) → alerta `overlapping_approved_requests` (warning, Logística) con ambos IDs y períodos; fechas ausentes → `overlap_not_verifiable` (info). Una solicitud aprobada cuyo período difiere de la asignación vigente de su unidad en el mismo proyecto → `assignment_window_differs_from_request` (info, «revisar vigencia»). Solo comparan fechas de origen; no usan el corte de observación. Ver [hub.py](../apps/api/app/services/hub.py) | Logística resuelve el conflicto de capacidad en Prisma; ECON no impide la aprobación ni modifica la asignación |
+| Presencia fuera del destino previsto | Vínculo GPS vigente, posición válida y reciente, geocerca acordada, etapa y traslado autorizado conocidos. **Sin implementar**: el hub no evalúa presencia GPS; el dispositivo puede ser del transportador y entrar en una geocerca no prueba ubicación | Verificar destino o movimiento; excluir trayectos autorizados |
 | Tarea completada sin recepción registrada | Tarea correlacionada y consulta de recepciones disponible, más plazo de registro acordado | Pedir la constancia; no concluir que la máquina no llegó |
 | Posible tiempo sin actividad | Jornada comprometida y secuencia de observaciones adecuadas al tipo de máquina, descontando períodos justificados | Revisar causa con el proyecto; no calcular improductividad a partir de velocidad cero |
 | Datos que dejaron de actualizarse | Último evento válido, última consulta exitosa y frecuencia esperada por fuente | Corregir integración/dispositivo; no clasificar como máquina parada |

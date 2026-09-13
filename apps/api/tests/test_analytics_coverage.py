@@ -35,6 +35,7 @@ def test_operations_http_reports_actual_ledger_window_and_narrowed_scope(
                     "id": f"test-coverage-{index:03}",
                     "movement_reference": f"test-coverage-{index:03}",
                     "identity_hash": f"test-{index}",
+                    "job_id": f"test-job-{index:03}",
                     "next_review_at": record.created_at,
                     "request_source_id": "test-narrow-scope" if index == 0 else "test-other",
                 }

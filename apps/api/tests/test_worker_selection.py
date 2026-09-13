@@ -1,19 +1,22 @@
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import update
+from sqlmodel import Session, func, select
 
 from app.core.access import management_scope
 from app.core.config import Settings
-from app.core.database import build_engine
+from app.core.database import build_engine, cycle_lock
+from app.integrations.nexus import NexusReadError
 from app.main import create_app
 from app.models import metadata
 from app.models.hub import EquipmentRecord, Provenance, RequestRecord
-from app.models.operations import Movement
+from app.models.operations import Movement, SourceSnapshot
 from app.services.ledger import OperationsLedger
 from app.services.transfers import TransferMapping
-from app.services.workflow import WorkflowService
+from app.services.workflow import SyncInProgress, WorkflowService
 
 OBSERVED = datetime(2026, 9, 12, 18, tzinfo=UTC)
 
@@ -291,3 +294,92 @@ def test_mode_isolation_and_safe_claim(tmp_path):
     assert obs[0].id == target.id
 
     engine.dispose()
+
+
+class OfflineNexus:
+    """Prisma is unreachable: revalidation fails visibly and no record is invented."""
+
+    configured = False
+
+    def get_request(self, _request_id):
+        raise NexusReadError("Sin conexión con Prisma en esta prueba.")
+
+    def get_equipment(self, _equipment_id):
+        raise NexusReadError("Sin conexión con Prisma en esta prueba.")
+
+
+def live_service(db_path, engine, **overrides) -> WorkflowService:
+    settings = Settings(
+        database_url=f"sqlite:///{db_path}",
+        allow_live_reads=True,
+        allow_local_management=True,
+        _env_file=None,
+        **overrides,
+    )
+    return WorkflowService(settings, engine, OfflineNexus(), SimpleNamespace(configured=False))
+
+
+def test_draft_review_is_delayed_after_each_cycle(tmp_path):
+    db_path = tmp_path / "review_delay.db"
+    engine = build_engine(f"sqlite:///{db_path}")
+    metadata.create_all(engine)
+    ledger = OperationsLedger(engine)
+    drafts = [ledger.create("live", *make_operation(index)) for index in range(1, 4)]
+    warning = "requieren revisar origen"
+
+    # Without a delay every cycle reviews the drafts again.
+    immediate = live_service(db_path, engine, workflow_review_delay_seconds=0)
+    with management_scope(True):
+        assert warning in immediate.sync("live").message
+        assert warning in immediate.sync("live").message
+    for draft in drafts:
+        assert ledger.get(draft.id, "live").next_review_at <= datetime.now(UTC)
+
+    delayed = live_service(db_path, engine, workflow_review_delay_seconds=300)
+    before = datetime.now(UTC)
+    with management_scope(True):
+        assert warning in delayed.sync("live").message
+    stamps = {draft.id: ledger.get(draft.id, "live").next_review_at for draft in drafts}
+    for stamp in stamps.values():
+        assert stamp >= before + timedelta(seconds=299)
+    # The pause is durable: another service on the same database reviews nothing yet.
+    with management_scope(True):
+        assert warning not in delayed.sync("live").message
+        assert warning not in live_service(db_path, engine).sync("live").message
+    assert {draft.id: ledger.get(draft.id, "live").next_review_at for draft in drafts} == stamps
+    engine.dispose()
+
+
+def test_cycle_lock_is_noop_on_sqlite(tmp_path):
+    """SQLite accredits no cross-process exclusion; tests/test_postgres_workflow.py does."""
+    db_path = tmp_path / "cycle_lock.db"
+    url = f"sqlite:///{db_path}"
+    engine_a, engine_b = build_engine(url), build_engine(url)
+    metadata.create_all(engine_a)
+    with cycle_lock(engine_a, "econ:sync:fixture") as owned:
+        assert owned is True
+        with cycle_lock(engine_b, "econ:sync:fixture") as also_owned:
+            assert also_owned is True
+    first, second = live_service(db_path, engine_a), live_service(db_path, engine_b)
+    with management_scope(True):
+        assert first.sync("fixture").available
+        assert second.sync("fixture").available
+    with Session(engine_a) as session:
+        # Identical re-reads are not duplicated: one snapshot, confirmed again (ADR 0006).
+        count = select(func.count(SourceSnapshot.id)).where(SourceSnapshot.mode == "fixture")
+        assert session.exec(count).one() == 1
+        snapshot = session.exec(
+            select(SourceSnapshot).where(SourceSnapshot.mode == "fixture")
+        ).one()
+        assert snapshot.last_confirmed_at is not None
+    # The per-process lock still refuses a concurrent cycle within one service.
+    assert first._sync_lock.acquire(blocking=False)
+    try:
+        with management_scope(True), pytest.raises(SyncInProgress, match="en este proceso"):
+            first.sync("fixture")
+    finally:
+        first._sync_lock.release()
+    with management_scope(True):
+        assert first.sync("fixture").available
+    engine_a.dispose()
+    engine_b.dispose()

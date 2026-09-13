@@ -1,6 +1,8 @@
 """Session login, role gates and redirects with AUTH_REQUIRED=true."""
 
+import json
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -10,11 +12,17 @@ from sqlmodel import Session
 from app.api.users import new_user
 from app.core.auth import Role
 from app.core.config import Settings
+from app.dashboard.workflow_forms import action_id, field_id
+from app.integrations.fixtures import fixture_records
 from app.main import create_app
 from app.models import metadata
+from app.models.hub import EquipmentRecord, Provenance, RequestRecord
 from app.models.users import User
+from app.services.ledger import OperationsLedger
+from app.services.transfers import TransferMapping
 
 PASSWORD = "correct-horse-battery"
+OBSERVED = datetime(2026, 9, 12, 18, tzinfo=UTC)
 
 
 def build_app(tmp_path, **overrides):
@@ -185,3 +193,210 @@ def test_dash_callbacks_can_read_the_session_user(tmp_path):
         login(client, "ops@example.com")
         signed = client.post("/_dash-update-component", json=payload).json()
         assert signed["response"]["auth-probe-out"]["children"] == "ops@example.com:logistica"
+
+
+def fixture_plan(reference: str = "test-auth-plan") -> dict:
+    machines, requests = fixture_records()
+    request = next(item for item in requests if item.status == "APROBADA")
+    machine = next(item for item in machines if item.id == request.machinery_id)
+    return {
+        "mode": "fixture",
+        "mapping": {
+            "request_source_id": request.provenance.source_id,
+            "machinery_source_id": machine.provenance.source_id,
+            "project_source_id": request.project_id,
+            "poi_id": "test-poi",
+            "assigned_user_ids": ["test-user"],
+            "movement_reference": reference,
+            "scheduled_date": "2026-09-14",
+        },
+    }
+
+
+def live_movement(app, reference: str = "test-live-1", *, state: str = "sent"):
+    """A synthetic live movement written straight into the ledger, without providers."""
+
+    def provenance(source_id: str) -> Provenance:
+        return Provenance(
+            source="nexus",
+            source_id=source_id,
+            environment="sandbox",
+            observed_at=OBSERVED,
+            evidence_kind="live_read",
+            is_synthetic=True,
+            source_reference="test inputs only",
+        )
+
+    equipment = EquipmentRecord(
+        id="test:equipment:auth-1",
+        code="TEST-AUTH-01",
+        name="Unidad de prueba",
+        project_id="test-project",
+        machinery_status="OCUPADA",
+        maintenance_is_stopped=False,
+        relation_status="unlinked",
+        relation_note="Test inputs only.",
+        provenance=provenance("test-unit-auth-1"),
+    )
+    request = RequestRecord(
+        id="test:request:auth-1",
+        status="APROBADA",
+        machinery_id=equipment.id,
+        project_id="test-project",
+        starts_on="2026-09-01",
+        provenance=provenance("test-request-auth-1"),
+    )
+    mapping = TransferMapping(
+        request_source_id="test-request-auth-1",
+        machinery_source_id="test-unit-auth-1",
+        project_source_id="test-project",
+        poi_id="test-poi",
+        assigned_user_ids=("test-user",),
+        movement_reference=reference,
+        scheduled_date=datetime(2026, 9, 14).date(),
+    )
+    ledger = OperationsLedger(app.state.engine)
+    row = ledger.create("live", request, equipment, mapping)
+    ledger.queue(row.id)
+    ledger.claim(row.id)
+    if state == "unknown":
+        return ledger.finish_unknown(row.id, "ambiguous_response")
+    return ledger.finish_sent(row.id, "test-job-1", status="1")
+
+
+def test_logistics_plan_and_receipt_record_the_session_actor(tmp_path):
+    app = build_app(tmp_path, allow_live_reads=True)
+    with open_client(app) as client:
+        logistics = add_user(app, "logistica@example.com", Role.logistica)
+        add_user(app, "lectura@example.com", Role.lectura)
+        manager = add_user(app, "gerencia@example.com", Role.gerencia_proyecto)
+        login(client, "logistica@example.com")
+        saved = client.post("/api/v1/operations/plans", json=fixture_plan())
+        assert saved.status_code == 201, saved.text
+        (created,) = saved.json()["events"]
+        assert created["kind"] == "created"
+        assert created["actor_user_id"] == str(logistics.id)
+        assert created["actor_role"] == "logistica"
+        assert created["actor_kind"] == "session"
+        repeated = client.post("/api/v1/operations/plans", json=fixture_plan())
+        assert repeated.status_code == 201
+        assert repeated.json()["id"] == saved.json()["id"]
+        assert len(repeated.json()["events"]) == 1
+        client.post("/api/v1/auth/logout")
+
+        login(client, "lectura@example.com")
+        assert client.post("/api/v1/operations/plans", json=fixture_plan()).status_code == 403
+        ledger = app.state.workflow.ledger
+        assert len(ledger.get(saved.json()["id"], "fixture").events) == 1
+        client.post("/api/v1/auth/logout")
+
+        # The declared receiver is a name on the record; the declaring session is kept apart.
+        sent = live_movement(app)
+        login(client, "gerencia@example.com")
+        received = client.post(
+            f"/api/v1/operations/{sent.id}/receipt",
+            json={
+                "mode": "live",
+                "receiver": "Persona X",
+                "received_at": "2026-09-14T14:00:00-06:00",
+                "reference": "ACTA-TEST-1",
+            },
+        )
+        assert received.status_code == 200, received.text
+        receipt = received.json()["receipt"]
+        assert receipt["receiver"] == "Persona X"
+        assert receipt["declared_by_user_id"] == str(manager.id)
+        assert receipt["declared_by_email"] == "gerencia@example.com"
+        assert receipt["declared_by_role"] == "gerencia_proyecto"
+        event = received.json()["events"][-1]
+        assert event["kind"] == "receipt"
+        assert event["actor_user_id"] == str(manager.id)
+        assert event["actor_role"] == "gerencia_proyecto" and event["actor_kind"] == "session"
+
+
+def test_resolve_requires_manage_transfers_and_records_the_actor(tmp_path):
+    app = build_app(tmp_path, allow_live_reads=True)
+    with open_client(app) as client:
+        add_user(app, "gerencia@example.com", Role.gerencia_proyecto)
+        logistics = add_user(app, "logistica@example.com", Role.logistica)
+        unknown = live_movement(app, state="unknown")
+        body = {"reason_code": "operator_resolved"}
+        assert client.post(f"/api/v1/operations/{unknown.id}/resolve", json=body).status_code == 401
+        login(client, "gerencia@example.com")
+        assert client.post(f"/api/v1/operations/{unknown.id}/resolve", json=body).status_code == 403
+        client.post("/api/v1/auth/logout")
+        login(client, "logistica@example.com")
+        refused = client.post(
+            f"/api/v1/operations/{unknown.id}/resolve", json={"reason_code": "texto libre"}
+        )
+        assert refused.status_code == 409
+        resolved = client.post(f"/api/v1/operations/{unknown.id}/resolve", json=body)
+        assert resolved.status_code == 200, resolved.text
+        record = resolved.json()
+        assert record["state"] == "failed" and record["reason_code"] == "operator_resolved"
+        resolution = record["events"][-1]
+        assert resolution["kind"] == "resolved"
+        assert resolution["actor_user_id"] == str(logistics.id)
+        assert resolution["actor_role"] == "logistica" and resolution["actor_kind"] == "session"
+        assert client.post(f"/api/v1/operations/{unknown.id}/resolve", json=body).status_code == 409
+
+
+def dash_save(client, fields: dict) -> dict:
+    def pattern(identifier):
+        return json.dumps(identifier, sort_keys=True, separators=(",", ":"))
+
+    response = client.post(
+        "/_dash-update-component",
+        json={
+            "output": "workflow-action-result.data",
+            "outputs": {"id": "workflow-action-result", "property": "data"},
+            "inputs": [
+                {
+                    "id": pattern(
+                        {"type": "workflow-action", "action": ["ALL"], "movement": ["ALL"]}
+                    ),
+                    "property": "n_clicks",
+                    "value": [1],
+                }
+            ],
+            "state": [
+                {
+                    "id": pattern({"type": "workflow-field", "field": ["ALL"]}),
+                    "property": "value",
+                    "value": list(fields.values()),
+                },
+                {
+                    "id": pattern({"type": "workflow-field", "field": ["ALL"]}),
+                    "property": "id",
+                    "value": [field_id(name) for name in fields],
+                },
+                {"id": "url", "property": "search", "value": "?mode=fixture"},
+                {"id": "url", "property": "pathname", "value": "/operaciones"},
+            ],
+            "changedPropIds": [pattern(action_id("save", "")) + ".n_clicks"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["response"]["workflow-action-result"]["data"]
+
+
+def test_dash_save_records_the_session_user_as_actor(tmp_path):
+    app = build_app(tmp_path)
+    plan = fixture_plan("test-dash-plan")
+    fields = {
+        **{key: value for key, value in plan["mapping"].items() if key != "assigned_user_ids"},
+        "assigned_user_ids": "test-user",
+        "scheduled_time": "",
+        "tracked_vehicle_id": "",
+    }
+    with open_client(app) as client:
+        assert client.get("/_dash-layout").status_code == 200
+        logistics = add_user(app, "ops@example.com", Role.logistica)
+        login(client, "ops@example.com")
+        result = dash_save(client, fields)
+        assert result["ok"], result
+        (stored,) = app.state.workflow.ledger.list("fixture")
+        (created,) = stored.events
+        assert created.actor_user_id == str(logistics.id)
+        assert created.actor_role == "logistica" and created.actor_kind == "session"
+        assert stored.tracked_vehicle_kind is None

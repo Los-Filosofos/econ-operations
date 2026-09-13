@@ -1,0 +1,6 @@
+Clasificación,Significado
+Directa,Conserva el mismo hecho y valor. Puede cambiar el nombre del campo dentro de ECON.
+Transformada,Deriva un valor mediante una regla explícita; no demuestra identidad entre plataformas.
+Manual,Requiere una decisión o correspondencia confirmada por una persona. Que exista un catálogo no resuelve esa decisión.
+Sin equivalente,El dato describe otro objeto o no está disponible en la fuente consultada.
+No soportado,El flujo de ECON no lo implementa o el contrato público consultado no expone la opción del formulario. Se distingue cuál de estos límites aplica.

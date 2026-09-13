@@ -1,6 +1,6 @@
 # API ECON: explorar y probar con Swagger
 
-Revisión del **12 de septiembre de 2026**. Describe el backend implementado,
+Revisión del **13 de septiembre de 2026**. Describe el backend implementado,
 sus respuestas y un ensayo local reproducible. No acredita acceso nuevo a
 Startrack ni completa las correspondencias del caso RE-03/MOT-006/PROY-006.
 
@@ -112,7 +112,11 @@ sesión pero sin el permiso de la operación, la respuesta es `403`. Con
 | `POST /api/v1/operations/plans` | Guarda correspondencias y preparación local (`manage_transfers`). Un 201 puede ser un plan `blocked`; revisar `preparation`. |
 | `POST /api/v1/operations/{movement_id}/queue` | Revalida un plan live y lo encola (`manage_transfers`). No envía el POST a Startrack en esa petición. |
 | `POST /api/v1/operations/sync` | Guarda un corte (`manage_transfers`); en live puede encolar, enviar hasta diez tareas y consultar seguimiento. |
-| `POST /api/v1/operations/{movement_id}/receipt` | Guarda una declaración manual para un movimiento live `sent` con `job_id` (`declare_reception`). |
+| `POST /api/v1/operations/{movement_id}/receipt` | Guarda una declaración manual para un movimiento live `sent` con `job_id` (`declare_reception`). La respuesta `MovementRecord.receipt` conserva `receiver`, `received_at`, `reference`, `note`, `recorded_at` y, cuando hubo sesión, `declared_by_user_id`, `declared_by_email` y `declared_by_role`; sin sesión quedan `null`, nunca inventados. |
+| `POST /api/v1/operations/{movement_id}/resolve` | Cierra un movimiento live `unknown` como `failed` con un `reason_code` cerrado (`manage_transfers`) y libera la máquina para otro plan. No consulta ni modifica Startrack ni repite el POST; el evento `resolved` conserva actor y motivo. |
+| `GET /api/v1/graph` | Proyección tipada de la misma lectura que `/hub` (mismo `mode` y `search`) más una página del registro (hasta 500): nodos `machine`, `project`, `place`, `request`, `movement`, `incident`; aristas con evidencia y alcance; `conflicts`, `tensions` y `gaps` («no verificable»); `coverage`. Solo lectura, sin Startrack. |
+| `GET /api/v1/indicators` | Ocho fichas con filas calculadas desde instantes documentados (`approval_time`, `open_request_age`, `approved_with_unit_without_sent_task`, `occupied_without_project`, `assignment_ended`, `completed_task_without_receipt`, `active_failure_registered`, `evidence_age`). Sin promedios ni porcentajes; la ausencia no es cero; fixture sin corte. |
+| `GET /api/v1/requests/{request_id}/suggestions` | Unidades candidatas para una solicitud PENDIENTE sin unidad: nivel `eligible`, `review_required` o `excluded` con motivos por regla R0–R8 y faltantes «no verificable». Sin GPS, puntajes ni ETA; recomendar no es asignar (la asignación se registra en Prisma). `404` si la solicitud no está en la lectura acotada del modo. |
 
 ### Filtros y ámbito
 
@@ -137,6 +141,55 @@ sesión pero sin el permiso de la operación, la respuesta es `403`. Con
   coinciden: solo son verdaderos si la primera página contiene toda la población
   del modo y filtro. La última página de una población mayor sigue siendo parcial,
   aunque `coverage.has_more=false`. `coverage` informa total, filas y páginas.
+
+### Grafo, indicadores y sugerencias con la muestra
+
+Las tres lecturas comparten la lectura acotada de `/hub` y una página del
+registro local; no consultan Startrack ni escriben. Con `mode=fixture` y la base
+migrada se obtiene:
+
+- `GET /api/v1/graph?mode=fixture`: 5 nodos `machine` (cuatro sin aristas), 2
+  `request`, 1 `project` marcado `referenced_only` (`presence`), 4 aristas
+  `source_observed`/`current` (`assigned_to` CF-03 → PROY-014, `requested_for`
+  de cada solicitud, `assigned_unit` de la aprobada), 0 `conflicts`, 1 tensión
+  `obsolete_with_approved_request` (CF-03 OBSOLETA con solicitud APROBADA) y
+  `gaps` con `status: "no verificable"`: `machine_location` por cada máquina
+  (nunca se deriva máquina → lugar desde visitas), `project_not_read`,
+  `startrack_not_queried` y `ledger_not_consulted` o `ledger_partial` según la
+  cobertura del registro. `coverage.complete` es `false` en fixture y mientras
+  Startrack no esté `connected`; `data_as_of` es `null`. Un movimiento guardado
+  aparece como nodo `movement` con `relation_scope` `current`, `historical` (la
+  copia almacenada difiere del origen → conflicto `movement_source_changed`) o
+  `unverifiable` (contraparte fuera de la lectura); la presencia
+  (`observed_at_place`) cuelga del movimiento y de su vehículo rastreado
+  (`tracked_asset_kind` declarado, no verificado), nunca de la máquina.
+- `GET /api/v1/indicators?mode=fixture`: `approval_time` `partial` con
+  `46d2573e…` evaluable (`seconds: 42.209783`, `approved_at − created_at`) y
+  `0cbbbd77…` `not_evaluable` («sin approved_at: la solicitud sigue
+  PENDIENTE»); `open_request_age` y `assignment_ended` `not_evaluable` («sin
+  corte de observación (fixture)»); `approved_with_unit_without_sent_task` y
+  `completed_task_without_receipt` `not_evaluable` («las muestras no envían
+  tareas y la ausencia en el archivo no es cero»); `occupied_without_project` y
+  `active_failure_registered` «sin casos evaluables: … entre las 5 filas leídas
+  (5 de 15)». Cada `coverage_note` cita «5 de 15 unidades y 2 de 2 solicitudes»;
+  los conteos suman siempre el número de filas. Con live deshabilitado responde
+  `200` con alcance vacío y notas que lo explican; no hay fallback.
+- `GET /api/v1/requests/nexus:request:0cbbbd77-4593-4791-9be5-afd46b06c888/suggestions?mode=fixture`
+  (la PENDIENTE): `applicable: true`, `requested_class: "Cargador frontal"`,
+  cinco candidatas evaluadas: CF-01 y CF-02 `eligible` (clase exacta,
+  DISPONIBLE, sin paro ni falla), CF-03 `excluded` («OBSOLETA: revisar con
+  Mantenimiento; el estado no afirma avería ni paro») con `same_project_evidence`
+  administrativa, EXC-01 y EXC-02 `excluded` («Clase distinta»). Cada candidata
+  lista en `missing` la ubicación física, los operadores, la tarifa y el
+  registro sin consultar como «no verificable». Con la APROBADA
+  (`46d2573e…`) responde `applicable: false`; con un ID inexistente, `404`.
+
+`PlanInput` admite `tracked_vehicle_kind` (`machine_device` o `transporter`,
+opcional, requiere `tracked_vehicle_id`): lo declara el operador y ninguna
+fuente lo verifica, por lo que el grafo lo publica con
+`tracked_vehicle_kind_verification: "declared"`; viaja con la evidencia de
+llegada como `tracked_asset_kind`. Su presencia GPS no prueba ubicación de la
+máquina ni recepción.
 
 ### Cómo interpretar una respuesta
 
@@ -201,7 +254,8 @@ Execute. El cuerpo usa estos datos:
     "scheduled_date": "2026-09-14",
     "scheduled_time": "08:00:00"
   },
-  "tracked_vehicle_id": null
+  "tracked_vehicle_id": null,
+  "tracked_vehicle_kind": null
 }
 ```
 
@@ -234,7 +288,7 @@ principal en 8050 conserva su configuración y PostgreSQL.
 | `201` | Plan o usuario guardado (plan: recuperado por identidad; revisar si quedó `draft` o `blocked`). |
 | `401` | Sin sesión válida: iniciar sesión en `POST /api/v1/auth/login`. |
 | `403` | La sesión no tiene el permiso de la operación (`manage_transfers`, `declare_reception` o `manage_users`). |
-| `404` | El recurso direccionado por la ruta no existe en el modo indicado; hoy lo usa `GET /api/v1/integration/{request_id}`. No significa que la solicitud no exista en Prisma: puede no estar en la población leída de ese modo. |
+| `404` | El recurso direccionado por la ruta no existe en el modo indicado; lo usan `GET /api/v1/integration/{request_id}` y `GET /api/v1/requests/{request_id}/suggestions`. No significa que la solicitud no exista en Prisma: puede no estar en la población leída de ese modo. |
 | `409` | Rechazo del flujo: gestión/live deshabilitados, dependencia no disponible, identidad/estado incompatible, registro no encontrado, evidencia inválida, email repetido o cambio que dejaría sin administrador. El contrato actual usa 409 también para estas causas. |
 | `422` | Validación estructural: modo inválido, campo requerido ausente, longitud excesiva, fecha mal formada o campos adicionales en cuerpos estrictos. |
 | `429` | Demasiados intentos de login desde la misma IP; esperar quince minutos. |
@@ -254,7 +308,10 @@ firmas. Repetir una declaración idéntica conserva la original; una modificaci�
 posterior genera conflicto. Ni GPS ni cierre de tarea producen recepción.
 
 `queue` exige lecturas/escrituras live, permiso `manage_transfers` y
-credenciales de ambos proveedores. `sync` no debe tratarse como un GET: con habilitaciones puede
+credenciales de ambos proveedores; responde `409` mientras otro movimiento de la
+misma máquina siga en vuelo (`queued`, `sending` o `unknown`) o si el `job_id`
+ya está vinculado a otro movimiento del mismo entorno (índices parciales de la
+migración `0004`). `sync` no debe tratarse como un GET: con habilitaciones puede
 procesar la cola. Un envío `unknown` se concilia por lectura y correspondencia
 exacta; no repetir la creación para resolver una respuesta incierta.
 

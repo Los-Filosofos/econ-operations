@@ -166,6 +166,55 @@ def test_preparation_retains_independent_source_provenance_and_unknown_condition
     assert "received_at" not in result.model_dump_json()
 
 
+def test_schedule_outside_usage_period_adds_note_without_blocking():
+    request, equipment, mapping = operation()
+    request.starts_on, request.ends_on = "2026-09-11", "2026-09-14"
+    outside = prepare_transfer(
+        request, equipment, mapping.model_copy(update={"scheduled_date": date(2026, 9, 20)})
+    )
+    assert outside.status == "draft_prepared" and outside.blocking_reasons == []
+    assert any("fuera del período de uso solicitado" in note for note in outside.notes)
+    assert any("no es ventana de entrega" in note for note in outside.notes)
+
+    inside = prepare_transfer(
+        request, equipment, mapping.model_copy(update={"scheduled_date": date(2026, 9, 12)})
+    )
+    assert inside.status == "draft_prepared"
+    assert not any("fuera del período" in note for note in inside.notes)
+    # Notes never reach the payload: identity stays mapping + payload only.
+    assert outside.draft.payload() | {"start_date": "2026-09-12"} == inside.draft.payload()
+
+    request.ends_on = None
+    unknown = prepare_transfer(request, equipment, mapping)
+    assert unknown.status == "draft_prepared"
+    assert any(
+        "Relación programación/período no verificable" in note and "usage_period.end" in note
+        for note in unknown.notes
+    )
+    assert not any("fuera del período" in note for note in unknown.notes)
+
+
+def test_schedule_is_related_to_the_unit_assignment_window_without_blocking():
+    request, equipment, mapping = operation()
+    request.starts_on, request.ends_on = "2026-09-11", "2026-09-14"
+    # The unit has a project but no dated window: the relation stays not verifiable.
+    unknown = prepare_transfer(request, equipment, mapping)
+    assert unknown.status == "draft_prepared"
+    assert any(
+        "Relación programación/asignación vigente no verificable" in note
+        and "assignment_window.start, assignment_window.end" in note
+        for note in unknown.notes
+    )
+    equipment.assignment_starts_on, equipment.assignment_ends_on = "2026-09-11", "2026-09-13"
+    outside = prepare_transfer(request, equipment, mapping)
+    assert outside.status == "draft_prepared"
+    assert any("no cae en la asignación vigente" in note for note in outside.notes)
+    equipment.assignment_ends_on = "2026-09-14"
+    inside = prepare_transfer(request, equipment, mapping)
+    assert not any("no cae en la asignación vigente" in note for note in inside.notes)
+    assert not any("no verificable" in note for note in inside.notes)
+
+
 def test_local_cli_uses_only_supplied_samples_and_never_constructs_an_http_client(
     monkeypatch, capsys
 ):

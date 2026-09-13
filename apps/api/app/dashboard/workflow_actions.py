@@ -3,6 +3,7 @@
 import re
 from datetime import date, datetime, time
 
+from app.core.auth import actor_from_user, session_user
 from app.services.hub import BUSINESS_TIMEZONE
 from app.services.transfers import TransferMapping
 
@@ -70,7 +71,12 @@ def assigned_users(fields: dict) -> tuple[str, ...]:
 
 
 def execute_action(service, action: str, mode: str, fields: dict, movement: str):
-    """Never treat displayed browser flags as permission to call a provider."""
+    """Never treat displayed browser flags as permission to call a provider.
+
+    The session user of the callback travels as the actor of every transition; without
+    a login (development only) the service records the loopback developer, never a user.
+    """
+    actor = actor_from_user(session_user(), kind="session")
     if action == "save":
         scheduled_time = text_field(fields, "scheduled_time", optional=True)
         mapping = TransferMapping(
@@ -83,15 +89,20 @@ def execute_action(service, action: str, mode: str, fields: dict, movement: str)
             scheduled_date=explicit_date(text_field(fields, "scheduled_date")),
             scheduled_time=explicit_time(scheduled_time).isoformat() if scheduled_time else None,
         )
+        # The form does not collect the device kind yet: it stays undeclared, never guessed.
         record = service.save_plan(
-            mode, mapping, text_field(fields, "tracked_vehicle_id", optional=True)
+            mode,
+            mapping,
+            tracked_vehicle_id=text_field(fields, "tracked_vehicle_id", optional=True),
+            tracked_vehicle_kind=None,
+            actor=actor,
         )
         return "Plan guardado en el registro local. Revisa su preparación y evidencia.", record
     if action == "queue" and mode == "live" and movement:
-        record = service.queue(movement)
+        record = service.queue(movement, actor=actor)
         return "Movimiento en cola. Sincroniza la operación para procesar el envío.", record
     if action == "sync":
-        overview = service.sync(mode)
+        overview = service.sync(mode, actor=actor)
         return overview.message, None
     if action == "receipt" and movement:
         received_at = datetime.combine(
@@ -102,10 +113,11 @@ def execute_action(service, action: str, mode: str, fields: dict, movement: str)
         record = service.record_receipt(
             movement,
             mode,
-            text_field(fields, "receiver"),
-            received_at,
-            text_field(fields, "reference"),
-            text_field(fields, "note", optional=True),
+            receiver=text_field(fields, "receiver"),
+            received_at=received_at,
+            reference=text_field(fields, "reference"),
+            note=text_field(fields, "note", optional=True),
+            actor=actor,
         )
         return "Constancia de recepción registrada con su responsable y referencia.", record
     raise ValueError("Acción no reconocida.")

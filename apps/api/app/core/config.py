@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     auto_queue_transfers: bool = False
     workflow_revalidation_batch_size: int = Field(default=25, ge=1, le=100)
     workflow_observation_batch_size: int = Field(default=25, ge=1, le=100)
+    # Durable pause before a draft/blocked plan is revalidated again; sent/unknown movements
+    # keep their next_review_at at the cycle time so that observation is never delayed.
+    workflow_review_delay_seconds: int = Field(default=300, ge=0, le=3600)
     startrack_api_key: SecretStr | None = Field(default=None, repr=False)
     startrack_password: SecretStr | None = Field(default=None, repr=False)
     startrack_page_size: int = Field(default=25, ge=1, le=100)

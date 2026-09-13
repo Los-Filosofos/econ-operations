@@ -19,6 +19,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from app.core.access import local_request
 from app.core.config import Settings
+from app.models.operations import Actor, ActorKind
 from app.models.users import User
 
 SESSION_COOKIE = "econ_session"
@@ -39,6 +40,8 @@ PUBLIC_PATHS = (
 STATIC_PATHS = ("/health/", "/assets/", "/_favicon.ico", "/_dash-component-suites/")
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 RECEIPT_PATH = re.compile(r"/api/v1/operations/[^/]+/receipt/?")
+# Operator exit from `unknown`; it changes local state only and never repeats a provider POST.
+RESOLVE_PATH = re.compile(r"/api/v1/operations/[^/]+/resolve/?")
 CROSS_ORIGIN_SITES = frozenset({"cross-site", "same-site"})
 
 
@@ -121,6 +124,36 @@ def session_user() -> User | None:
     return getattr(state, "user", None)
 
 
+def actor_from_user(user: User | None, *, kind: ActorKind) -> Actor | None:
+    """Ledger actor for a real user or for an explicit process; never a fabricated identity.
+
+    With a user the actor is always `session` (id, email and role come from the row read
+    from SQL). Without a user, `session` yields None and `local_dev` / `cli_worker`
+    yield an actor that carries no user at all.
+    """
+    if user is not None:
+        return Actor(user_id=str(user.id), email=user.email, role=user.role, kind="session")
+    if kind == "session":
+        return None
+    return Actor(kind=kind)
+
+
+def request_actor(request: Request) -> Actor | None:
+    """Who acts in this HTTP request: the session user, the loopback developer, or nobody."""
+    user = load_session_user(request)
+    if user is not None:
+        return actor_from_user(user, kind="session")
+    settings = getattr(request.app.state, "settings", None)
+    if (
+        settings is not None
+        and not settings.auth_required
+        and settings.allow_local_management
+        and local_request(request)
+    ):
+        return actor_from_user(None, kind="local_dev")
+    return None
+
+
 def write_permission(request: Request) -> Permission:
     """Permission this request needs; Dash callbacks gate their own actions with session_user()."""
     path = request.url.path
@@ -128,6 +161,8 @@ def write_permission(request: Request) -> Permission:
         return Permission.read
     if RECEIPT_PATH.fullmatch(path):
         return Permission.declare_reception
+    if RESOLVE_PATH.fullmatch(path):
+        return Permission.manage_transfers
     if path.startswith("/api/v1/operations"):
         return Permission.manage_transfers
     if path.startswith("/api/v1/users"):

@@ -1,20 +1,30 @@
 # Gráficos y diagramas del reto ECON
 
-Edición del 12 de septiembre de 2026. Este documento es el punto de entrada al
-dossier visual. Las fuentes originales de `docs/onedrive` se conservan. Los
+Edición del 13 de septiembre de 2026 (añade el diagrama «dónde vive cada
+estado», las matrices exportadas y el manifiesto de PDFs). Este documento es el
+punto de entrada al dossier visual. Las fuentes originales de `docs/onedrive` se conservan. Los
 gráficos usan únicamente la muestra proporcionada; los diagramas distinguen
 proceso documental, implementación actual y ampliación propuesta.
 
 ## Paquete para revisar
 
 - [Trazabilidad de RF/RNF y entregables](matriz-requisitos-entregables.md).
-- [Matriz completa de equivalencias y RACI propuesta](equivalencias-prisma-startrack.md).
+- [Matriz completa de equivalencias y RACI propuesta](equivalencias-prisma-startrack.md),
+  exportada sin cambios a [CSV y XLSX](../output/matrices/MANIFEST.md) con
+  `scripts/docs/exportar_matrices.py` (RNF-02; `--check` en CI).
 - [Diccionario técnico y manual de operación](manual-mapeo-integracion.md).
-- [Inventario de campos del modelo ECON](diccionario-modelo-econ.md).
+- [Inventario de campos del modelo ECON](diccionario-modelo-econ.md), generado y
+  verificado en CI con `generar_diccionario.py --check` (RF-01).
+- [Indicadores calculables](indicadores-calculables.md) de `GET /api/v1/indicators`.
 - [Decisiones técnicas, resumen de dos páginas](decisiones-tecnicas.md).
-- [Dossier visual en PDF](../output/pdf/ECON-entregables-visuales.pdf).
-- [Decisiones técnicas en PDF](../output/pdf/ECON-decisiones-tecnicas.pdf).
-- [Diccionario y mapeo completo en PDF](../output/pdf/ECON-diccionario-mapeo-y-manual-integracion.pdf).
+- [Dossier visual en PDF](../output/pdf/ECON-entregables-visuales.pdf) (16 páginas).
+- [Decisiones técnicas en PDF](../output/pdf/ECON-decisiones-tecnicas.pdf) (2 páginas).
+- [Manifiesto de PDFs](../output/pdf/MANIFEST.md) con fecha, páginas y SHA-256.
+
+El PDF `ECON-diccionario-mapeo-y-manual-integracion.pdf` (34 páginas, 12/09/2026)
+no tiene generador en el repositorio: se conserva sin regenerar y, para la matriz
+completa, queda reemplazado por la matriz Markdown, `output/matrices` y el
+diccionario generado.
 
 El brief pide además una presentación de hasta diez diapositivas con reflexión;
 este dossier no se presenta como una presentación terminada. La validación
@@ -132,7 +142,62 @@ flowchart LR
     H --> D
 ```
 
+## Diagrama 6: dónde vive cada estado
+
+![Dónde vive cada estado](assets/entregables/diagrama-estados.png)
+
+Cada estado pertenece a una plataforma y ECON no lo traduce ni lo iguala a otro.
+Prisma conserva la solicitud (`status`, `approved_at`), la asignación
+(`maquinaria_id` de la solicitud; `project_id` y vigencia
+`fecha_inicio_uso`/`fecha_fin_uso` del equipo), la maquinaria (`estado`) y el
+mantenimiento (`active_failure_status`, `active_failure_is_paro`); ECON conserva
+el envío del movimiento (`Movement.state`), la recepción declarada
+(`receiver`, `received_at`, `reference`, `declared_by_*` cuando hubo sesión) y el
+actor de cada transición (`actor_*`); Startrack conserva la tarea (`status` como
+ID más `workflow_role` 0/1/2) y la ubicación observada del vehículo rastreado
+(visita a la geocerca con `vehicle_id`, `start_date` y `end_date`; el vehículo
+puede ser el transportador, no la máquina). ECON solo lee Prisma, lee tareas y
+visitas de Startrack y emite un único POST de creación; no escribe en Prisma.
+La ubicación observada no es recepción y una tarea completada no vuelve
+disponible a la máquina. Fuente:
+[estados separados](equivalencias-prisma-startrack.md#fechas-unidades-y-estados-separados),
+[ADR 0004](adr/0004-persistent-transfer-workflow.md) y
+[ADR 0006](adr/0006-postgresql-unica-infraestructura-de-estado.md).
+
+```mermaid
+flowchart LR
+    subgraph Prisma
+        PS[Solicitud: status, approved_at]
+        PA[Asignación: maquinaria_id, project_id, vigencia]
+        PM[Maquinaria: estado]
+        PF[Mantenimiento: active_failure_*]
+    end
+    subgraph ECON
+        EM[Movimiento: state draft…failed]
+        ER[Recepción declarada: receiver, received_at, reference, declared_by_*]
+        EA[Actor y evidencia: actor_*, event_time / observed_at / recorded_at]
+    end
+    subgraph Startrack
+        ST[Tarea: status ID + workflow_role]
+        SP[Ubicación observada: visita a POI del vehículo rastreado]
+    end
+    PS -- GET --> EM
+    PA -- GET --> EM
+    PM -- GET --> EM
+    PF -- GET --> EM
+    EM -- único POST --> ST
+    ST -- GET --> EA
+    SP -- GET --> EA
+```
+
 ## RF-06: indicador definido, sin valor inventado
+
+Esta sección es la **definición única** del indicador RF-06; la
+[matriz de requisitos](matriz-requisitos-entregables.md), la
+[analítica](analitica-decisiones.md) y los
+[indicadores y referencias ISO](kpis-y-referencias-iso.md) enlazan aquí en lugar
+de repetir la fórmula. Los indicadores que sí se calculan hoy con las lecturas
+existentes están en [indicadores calculables](indicadores-calculables.md).
 
 **Tiempo fuera de geocerca sin justificación**, por equipo y período acordado.
 Unidad: horas. Cálculo: duración de la unión de intervalos válidos fuera de la
@@ -159,8 +224,16 @@ Desde la raíz, sin cambiar el lockfile de la aplicación:
 ```powershell
 uv run --no-project --with matplotlib python scripts/docs/generar_graficos.py
 uv run --no-project --with matplotlib --with reportlab --with pypdf --with markdown-it-py python scripts/docs/generar_dossier.py
+uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py
+uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py --check
 ```
 
-Los PNG/SVG y PDFs se generan localmente. Antes de entregar una nueva edición,
-renderizar los PDFs, revisar páginas y verificar la matriz contra las fuentes.
-La generación no consulta ni modifica Prisma o Startrack.
+Los PNG/SVG y PDFs se generan localmente. `generar_dossier.py` dibuja los seis
+diagramas, construye los dos PDF, extrae su texto en `tmp/pdfs/entregables/` para
+revisión y falla si el dossier no tiene 16 páginas o las decisiones más de 2.
+Si el sistema tiene una instalación de `cryptography` rota, añadir
+`--with cryptography` para que `pypdf` use una copia sana. Tras regenerar,
+actualizar fecha, páginas y SHA-256 en [`output/pdf/MANIFEST.md`](../output/pdf/MANIFEST.md).
+Antes de entregar una nueva edición, renderizar los PDFs, revisar páginas y
+verificar la matriz contra las fuentes. La generación no consulta ni modifica
+Prisma o Startrack.

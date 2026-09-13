@@ -17,26 +17,46 @@ def local_development_mode(monkeypatch):
 
 POSTGRES_URL_VARIABLE = "ECON_TEST_POSTGRES_URL"
 POSTGRES_DEFAULT_URL = "postgresql+psycopg://econ@127.0.0.1:54329/econ_test"
+# Dedicated database for upgrade/downgrade round trips: they rewrite the schema and must
+# never share a database with tests that expect the migrated head.
+POSTGRES_MIGRATIONS_URL_VARIABLE = "ECON_TEST_POSTGRES_MIGRATIONS_URL"
+POSTGRES_MIGRATIONS_DEFAULT_URL = "postgresql+psycopg://econ@127.0.0.1:54329/econ_test_migrations"
+
+
+def _reachable_postgres(variable: str, default: str) -> str:
+    """Skip when the optional database is absent; fail when it was configured but is down."""
+    import sqlalchemy
+
+    explicit = os.environ.get(variable)
+    url = explicit or default
+    engine = None
+    try:
+        engine = sqlalchemy.create_engine(url, connect_args={"connect_timeout": 2})
+        with engine.connect():
+            pass
+    except Exception as error:  # noqa: BLE001 - any failure means the database is unavailable
+        if explicit:
+            pytest.fail(
+                f"PostgreSQL de pruebas configurado en {variable} no responde "
+                f"({type(error).__name__}); no se omite la verificación."
+            )
+        pytest.skip(f"PostgreSQL de pruebas no disponible ({variable})")
+    finally:
+        if engine is not None:
+            engine.dispose()
+    return url
 
 
 @pytest.fixture(scope="session")
 def postgres_url() -> str:
     """Isolated PostgreSQL database for guarantees SQLite cannot accredit; skipped when absent."""
-    import sqlalchemy
+    return _reachable_postgres(POSTGRES_URL_VARIABLE, POSTGRES_DEFAULT_URL)
 
-    url = os.environ.get(POSTGRES_URL_VARIABLE, POSTGRES_DEFAULT_URL)
-    try:
-        engine = sqlalchemy.create_engine(url, connect_args={"connect_timeout": 2})
-        with engine.connect():
-            pass
-    except Exception:  # noqa: BLE001 - any failure means the optional database is unavailable
-        pytest.skip(f"PostgreSQL de pruebas no disponible ({POSTGRES_URL_VARIABLE})")
-    finally:
-        try:
-            engine.dispose()
-        except UnboundLocalError:
-            pass
-    return url
+
+@pytest.fixture(scope="session")
+def postgres_migrations_url() -> str:
+    """Separate PostgreSQL database that upgrade/downgrade tests may leave at any revision."""
+    return _reachable_postgres(POSTGRES_MIGRATIONS_URL_VARIABLE, POSTGRES_MIGRATIONS_DEFAULT_URL)
 
 
 @pytest.fixture

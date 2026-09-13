@@ -88,11 +88,19 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `core/auth.py`, `api/auth.py`, `api/users.py` | Roles, permisos, sesión, login/logout/me y administración de usuarios |
 | `services/hub.py` | Proyección de lectura `HubResponse`, compartida con HTTP |
 | `services/evidence.py` | Proyección de evidencia persistida mediante identidades y períodos compatibles |
-| `services/workflow.py`, `services/ledger.py` | Reglas operativas, permiso por acción, persistencia, cortes, eventos y cola transaccional |
+| `services/workflow.py`, `services/ledger.py` | Reglas operativas, permiso por acción, persistencia, cortes, eventos y cola transaccional; `resolve` cierra un `unknown` como `failed` con actor |
+| `services/intervals.py` | Intervalos por día (período de uso, asignación vigente, programación, observación) y comparación inclusiva; fecha ausente, parcial o sin zona → «no verificable», nunca «sin conflicto». Lo usan hub, transfers y suggestions |
+| `services/graph.py`, `api/graph.py` | `GraphProjection` de `GET /api/v1/graph`: nodos tipados, aristas con evidencia y alcance, conflictos, tensiones y faltantes «no verificable»; la presencia cuelga del movimiento, no de la máquina; sin geometría ni ETA |
+| `services/indicators.py`, `api/indicators.py` | `IndicatorsReport` de `GET /api/v1/indicators`: ocho fichas por fila, sin promedios; la ausencia no es cero; fixture sin corte |
+| `services/suggestions.py`, `api/suggestions.py` | `AssignmentSuggestion` de `GET /api/v1/requests/{id}/suggestions`: candidatas por reglas R0–R8, sin GPS ni puntajes; recomendar no es asignar |
+| `api/integration.py` | Traza de una solicitud para `/integracion` y `GET /api/v1/integration/{request_id}` |
+| `core/database.py`, `cli/sync_operations.py`, `cli/prune_snapshots.py` | Motor SQL y `cycle_lock` (`pg_try_advisory_lock`, un ciclo por proceso y por base); worker explícito y poda explícita de cortes (ADR 0006) |
 | `dashboard/assets` | `style.css` mínimo (skip link, foco, grid, impresión), Inter y logotipos ECON |
 
 Se retiraron `icons.py`, `decision_views.py`, `equipment_views.py`, los SVG
-locales y el menú clientside: Mantine e Iconify cubren esas funciones.
+locales y el menú clientside: Mantine e Iconify cubren esas funciones. Grafo,
+indicadores y sugerencias no tienen página Dash propia: se consultan por HTTP y
+Swagger; la tabla `PAGES` no cambió.
 
 Las relaciones usan IDs originales, fuente, entorno y evidencia compatibles.
 Los movimientos que alimentan las decisiones deben corresponder también a la

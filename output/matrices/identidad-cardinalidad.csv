@@ -1,0 +1,7 @@
+Relación,Cardinalidad y decisión necesaria,Implementación vigente
+Proyecto → solicitudes,Un proyecto puede tener varias solicitudes. Cada solicitud conserva su project_id.,"Unión por UUID, nunca por project_name."
+Solicitud → maquinaria,Cada registro tiene cero o una maquinaria_id; una máquina puede figurar en varias solicitudes a lo largo del tiempo.,Sin unidad no se prepara el traslado. El tipo solicitado no identifica una unidad.
+Solicitud → movimientos → tareas,Una solicitud puede requerir varios movimientos. Cada movimiento local tiene cero o un job_id confirmado.,La referencia distingue movimientos; no se fuerza una tarea por proyecto ni una tarea por solicitud.
+Proyecto ↔ geocerca,No hay relación 1:1 acreditada por las muestras. Un proyecto podría requerir distintos destinos.,Cada movimiento guarda explícitamente project_source_id y poi_id. No existe un catálogo maestro de equivalencias con vigencias independientes.
+Maquinaria ↔ vehículo rastreado,No hay identidad automática. El GPS puede estar en la máquina o en el transportador.,Movement.tracked_vehicle_id es una elección separada; no se envía como campo de Job.
+Operador Prisma ↔ conductor ↔ usuario Startrack,Son entidades e identificadores distintos. La tarea admite varios usuarios.,"Se eligen assigned_user_ids; no se deducen de nombres, código MOT, solicitante o conductor del vehículo."

@@ -1,0 +1,8 @@
+Estado,Fuente / modelo,Regla
+Administrativo de solicitud,Prisma status → RequestRecord.status.,Solo APROBADA/APPROVED habilitan la preparación actual. Otros valores se conservan y no se consideran aprobación.
+Administrativo de maquinaria,Prisma estado → machinery_status.,OCUPADA no significa GPS en destino; OBSOLETA no se sustituye automáticamente por un código de falla.
+Mantenimiento,active_failure_* → maintenance_*.,"Un paro explícito bloquea preparación. Desconocer el paro genera advertencia, no certifica disponibilidad."
+Envío de integración,"Movement.state: draft, blocked, queued, sending, sent, unknown, failed.","sent confirma una tarea asociada, no ejecución ni entrega. unknown no permite otro POST automático."
+Tarea,Job.status es un ID; catálogo JobStatus.workflow_role agrupa pendiente/completada/cancelada.,"No interpretar un ID personalizado por su parecido con 0, 1 o 2; consultar su rol. Conservar desconocidos."
+Presencia,"Visita de vehículo a POI, con IDs y tiempo.","Evidencia espacial acotada, separada de tarea y máquina transportada."
+Recepción,ReceiptRecord declarado expresamente.,"Requiere receptor, instante con zona y referencia de constancia. Ni GPS, tarea completada ni formulario genérico generan recepción automática."

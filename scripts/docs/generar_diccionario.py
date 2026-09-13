@@ -21,11 +21,20 @@ from app.api.documentation import MODE_DESCRIPTION
 from app.integrations.fixtures import fixture_records
 from app.integrations.startrack import Identifier, StartrackTaskDraft
 from app.models.hub import DataMode
+from app.models.operations import TrackedVehicleKind
+from app.services.ledger import SAFE_REASON_CODES
 from app.services.transfers import TransferMapping, TransferPreparation
 from pydantic import BaseModel, ConfigDict, Field
 
 OUTPUT = ROOT / "docs" / "diccionario-modelo-econ.md"
-MODULES = ("app.models.hub", "app.models.operations", "app.models.workflow")
+MODULES = (
+    "app.models.hub",
+    "app.models.operations",
+    "app.models.workflow",
+    "app.models.graph",
+    "app.models.indicators",
+    "app.models.suggestions",
+)
 TECH_TIME = "2000-01-01T00:00:00Z"
 PRISMA_FIELDS = {
     "EquipmentRecord": {
@@ -239,6 +248,95 @@ MEANINGS = {
     "form_ids": "IDs de formularios asociados al borrador; soporte SDK, no propagados por preparación actual.",
     "required_form_ids": "Subconjunto de formularios obligatorios; no define por sí solo recepción empresarial.",
     "notify_contact": "Siempre false en este borrador; no solicita avisos al contacto.",
+    "arrival_observed_at": "Instante en que ECON leyó la visita de llegada; nunca sustituye a arrival_event_time.",
+    "tracked_vehicle_kind": "Declarado por el operador (machine_device o transporter); no verificado: el catálogo de vehículos de Startrack no tiene tipo. Requiere tracked_vehicle_id.",
+    "actor_user_id": "ID del usuario de sesión que causó la transición; null con actor de proceso o sesión desconocida, nunca inventado.",
+    "actor_role": "Rol de sesión del actor en el momento de la transición; null sin sesión.",
+    "actor_kind": "session (usuario autenticado), local_dev (AUTH_REQUIRED=false sin login) o cli_worker (proceso); null en filas anteriores a la migración 0004.",
+    "last_confirmed_at": "Última relectura cuya huella estable coincidió con este corte; con recorded_at forma la última lectura (last_sync_at). Null si nunca se confirmó.",
+    "user_id": "Identificador del usuario autenticado; obligatorio con kind=session y prohibido en actores sin sesión.",
+    "email": "Correo del usuario de sesión, copiado como dato; nunca se usa para unir con proveedores.",
+    "role": "Rol de sesión (ADR 0005) con el que se ejecutó la acción; no es rol de Startrack ni de la RACI aprobada.",
+    "declared_by_user_id": "ID del usuario autenticado que registró la recepción (migración 0004); null sin sesión. No sustituye a receiver.",
+    "declared_by_email": "Correo del usuario que registró la recepción; null sin sesión.",
+    "declared_by_role": "Rol de sesión de quien registró la recepción; no acredita autoridad empresarial para recibir.",
+    "origin": "Sistema del que procede la evidencia: nexus, startrack, econ_ledger o econ_declaration.",
+    "verification": "Cómo se sostiene el hecho: source_observed (leído del proveedor), ledger_recorded (registro local), declared (persona) o referenced_only (solo ID, no leído).",
+    "missing": "Hechos que esta lectura no cubre para el objeto; cada uno queda «no verificable», nunca ausente ni cero.",
+    "last_observed": "Instante del hecho por tipo (administrative, task, presence, receipt), cada uno con su propia última observación; presence es del vehículo rastreado, no de la máquina.",
+    "last_read": "Instante de lectura o registro de cada hecho; no sustituye al instante del hecho.",
+    "presence": "Siempre referenced_only: el proyecto no se lee de Prisma, solo se referencia por project_id.",
+    "geometry": "Siempre null: ECON no conserva coordenadas ni radio de la geocerca.",
+    "task_ref": "startrack:job:{job_id} cuando la tarea está confirmada; null en borradores y envíos sin ID.",
+    "tracked_vehicle_kind_verification": "Siempre declared cuando hay tipo: lo declaró el operador y ninguna fuente lo verifica.",
+    "relation_scope": "current si solicitud y unidad almacenadas coinciden con la lectura vigente; historical si el origen cambió; unverifiable si la contraparte no está en la lectura; not_applicable si no procede.",
+    "failure_id": "Referencia de la falla activa informada por Prisma; identidad de la incidencia, no de la máquina.",
+    "is_stopped": "Paro explícito informado por Prisma: true/false; null significa desconocido, no «sin paro».",
+    "target": "ID del nodo destino de la arista.",
+    "attributes": "Atributos escalares de la arista (por ejemplo visit_id, tracked_asset_kind, receiver); nunca geometría ni distancias.",
+    "node_ids": "IDs de los nodos involucrados en el conflicto o la tensión.",
+    "edge_ids": "IDs de las aristas involucradas, si las hay.",
+    "node_id": "Nodo al que pertenece el faltante; null si afecta a toda la lectura.",
+    "edge_kind": "Tipo de arista que no pudo establecerse por el faltante; null si no aplica.",
+    "fact": "Hecho concreto que falta o se cita, en texto; no un valor inferido.",
+    "ledger": "Cobertura de la página del registro local usada por la proyección; null si no se pudo consultar.",
+    "ledger_available": "El registro local pudo consultarse; false no significa cero movimientos.",
+    "ledger_message": "Explicación de disponibilidad y cobertura del registro local.",
+    "nodes_by_kind": "Conteo de nodos por tipo en esta lectura; describe la proyección, no la flota.",
+    "edges_by_kind": "Conteo de aristas por tipo en esta lectura.",
+    "referenced_only": "Nodos presentes solo por referencia de ID (proyectos, unidades fuera de la página), no leídos.",
+    "nodes": "Nodos tipados (machine, project, place, request, movement, incident), cada uno con evidencia y faltantes.",
+    "edges": "Relaciones con evidencia y alcance; la presencia cuelga del movimiento, nunca de la máquina.",
+    "conflicts": "Hechos documentados incompatibles entre sí (por ejemplo, el origen cambió tras el envío).",
+    "tensions": "Hechos que coexisten y piden revisión sin ser contradicción (por ejemplo, llegada sin recepción).",
+    "gaps": "Hechos que la lectura no cubre; siempre «no verificable», nunca ausencia comprobada.",
+    "question": "Pregunta que responde cada fila del indicador.",
+    "decision": "Decisión que habilita el indicador y quién la toma.",
+    "grain": "Grano de la fila: solicitud, unidad o movimiento.",
+    "population": "Registros de la lectura acotada que forman la población; no la flota.",
+    "numerator": "Fórmula por fila con los campos exactos de origen.",
+    "denominator": "Denominador; «no aplica» cuando el indicador se publica por fila.",
+    "exclusions": "Registros excluidos por regla explícita de la ficha.",
+    "unknowns": "Lo que la lectura no permite saber; se publica junto al resultado.",
+    "dates": "Nombres exactos de los campos de fecha usados por la ficha.",
+    "unit": "Unidad del valor por fila (segundos, horas, días o hecho); sin promedios.",
+    "status_rule": "Cuándo la fila y el indicador son evaluable, partial o not_evaluable.",
+    "measurable_in": "Modos en los que hoy existe alguna fila evaluable (fixture y/o live).",
+    "subject_id": "ID del hub de la fila: nexus:request:…, nexus:equipment:… o econ:movement:….",
+    "values": "Valores calculados de la fila a partir de sus propias fechas; null conserva lo desconocido.",
+    "reason": "Por qué la fila o el indicador no es evaluable o es parcial, con el campo que falta.",
+    "sheet": "Ficha completa del indicador publicada con el resultado.",
+    "rows": "Filas evaluadas de esta lectura; una lista vacía describe la lectura, no la operación.",
+    "evaluable_count": "Filas evaluable; junto con partial y not_evaluable suma el total de filas.",
+    "partial_count": "Filas partial (registro local incompleto u otra cobertura parcial).",
+    "not_evaluable_count": "Filas not_evaluable; la ausencia de dato no se convierte en cero.",
+    "coverage_note": "Población, alcance de la lectura (por ejemplo 5 de 15 unidades) y límites.",
+    "registry": "Estado del registro local de movimientos visto por el hub; ver OperationEvidenceStatus.",
+    "ledger_coverage": "Cobertura de la página del registro local usada; null si no se consultó.",
+    "last_registry_read_at": "Última lectura del registro (max(recorded_at, last_confirmed_at) del corte); único «ahora» permitido, solo para evidence_age.",
+    "indicators": "Resultados por ficha; sin promedios, percentiles ni porcentajes.",
+    "field": "Campo(s) exacto(s) de origen que sostienen el hecho citado.",
+    "nature": "Siempre administrative: solo hechos registrados en la fuente, nunca presencia GPS.",
+    "equipment_source_id": "UUID original de la unidad en Prisma, sin prefijo.",
+    "requested_class": "Clase solicitada (machinery_type) tal como se comparó, sin normalizar.",
+    "class_match": "true solo con igualdad exacta de clases tras quitar espacios; similar_classes no lo altera.",
+    "eligibility": "eligible, review_required o excluded según las reglas R0–R8; no es un puntaje.",
+    "reasons": "Motivos por regla que sostienen el nivel de la candidata.",
+    "review_reasons": "Hechos que exigen revisión humana antes de asignar.",
+    "exclusion_reasons": "Reglas que excluyen a la candidata (paro, solapamiento, clase distinta…).",
+    "overlapping_requests": "IDs de solicitudes aprobadas cuyo período de uso se cruza con el solicitado.",
+    "overlapping_movements": "IDs de movimientos abiertos de la unidad (draft, queued, sending, sent sin recepción o unknown).",
+    "same_project_evidence": "Asignación administrativa vigente al mismo project_id que termina antes del período; continuidad administrativa, no ubicación observada.",
+    "operators_known": "false significa lectura acotada sin operadores, no «sin operadores».",
+    "request_status": "Estado original de la solicitud en Prisma; solo PENDIENTE sin unidad es aplicable.",
+    "project_label": "Nombre de proyecto para presentación; la identidad sigue en project_id.",
+    "requested_starts_on": "Inicio del período de uso solicitado, como texto; no fecha de traslado.",
+    "requested_ends_on": "Fin del período de uso solicitado, como texto; no vencimiento.",
+    "applicable": "false cuando la solicitud no está pendiente o ya tiene unidad; entonces no hay candidatas.",
+    "rules": "Reglas R0–R8 aplicadas, en texto; sin puntajes, distancias ni ETA.",
+    "candidates": "Unidades candidatas ordenadas por nivel, evidencia de mismo proyecto e ID; cero elegibles no afirma que no exista una unidad.",
+    "similar_classes": "Clases de la lectura con grafía cercana a la solicitada; informativo, no une registros.",
+    "authority_note": "Recomendar no es asignar: la asignación se registra en Prisma.",
 }
 
 OVERRIDES = {
@@ -285,6 +383,65 @@ OVERRIDES = {
         "StartrackTaskDraft",
         "description",
     ): "Texto generado con UUID de solicitud, maquinaria, proyecto y referencia; no copia comentarios.",
+    ("Actor", "kind"): "session, local_dev o cli_worker; determina si puede llevar usuario, correo y rol.",
+    ("GraphEdge", "source"): "ID del nodo origen de la arista.",
+    ("GraphEdge", "kind"): "Tipo de relación: assigned_to, requested_for, assigned_unit, transfer_of, for_request, destination, observed_at_place, received_by o affects.",
+    ("GraphEdge", "scope"): "Alcance de la relación: current, historical, unverifiable o not_applicable; heredado del movimiento para sus aristas.",
+    ("GraphEdge", "evidence"): "Al menos una EvidenceRef con procedencia intacta; una arista sin evidencia no existe.",
+    ("NodeBase", "kind"): "Tipo de nodo: machine, project, place, request, movement o incident.",
+    ("NodeBase", "label"): "Etiqueta de presentación del nodo; nunca clave de unión.",
+    ("NodeBase", "evidence"): "EvidenceRef que sostienen el nodo; vacía en nodos solo referenciados.",
+    ("MachineNode", "kind"): "Constante machine; discriminador de GraphNode.",
+    ("MachineNode", "label"): "Etiqueta de presentación de la unidad (activo o nombre); nunca clave de unión.",
+    ("MachineNode", "evidence"): "EvidenceRef de la lectura de Prisma que sostiene el nodo.",
+    ("ProjectNode", "kind"): "Constante project; discriminador de GraphNode.",
+    ("ProjectNode", "label"): "Nombre o ID de proyecto para presentación; nunca clave de unión.",
+    ("ProjectNode", "name"): "Nombre de proyecto tal como lo referencian solicitudes o equipos; solo presentación.",
+    ("ProjectNode", "evidence"): "Vacía: el proyecto solo se referencia por ID, no se lee de Prisma.",
+    ("PlaceNode", "kind"): "Constante place; discriminador de GraphNode.",
+    ("PlaceNode", "label"): "Etiqueta de la geocerca (nombre observado o poi_id); nunca clave de unión.",
+    ("PlaceNode", "name"): "Nombre observado en Startrack para ese mismo poi_id; null si no se leyó. Nunca unido por nombre.",
+    ("PlaceNode", "evidence"): "EvidenceRef del mapeo declarado y, si coincide el poi_id, de la tarea observada.",
+    ("RequestNode", "kind"): "Constante request; discriminador de GraphNode.",
+    ("RequestNode", "label"): "Etiqueta de presentación de la solicitud; nunca clave de unión.",
+    ("RequestNode", "status"): "Estado original del flujo de solicitud en Prisma.",
+    ("RequestNode", "evidence"): "EvidenceRef de la lectura de Prisma que sostiene el nodo.",
+    ("MovementNode", "kind"): "Constante movement; discriminador de GraphNode.",
+    ("MovementNode", "label"): "Etiqueta de presentación del movimiento (referencia); nunca clave de unión.",
+    ("MovementNode", "status"): "ID/texto de estado remoto de la tarea Startrack; no estado de envío local.",
+    ("MovementNode", "evidence"): "EvidenceRef del registro local (ledger_recorded) y de las observaciones vinculadas.",
+    ("MovementNode", "receipt"): "Recepción declarada del movimiento; null mientras nadie la declare. Ni GPS ni tarea completada la generan.",
+    ("IncidentNode", "kind"): "Constante incident; discriminador de GraphNode.",
+    ("IncidentNode", "label"): "Etiqueta de presentación de la falla; nunca clave de unión.",
+    ("IncidentNode", "status"): "Estado de la falla en Prisma (active_failure_status), separado del estado administrativo.",
+    ("IncidentNode", "evidence"): "EvidenceRef de la lectura de Prisma del equipo afectado.",
+    ("GraphConflict", "code"): "Código cerrado del conflicto: assignment_project_mismatch, movement_source_changed, task_destination_differs, overlapping_approved_requests o status_role_unknown.",
+    ("GraphConflict", "description"): "Explicación legible del conflicto con los hechos citados.",
+    ("GraphTension", "code"): "Código cerrado de la tensión: administrative_status_vs_task, obsolete_with_approved_request, stopped_with_pending_task, arrival_without_receipt o receipt_without_arrival.",
+    ("GraphTension", "description"): "Explicación legible de por qué los hechos piden revisión.",
+    ("GraphGap", "code"): "Código del faltante (machine_location, project_not_read, record_not_in_reading, startrack_not_queried…).",
+    ("GraphGap", "description"): "Explicación legible del faltante y de por qué no se infiere.",
+    ("GraphGap", "status"): "Siempre «no verificable»: un faltante nunca se publica como ausencia ni como correcto.",
+    ("GraphCoverage", "description"): "Explicación de la población, las fuentes y los límites de la proyección.",
+    ("GraphCoverage", "complete"): "true solo con Prisma y Startrack conectados en live y registro completo; false en fixture y mientras Startrack no se consulte.",
+    ("GraphProjection", "notes"): "Advertencias y límites de interpretación de la proyección.",
+    ("EvidenceRef", "reference"): "Referencia local que localiza la evidencia (movimiento, evento, constancia).",
+    ("EvidenceRef", "note"): "Nota de interpretación de la evidencia (por ejemplo «Declarado por el operador; no verificado»).",
+    ("IndicatorSheet", "id"): "Identificador cerrado del indicador (approval_time, open_request_age, …).",
+    ("IndicatorSheet", "name"): "Nombre del indicador en español.",
+    ("IndicatorSheet", "owner"): "Área responsable de actuar sobre el resultado; no asignación autenticada.",
+    ("IndicatorRow", "label"): "Etiqueta legible de la fila (activo, código); nunca clave de unión.",
+    ("IndicatorRow", "status"): "evaluable, partial o not_evaluable para esta fila.",
+    ("IndicatorRow", "evidence"): "Hechos de origen citados por la fila, como lista de textos.",
+    ("IndicatorResult", "status"): "Estado del indicador completo; not_evaluable con población vacía («sin casos evaluables»).",
+    ("IndicatorsReport", "notes"): "Advertencias de cobertura y de modo (por ejemplo, live deshabilitado sin fallback).",
+    ("SuggestionEvidence", "source"): "Sistema que registró el hecho: nexus, startrack o econ.",
+    ("SuggestionEvidence", "reference"): "Referencia local (movimiento, evento o marca de origen) del hecho citado.",
+    ("CandidateUnit", "label"): "Etiqueta de presentación de la unidad candidata; nunca clave de unión.",
+    ("CandidateUnit", "missing"): "Hechos que la lectura acotada no cubre (ubicación física, operadores, tarifa); cada uno «no verificable».",
+    ("AssignmentSuggestion", "message"): "Explicación legible de la aplicabilidad y de la cobertura de la sugerencia.",
+    ("AssignmentSuggestion", "request_id"): "ID de la solicitud en el modelo de lectura (nexus:request:…).",
+    ("ResolveInput", "reason_code"): "Código cerrado de SAFE_REASON_CODES con que el operador cierra un movimiento unknown como failed; sin texto libre.",
 }
 
 MODEL_ORIGINS = {
@@ -318,14 +475,57 @@ MODEL_ORIGINS = {
     "PlanInput": "Entrada de gestión local → TransferMapping",
     "SyncInput": "Entrada de gestión local para seleccionar modo",
     "ReceiptInput": "Entrada de declaración manual de recepción",
+    "ResolveInput": "Entrada de decisión del operador para cerrar un movimiento incierto",
+    "Actor": "ECON: quién ejecuta una transición del registro (sesión, desarrollo local o worker)",
+    "EvidenceRef": "ECON: services/graph.py, procedencia de cada hecho del grafo",
+    "NodeBase": "ECON: base de los nodos del grafo",
+    "MachineNode": "Proyección de EquipmentRecord en el grafo",
+    "ProjectNode": "Referencia de proyecto derivada de project_id; no se lee de Prisma",
+    "PlaceNode": "Geocerca del mapeo (poi_id) y nombre observado en Startrack si coincide",
+    "RequestNode": "Proyección de RequestRecord en el grafo",
+    "MovementNode": "Proyección de MovementRecord y sus observaciones en el grafo",
+    "IncidentNode": "Falla activa informada por Prisma en el equipo",
+    "GraphEdge": "ECON: services/graph.py, relación con evidencia y alcance",
+    "GraphConflict": "ECON: services/graph.py, hechos incompatibles",
+    "GraphTension": "ECON: services/graph.py, hechos que piden revisión",
+    "GraphGap": "ECON: services/graph.py, faltante siempre «no verificable»",
+    "GraphCoverage": "ECON: cobertura compuesta de la proyección de grafo",
+    "GraphProjection": "ECON: respuesta de GET /api/v1/graph",
+    "IndicatorSheet": "ECON: services/indicators.py, ficha documentada en indicadores-calculables.md",
+    "IndicatorRow": "ECON: fila calculada con las fechas de origen del registro",
+    "IndicatorResult": "ECON: resultado por ficha, sin promedios",
+    "IndicatorsReport": "ECON: respuesta de GET /api/v1/indicators",
+    "SuggestionEvidence": "ECON: services/suggestions.py, hecho administrativo citado",
+    "CandidateUnit": "ECON: unidad candidata evaluada por reglas R0–R8",
+    "AssignmentSuggestion": "ECON: respuesta de GET /api/v1/requests/{id}/suggestions",
 }
+
+
+GRAPH_MODELS = {
+    "EvidenceRef",
+    "NodeBase",
+    "MachineNode",
+    "ProjectNode",
+    "PlaceNode",
+    "RequestNode",
+    "MovementNode",
+    "IncidentNode",
+    "GraphEdge",
+    "GraphConflict",
+    "GraphTension",
+    "GraphGap",
+    "GraphCoverage",
+    "GraphProjection",
+}
+INDICATOR_MODELS = {"IndicatorSheet", "IndicatorRow", "IndicatorResult", "IndicatorsReport"}
+SUGGESTION_MODELS = {"SuggestionEvidence", "CandidateUnit", "AssignmentSuggestion"}
 
 
 def api_inputs() -> list[type[BaseModel]]:
     """Extract only DTO declarations; never import routes/dependencies/settings."""
     path = API / "app" / "api" / "workflow.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    names = {"PlanInput", "SyncInput", "ReceiptInput"}
+    names = {"PlanInput", "SyncInput", "ReceiptInput", "ResolveInput"}
     declarations = [
         n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in names
     ]
@@ -339,8 +539,10 @@ def api_inputs() -> list[type[BaseModel]]:
         "TransferMapping": TransferMapping,
         "datetime": datetime,
         "MODE_DESCRIPTION": MODE_DESCRIPTION,
+        "TrackedVehicleKind": TrackedVehicleKind,
+        "SAFE_REASON_CODES": SAFE_REASON_CODES,
     }
-    # Only three reviewed, repository-owned DTO declarations; no source documents or input text.
+    # Only four reviewed, repository-owned DTO declarations; no source documents or input text.
     exec(  # noqa: S102
         compile(ast.Module(body=declarations, type_ignores=[]), str(path), "exec"),
         namespace,
@@ -352,6 +554,7 @@ def api_inputs() -> list[type[BaseModel]]:
 
 def models() -> list[tuple[type[BaseModel], str]]:
     result = []
+    seen: set[type[BaseModel]] = set()
     for name in MODULES:
         module = importlib.import_module(name)
         for value in vars(module).values():
@@ -359,7 +562,9 @@ def models() -> list[tuple[type[BaseModel], str]]:
                 inspect.isclass(value)
                 and issubclass(value, BaseModel)
                 and value.__module__ == name
+                and value not in seen  # aliases such as ActorRef = Actor
             ):
+                seen.add(value)
                 result.append((value, f"apps/api/{name.replace('.', '/')}.py"))
     result.extend(
         [
@@ -377,6 +582,8 @@ def json_type(schema: dict[str, Any]) -> str:
         return schema["$ref"].rsplit("/", 1)[-1]
     if "anyOf" in schema:
         return " / ".join(json_type(item) for item in schema["anyOf"])
+    if "oneOf" in schema:
+        return " | ".join(json_type(item) for item in schema["oneOf"])
     if "const" in schema:
         return json.dumps(schema["const"])
     if "enum" in schema:
@@ -390,6 +597,8 @@ def json_type(schema: dict[str, Any]) -> str:
         "string": "texto",
         "integer": "entero",
         "boolean": "booleano",
+        "number": "número",
+        "null": "null",
         "object": "objeto JSON",
     }.get(kind, kind)
 
@@ -497,6 +706,14 @@ def field_origin(model: str, field: str) -> str:
         return "Proyección de Startrack prevista; sin muestra"
     if model == "StartrackTaskDraft":
         return "Borrador ECON para contrato Job"
+    if model == "Actor":
+        return "Sesión autenticada o proceso local; nunca fabricado"
+    if model in GRAPH_MODELS:
+        return "Proyección ECON de lectura y registro; procedencia en evidence"
+    if model in INDICATOR_MODELS:
+        return "Cálculo ECON por fila sobre instantes de origen"
+    if model in SUGGESTION_MODELS:
+        return "Sugerencia ECON de solo lectura; Prisma asigna"
     return "Derivación o metadato ECON"
 
 
@@ -528,8 +745,9 @@ def render() -> str:
         "",
         "## Alcance y reproducción",
         "",
-        "Se incluyen todos los modelos propios de `models/hub.py`, `models/operations.py` y",
-        "`models/workflow.py`, además de `TransferMapping`, `TransferPreparation`,",
+        "Se incluyen todos los modelos propios de `models/hub.py`, `models/operations.py`,",
+        "`models/workflow.py`, `models/graph.py`, `models/indicators.py` y",
+        "`models/suggestions.py`, además de `TransferMapping`, `TransferPreparation`,",
         "`StartrackTaskDraft` y las entradas de la API de operaciones. Se enumeran sus campos",
         "públicos/declarados; propiedades, validadores y restricciones de servicio se explican abajo.",
         "Se excluyen configuración/secretos, modelos genéricos del transporte y DTO de proveedores",
@@ -543,7 +761,7 @@ def render() -> str:
         "```",
         "",
         "El generador importa únicamente declaraciones de modelos y el lector de muestras locales.",
-        "Extrae las tres entradas HTTP por AST sin importar rutas ni dependencias. No carga settings,",
+        "Extrae las cuatro entradas HTTP por AST sin importar rutas ni dependencias. No carga settings,",
         "no abre la base, no inicia clientes y no consulta proveedores. `--check` verifica que este",
         "archivo coincida con las declaraciones y anotaciones del generador.",
         "",
@@ -613,6 +831,10 @@ SEMANTICS = """
 | Correspondencias | Los identificadores deben ser cadenas no vacías sin espacios; los asignados no se repiten. POI, usuarios y activo rastreado se eligen explícitamente; proyecto, solicitante y motorista no se unen por nombres. | [transfers.py](../apps/api/app/services/transfers.py), [startrack.py](../apps/api/app/integrations/startrack.py) |
 | Borrador | Fecha explícita YYYY-MM-DD; hora HH:MM:SS; objetivo no vacío y máximo 255 caracteres. Formularios obligatorios son subconjunto de formularios asociados. `notify_contact=false`. Preparación no certifica aceptación remota. | [startrack.py](../apps/api/app/integrations/startrack.py) |
 | JSON interno | `mapping`, `source_request`, `source_equipment`, `preparation`, `payload`, `receipt`, `content` y `data` se tipan como JSON en persistencia. Sus estructuras operativas se revisan contra los modelos y productores; el esquema SQL no valida por sí solo toda su semántica. | [ledger.py](../apps/api/app/services/ledger.py) |
+| Actor y autoría | `actor_*` en eventos y `declared_by_*` en la recepción se copian de la sesión firmada (ADR 0005) o quedan nulos; un actor sin sesión no puede declarar usuario, correo ni rol. `receiver` sigue siendo el nombre escrito en la constancia. | [operations.py](../apps/api/app/models/operations.py), [ledger.py](../apps/api/app/services/ledger.py) |
+| Exclusividad en vuelo y unicidad de tarea | Índices parciales `uq_operation_movements_inflight_machine` (un movimiento `queued`/`sending`/`unknown` por máquina, modo y entorno) y `uq_operation_movements_job_identity` (un `job_id` por modo y entorno); el prechequeo en Python solo mejora el mensaje. `operation_events` es append-only por trigger en PostgreSQL. | [0004_movement_guards_actors_and_indexes.py](../apps/api/migrations/versions/0004_movement_guards_actors_and_indexes.py), [ADR 0006](adr/0006-postgresql-unica-infraestructura-de-estado.md) |
+| Grafo | La presencia (`observed_at_place`) cuelga del movimiento y de su vehículo rastreado, nunca de la máquina; los proyectos son `referenced_only`; un faltante es un `GraphGap` «no verificable». `coverage.complete` es false en fixture y mientras Startrack no se consulte. | [graph.py](../apps/api/app/services/graph.py) |
+| Indicadores y sugerencias | Cada fila es una diferencia entre dos instantes documentados o un hecho copiado; sin promedios ni porcentajes; la ausencia no es cero. Las sugerencias no usan GPS ni puntajes: recomendar no es asignar. | [indicators.py](../apps/api/app/services/indicators.py), [suggestions.py](../apps/api/app/services/suggestions.py) |
 
 ## Derivaciones de presentación vigentes
 
