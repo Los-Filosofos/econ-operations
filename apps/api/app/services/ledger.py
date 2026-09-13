@@ -4,13 +4,15 @@ The claim transaction commits before a caller can issue a POST. A crash after
 that commit is ambiguous: recovery changes sending to unknown, never to queued.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Engine, update
+from sqlalchemy import Engine, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -151,8 +153,15 @@ class OperationsLedger:
             .order_by(OperationEvent.recorded_at, OperationEvent.id)
         ).all()
         data = row.model_dump(exclude={"identity_hash"})
-        for field in ("created_at", "updated_at", "queued_at", "sending_at", "sent_at"):
-            data[field] = _stored_time(data[field])
+        for field in (
+            "created_at",
+            "updated_at",
+            "next_review_at",
+            "queued_at",
+            "sending_at",
+            "sent_at",
+        ):
+            data[field] = _stored_time(data.get(field))
         data["events"] = [
             MovementEventRecord(
                 **event.model_dump(
@@ -176,12 +185,29 @@ class OperationsLedger:
         with Session(self.engine) as session:
             return self._record(session, self._row(session, movement_id, mode))
 
+    def count(
+        self,
+        mode: DataMode,
+        *,
+        environment: str | None = None,
+        request_source_id: str | None = None,
+    ) -> int:
+        _mode(mode)
+        query = select(func.count(Movement.id)).where(Movement.mode == mode)
+        if environment is not None:
+            query = query.where(Movement.environment == environment)
+        if request_source_id is not None:
+            query = query.where(Movement.request_source_id == request_source_id)
+        with Session(self.engine) as session:
+            return session.exec(query).one()
+
     def list(
         self,
         mode: DataMode,
         *,
         environment: str | None = None,
         request_source_id: str | None = None,
+        offset: int = 0,
         limit: int = 100,
     ) -> list[MovementRecord]:
         _mode(mode)
@@ -190,11 +216,71 @@ class OperationsLedger:
             query = query.where(Movement.environment == environment)
         if request_source_id is not None:
             query = query.where(Movement.request_source_id == request_source_id)
-        query = query.order_by(Movement.created_at.desc(), Movement.id).limit(
-            max(1, min(limit, 500))
+        query = (
+            query.order_by(Movement.created_at.desc(), Movement.id)
+            .offset(max(0, offset))
+            .limit(max(1, min(limit, 500)))
         )
         with Session(self.engine) as session:
             return [self._record(session, row) for row in session.exec(query).all()]
+
+    def list_page(
+        self,
+        mode: DataMode,
+        *,
+        environment: str | None = None,
+        request_source_id: str | None = None,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[MovementRecord], int]:
+        total = self.count(
+            mode,
+            environment=environment,
+            request_source_id=request_source_id,
+        )
+        items = self.list(
+            mode,
+            environment=environment,
+            request_source_id=request_source_id,
+            offset=offset,
+            limit=limit,
+        )
+        return items, total
+
+    def select_for_review(
+        self,
+        mode: DataMode,
+        states: tuple[str, ...] | list[str],
+        *,
+        limit: int = 25,
+    ) -> list[MovementRecord]:
+        _mode(mode)
+        bounded_limit = max(1, min(limit, 100))
+        query = (
+            select(Movement)
+            .where(Movement.mode == mode, Movement.state.in_(states))
+            .order_by(Movement.next_review_at.asc(), Movement.created_at.asc(), Movement.id.asc())
+            .limit(bounded_limit)
+        )
+        with Session(self.engine) as session:
+            return [self._record(session, row) for row in session.exec(query).all()]
+
+    def advance_review(
+        self,
+        movement_id: str,
+        mode: DataMode,
+        *,
+        delay_seconds: int = 0,
+    ) -> None:
+        _mode(mode)
+        next_time = _now() + timedelta(seconds=delay_seconds)
+        with Session(self.engine) as session:
+            session.execute(
+                update(Movement)
+                .where(Movement.id == movement_id, Movement.mode == mode)
+                .values(next_review_at=next_time)
+            )
+            session.commit()
 
     def create(
         self,
@@ -254,6 +340,7 @@ class OperationsLedger:
             state="draft" if payload else "blocked",
             created_at=now,
             updated_at=now,
+            next_review_at=now,
         )
         with Session(self.engine) as session:
             existing = session.exec(
@@ -352,6 +439,7 @@ class OperationsLedger:
                 ),
                 "state": "draft" if payload else "blocked",
                 "updated_at": _now(),
+                "next_review_at": _now(),
             }
             changed = session.execute(
                 update(Movement)
@@ -437,7 +525,7 @@ class OperationsLedger:
                     if state == "sent"
                     else Movement.state == "sending",
                 )
-                .values(state=state, updated_at=_now(), **values)
+                .values(state=state, updated_at=_now(), next_review_at=_now(), **values)
                 .returning(Movement)
             ).scalar_one_or_none()
             if row is None:
@@ -484,7 +572,12 @@ class OperationsLedger:
                         Movement.state == "sending",
                         Movement.sending_at < before,
                     )
-                    .values(state="unknown", reason_code="worker_interrupted", updated_at=_now())
+                    .values(
+                        state="unknown",
+                        reason_code="worker_interrupted",
+                        updated_at=_now(),
+                        next_review_at=_now(),
+                    )
                     .returning(Movement)
                 )
                 .scalars()

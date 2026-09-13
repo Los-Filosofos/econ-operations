@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     allow_local_management: bool = False
     allow_live_writes: bool = False
     auto_queue_transfers: bool = False
+    workflow_revalidation_batch_size: int = Field(default=25, ge=1, le=100)
+    workflow_observation_batch_size: int = Field(default=25, ge=1, le=100)
     startrack_api_key: SecretStr | None = Field(default=None, repr=False)
     startrack_password: SecretStr | None = Field(default=None, repr=False)
     startrack_page_size: int = Field(default=25, ge=1, le=100)

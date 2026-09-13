@@ -37,8 +37,15 @@ def list_operations(
     request: Request,
     mode: DataMode = "fixture",
     request_source_id: Annotated[str | None, Query(max_length=255)] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> WorkflowOverview:
-    return request.app.state.workflow.read(mode, request_source_id)
+    return request.app.state.workflow.read(
+        mode,
+        request_source_id,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/catalogs")

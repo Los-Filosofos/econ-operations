@@ -242,6 +242,8 @@ def operations(workflow: "WorkflowOverview | None", context: QueryContext):
     )
     if not workflow.available:
         return [*content, empty("Registro no disponible", workflow.message)]
+    if workflow.coverage and not workflow.coverage.is_complete:
+        content.append(html.P(workflow.coverage.note, className="table-hint coverage-note"))
     movements = workflow.movements
     if context.query:
         term = context.query.casefold()
