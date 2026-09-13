@@ -11,10 +11,11 @@ from app.models.hub import (
     HubResponse,
     OperationEvidenceStatus,
     Provenance,
+    ReceiptSummary,
     RequestRecord,
     TransferRecord,
 )
-from app.models.operations import MovementEventRecord, MovementRecord
+from app.models.operations import MovementEventRecord, MovementRecord, ReceiptRecord
 from app.services.ledger import LedgerError, OperationsLedger, effective_event_sort_key
 
 MOVEMENT_LIMIT = 100
@@ -137,6 +138,49 @@ def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecor
             source_reference=f"operation_movements/{movement.id}",
         )
     )
+    arrival_events = [
+        event
+        for event in movement.events
+        if event.kind == "arrival"
+        and event.data.get("poi_id") == movement.mapping.get("poi_id")
+        and event.data.get("tracked_asset_id") == movement.tracked_vehicle_id
+        and _source_event(movement, event)
+    ]
+    latest_arrival = max(
+        arrival_events,
+        key=effective_event_sort_key,
+        default=None,
+    )
+    arrival_observed = latest_arrival is not None
+    arrival_event_time = (
+        (latest_arrival.event_time or latest_arrival.observed_at) if latest_arrival else None
+    )
+    arrival_poi_id = latest_arrival.data.get("poi_id") if latest_arrival else None
+    arrival_evidence_origin = "visit_observation" if latest_arrival else None
+
+    receipt_summary = None
+    if movement.receipt:
+        if isinstance(movement.receipt, ReceiptRecord):
+            receipt_summary = ReceiptSummary(
+                receiver=movement.receipt.receiver,
+                received_at=movement.receipt.received_at,
+                reference=movement.receipt.reference,
+                recorded_at=movement.receipt.recorded_at,
+                note=movement.receipt.note,
+            )
+        elif isinstance(movement.receipt, dict):
+            try:
+                rec = ReceiptRecord.model_validate(movement.receipt)
+                receipt_summary = ReceiptSummary(
+                    receiver=rec.receiver,
+                    received_at=rec.received_at,
+                    reference=rec.reference,
+                    recorded_at=rec.recorded_at,
+                    note=rec.note,
+                )
+            except ValidationError:
+                receipt_summary = None
+
     return TransferRecord(
         id=f"startrack:job:{movement.job_id}",
         code=movement.job_id or "",
@@ -151,6 +195,11 @@ def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecor
         evidence_origin="task_observation" if latest else "creation_acknowledgment",
         source_data=latest.data if latest else {},
         provenance=provenance,
+        arrival_observed=arrival_observed,
+        arrival_event_time=arrival_event_time,
+        arrival_poi_id=arrival_poi_id,
+        arrival_evidence_origin=arrival_evidence_origin,
+        receipt=receipt_summary,
     )
 
 
