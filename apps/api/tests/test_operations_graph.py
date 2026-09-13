@@ -184,8 +184,9 @@ def test_incident_marker_requires_confirmed_failure_and_keeps_maintenance_separa
     ]
     payload = serialized(operations_graph_view(hub))
     assert "graph-node--incident" in payload
-    assert "failure-source-1" in payload
-    assert "Incidentes confirmados por reglas" in payload
+    assert "failure-source-1" not in payload
+    assert "Falla" in payload and "Evidencia vinculada" in payload
+    assert "Incidentes confirmados" in payload
 
 
 def test_graph_states_expose_partial_old_empty_and_unavailable_reads_briefly():
@@ -241,7 +242,7 @@ def test_place_selection_reveals_only_related_machines_and_connection_context():
     assert "graph-node--collection" not in payload
     assert "graph-edge-label" in payload
     assert "Evidencia de la relación" in payload
-    assert "La línea representa correspondencia documental" in payload
+    assert "Relación documental · la geometría no mide tiempo ni distancia" in payload
     assets = Path(__file__).parents[1] / "app" / "dashboard" / "assets"
     script = (assets / "operations-graph.js").read_text(encoding="utf-8")
     css = (assets / "style.css").read_text(encoding="utf-8")
@@ -266,8 +267,9 @@ def test_machine_detail_counts_distinct_projects_from_exact_visible_evidence():
     graph = build_operations_graph(hub)
     machine = next(node for node in graph.nodes if node.entity_id == request.machinery_id)
     payload = serialized(_machine_detail(machine, hub, None, graph))
-    assert "Trazabilidad por proyecto" in payload
-    assert "Proyectos distintos en evidencia" in payload
+    assert "Recorrido por proyectos" in payload
     assert '"children": "2"' in payload
-    assert request.project_id in payload and "project-history-id" in payload
-    assert "Una solicitud o asignación no prueba" in payload
+    assert "PROY-014" in payload and "Proyecto histórico" in payload
+    assert request.project_id not in payload and "project-history-id" not in payload
+    assert "Evidencia documental · no confirma presencia física" in payload
+    assert "graph-detail-visual-grid" in payload and "graph-detail-hero" in payload

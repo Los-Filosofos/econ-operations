@@ -11,6 +11,7 @@ from unicodedata import normalize
 
 from dash import html
 
+from app.dashboard.components import icon
 from app.models.hub import EquipmentRecord, HubResponse, Provenance, RequestRecord, TransferRecord
 from app.models.operations import MovementRecord
 from app.models.workflow import WorkflowOverview
@@ -21,6 +22,7 @@ MODE_LABELS = {"fixture": "Muestras proporcionadas", "live": "Sandbox actual · 
 READABLE_SOURCE_STATES = {"fixture", "connected", "partial"}
 ACTIVE_TRANSFER_ROLES = {"pending", "active", "in_progress", "in progress", "en curso"}
 ACTIVE_TRANSFER_STATES = {"PENDIENTE", "PENDING", "ACTIVE", "IN_PROGRESS", "EN CURSO"}
+MONTHS = ("ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC")
 
 
 @dataclass
@@ -106,7 +108,93 @@ def _short_project(name: str | None, source_id: str) -> str:
     if name:
         first = name.split(" - ", 1)[0].strip()
         return first if first else name[:28]
-    return f"Proyecto {source_id[:8]}"
+    return "Proyecto identificado"
+
+
+def _compact_date(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value).date()
+    except ValueError:
+        return value
+    return f"{parsed.day:02d} {MONTHS[parsed.month - 1]} {parsed.year}"
+
+
+def _period(starts_on: str | None, ends_on: str | None) -> str | None:
+    start, end = _compact_date(starts_on), _compact_date(ends_on)
+    if not start and not end:
+        return None
+    return f"{start or 'Inicio pendiente'}  →  {end or 'Fin pendiente'}"
+
+
+def _provider(provenance: Provenance | None) -> tuple[str, str | None]:
+    if provenance is None:
+        return "Prisma / Nexus", "Identidad informada por solicitud"
+    name = "Prisma / Nexus" if provenance.source == "nexus" else "Startrack"
+    nature = {
+        "provided_sample": "Muestra documental",
+        "live_read": "Lectura sandbox",
+        "test_case": "Prueba interna",
+    }[provenance.evidence_kind]
+    return name, f"{nature} · {provenance.environment}"
+
+
+def _project_label(project_id: str, graph: OperationsGraph) -> str:
+    project = next(
+        (node for node in graph.nodes if node.kind == "place" and node.entity_id == project_id),
+        None,
+    )
+    return project.label if project else "Proyecto identificado"
+
+
+def _visual_fact(
+    icon_name: str,
+    label: str,
+    value: Any,
+    secondary: str | None = None,
+    *,
+    tone: str = "neutral",
+):
+    return html.Div(
+        [
+            html.Span(icon(icon_name, 17), className="graph-detail-fact-icon"),
+            html.Div(
+                [
+                    html.Span(label, className="graph-detail-fact-label"),
+                    html.Strong(
+                        str(value) if value not in (None, "") else "Sin confirmar",
+                        className="graph-detail-fact-value",
+                    ),
+                    html.Span(secondary, className="graph-detail-fact-meta") if secondary else None,
+                ]
+            ),
+        ],
+        className=f"graph-detail-fact graph-detail-fact--{tone}",
+    )
+
+
+def _signal(icon_name: str, label: str, value: str, *, tone: str = "neutral"):
+    return html.Li(
+        [
+            icon(icon_name, 16),
+            html.Span(label, className="graph-detail-signal-label"),
+            html.Strong(value),
+        ],
+        className=f"graph-detail-signal graph-detail-signal--{tone}",
+    )
+
+
+def _evidence_label(value: str) -> str:
+    return {
+        "maquinaria.project_id": "Proyecto asignado en Prisma",
+        "solicitud.maquinaria_id + solicitud.project_id": (
+            "Solicitud, unidad y proyecto coinciden"
+        ),
+        "tarea Startrack vinculada a la asignación actual por IDs y período": (
+            "Tarea vinculada a la asignación vigente"
+        ),
+    }.get(value, "Correspondencia validada por el servicio")
 
 
 def _machine_subtype(item: EquipmentRecord | None) -> str:
@@ -358,29 +446,50 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
         if getattr(record, "project_name", None)
     }
     equipment_by_id = {candidate.entity_id: candidate for candidate in connected}
+    provider, provider_context = _provider(
+        node.project_records[0].provenance if node.project_records else None
+    )
     return [
-        html.P("Proyecto / obra", className="graph-detail-kicker"),
-        html.H2(node.label),
-        _facts(
+        html.Div(
             [
-                ("ID original", node.source_id),
-                ("Fuente", node.source),
-                ("Observación", node.age),
-                ("Solicitudes visibles", len(requests)),
-                ("Unidades relacionadas", len(connected)),
-            ]
+                html.Span(
+                    html.Img(src="/assets/graph-project.svg", alt=""),
+                    className="graph-detail-hero-icon",
+                    **{"aria-hidden": "true"},
+                ),
+                html.Div(
+                    [
+                        html.P("Proyecto / obra", className="graph-detail-kicker"),
+                        html.H2(node.label),
+                        html.P("Flujo operativo", className="graph-detail-subtitle"),
+                    ]
+                ),
+            ],
+            className="graph-detail-hero",
+        ),
+        html.Div(
+            [
+                _visual_fact(
+                    "bulldozer",
+                    "Maquinaria relacionada",
+                    len(connected),
+                    "Por identificadores exactos",
+                ),
+                _visual_fact("clipboard-list", "Solicitudes", len(requests), "En esta lectura"),
+                _visual_fact("database", "Origen", provider, provider_context),
+                _visual_fact("eye-check", "Observación", node.age),
+            ],
+            className="graph-detail-visual-grid",
         ),
         html.Section(
             [
                 html.H3("Asignaciones verificadas"),
                 html.Ul(
-                    [
-                        html.Li(f"{item.label} · {item.source_id or item.entity_id}")
-                        for item in connected
-                    ]
+                    [_signal("bulldozer", item.label, item.status) for item in connected],
+                    className="graph-detail-signals",
                 )
                 if connected
-                else html.P("Sin maquinaria relacionada por un ID verificable."),
+                else html.Div(_signal("bulldozer", "Maquinaria", "Sin relación verificable")),
             ]
         ),
         html.Section(
@@ -390,39 +499,51 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
                     [
                         html.Li(
                             [
-                                html.Strong(request.provenance.source_id or request.id),
-                                html.Span(f" · {request.status}"),
-                                html.Br(),
-                                html.Span(
-                                    f"{request.machinery_type or 'Tipo no informado'} · "
-                                    f"{request.starts_on or 'inicio pendiente'} → "
-                                    f"{request.ends_on or 'fin pendiente'}"
+                                html.Div(
+                                    [
+                                        icon("clipboard-list", 16),
+                                        html.Strong(f"Solicitud {request.status.lower()}"),
+                                    ],
+                                    className="graph-detail-event-title",
                                 ),
-                                html.Br(),
                                 html.Span(
-                                    "Unidad: "
-                                    + (
+                                    _period(request.starts_on, request.ends_on)
+                                    or "Período pendiente",
+                                    className="graph-detail-event-meta",
+                                ),
+                                html.Span(
+                                    request.machinery_type or "Tipo pendiente",
+                                    className="graph-detail-event-meta",
+                                ),
+                                html.Span(
+                                    (
                                         equipment_by_id[request.machinery_id].label
                                         if request.machinery_id in equipment_by_id
-                                        else "sin asignación verificable"
-                                    )
-                                    + f" · Solicita: {request.requested_by or 'no informado'}"
+                                        else "Unidad pendiente"
+                                    ),
+                                    className="graph-detail-event-tag",
                                 ),
-                            ]
+                            ],
+                            className="graph-detail-event",
                         )
                         for request in requests
-                    ]
+                    ],
+                    className="graph-detail-timeline",
                 )
                 if requests
-                else html.P("Sin solicitudes dentro de esta lectura."),
+                else html.Div(_signal("clipboard-list", "Solicitudes", "Sin registros")),
             ]
         ),
-        html.P(
-            "Hay nombres contradictorios para el mismo ID de proyecto; "
-            "se conserva el ID como identidad."
-            if len(labels) > 1
-            else "Las conexiones se derivan de project_id y maquinaria_id, nunca del nombre.",
-            className="graph-detail-note",
+        html.Div(
+            [
+                icon("alert-circle", 15) if len(labels) > 1 else icon("check", 15),
+                html.Span(
+                    "Nombres contradictorios; identidad técnica preservada"
+                    if len(labels) > 1
+                    else "Relaciones verificadas por identidad técnica"
+                ),
+            ],
+            className="graph-detail-proof",
         ),
     ]
 
@@ -448,8 +569,8 @@ def _duration_label(raw: Any) -> str | None:
 
 def _transfer_lines(transfer: TransferRecord) -> list:
     active = _active_transfer(transfer)
-    destination = (
-        transfer.destination_project_name or transfer.destination_project_id or "no informado"
+    destination = transfer.destination_project_name or (
+        "Proyecto identificado" if transfer.destination_project_id else "Destino pendiente"
     )
     planned_duration = _duration_label(transfer.source_data.get("duration"))
     scheduled = " ".join(
@@ -463,42 +584,80 @@ def _transfer_lines(transfer: TransferRecord) -> list:
     return [
         html.Li(
             [
-                html.Strong(transfer.code or transfer.id),
-                html.Span(f" · {transfer.status or 'sin estado'}"),
-                html.Br(),
-                html.Span(f"Destino: {destination}"),
-                html.Br(),
-                html.Span("Origen físico: no proporcionado por el servicio normalizado"),
-                html.Br(),
-                html.Span(f"Responsable: {transfer.driver or 'no informado'}"),
-                html.Br(),
-                html.Span(f"Programación Startrack: {scheduled or 'no informada'}"),
-                html.Br(),
-                html.Span(
-                    f"Duración planificada: {planned_duration}"
-                    if planned_duration
-                    else "Duración planificada no informada"
+                html.Div(
+                    [
+                        icon("truck", 18),
+                        html.Div(
+                            [
+                                html.Strong(
+                                    f"Traslado {transfer.code}"
+                                    if transfer.code
+                                    else "Traslado identificado"
+                                ),
+                                html.Span(
+                                    transfer.status or "Sin estado",
+                                    className="graph-detail-event-tag",
+                                ),
+                            ]
+                        ),
+                    ],
+                    className="graph-detail-event-title",
                 ),
-                html.Br(),
-                html.Span(
-                    "En traslado · tiempo no disponible"
-                    if active
-                    else "Sin estimación temporal respaldada por la fuente"
+                html.Div(
+                    [
+                        _visual_fact("layout-dashboard", "Destino", destination),
+                        _visual_fact(
+                            "user-circle", "Responsable", transfer.driver or "Sin asignar"
+                        ),
+                        _visual_fact(
+                            "arrows-exchange",
+                            "Programación",
+                            scheduled or "Sin fecha",
+                            (
+                                f"Duración {planned_duration}"
+                                if planned_duration
+                                else "Duración no disponible"
+                            ),
+                        ),
+                    ],
+                    className="graph-detail-visual-grid graph-detail-visual-grid--transfer",
                 ),
-                html.Br(),
-                html.Span(
-                    "Presencia del vehículo GPS observada; no acredita recepción."
-                    if transfer.arrival_observed
-                    else "Sin evidencia de llegada vinculada."
+                html.Ul(
+                    [
+                        _signal(
+                            "arrows-exchange",
+                            "Actividad",
+                            (
+                                "En traslado · tiempo no disponible"
+                                if active
+                                else "Sin actividad confirmada"
+                            ),
+                            tone="transfer" if active else "neutral",
+                        ),
+                        _signal(
+                            "eye-check",
+                            "Llegada",
+                            (
+                                "GPS observado · no confirma recepción"
+                                if transfer.arrival_observed
+                                else "Sin evidencia vinculada"
+                            ),
+                        ),
+                        _signal(
+                            "clipboard-check",
+                            "Recepción",
+                            (
+                                f"Confirmada · {transfer.receipt.receiver}"
+                                if transfer.receipt
+                                else "Sin constancia de recepción"
+                            ),
+                            tone="active" if transfer.receipt else "neutral",
+                        ),
+                    ],
+                    className="graph-detail-signals",
                 ),
-                html.Br(),
-                html.Span(
-                    f"Recepción declarada por {transfer.receipt.receiver} · "
-                    f"{transfer.receipt.reference}"
-                    if transfer.receipt
-                    else "Sin constancia de recepción."
-                ),
-            ]
+            ],
+            className="graph-transfer-item",
         )
     ]
 
@@ -515,241 +674,350 @@ def _machine_detail(
     ]
     transfers = item.transfers if item else []
     alerts = [alert for alert in hub.alerts if alert.equipment_id == node.entity_id]
-    project_evidence: dict[str, list[str]] = {}
+    project_evidence: dict[str, list[tuple[str, str, str]]] = {}
 
-    def add_project(project_id: str | None, evidence: str):
+    def add_project(project_id: str | None, icon_name: str, label: str, value: str):
         if project_id:
-            project_evidence.setdefault(project_id, []).append(evidence)
+            evidence = (icon_name, label, value)
+            if evidence not in project_evidence.setdefault(project_id, []):
+                project_evidence[project_id].append(evidence)
 
     if item:
-        add_project(item.project_id, "Asignación administrativa de Prisma")
+        add_project(item.project_id, "clipboard-check", "Asignación Prisma", item.machinery_status)
     for request in requests:
         add_project(
             request.project_id,
-            f"Solicitud {request.provenance.source_id or request.id} · {request.status}",
+            "clipboard-list",
+            "Solicitud",
+            " · ".join(
+                value
+                for value in [request.status, _period(request.starts_on, request.ends_on)]
+                if value
+            ),
         )
     for transfer in transfers:
         add_project(
             transfer.destination_project_id,
-            f"Tarea Startrack {transfer.code or transfer.id} · {transfer.status}",
+            "truck",
+            "Traslado Startrack",
+            transfer.status or "Sin estado",
         )
     for movement in movements:
         add_project(
             movement.project_source_id,
-            f"Movimiento {movement.movement_reference} · {movement.state}",
+            "arrows-exchange",
+            "Movimiento ECON",
+            f"{movement.state} · {len(movement.events)} evento(s)",
         )
+
     project_ids = set(project_evidence)
+    project_labels = [_project_label(project_id, graph) for project_id in sorted(project_ids)]
+    project_summary = (
+        project_labels[0]
+        if len(project_labels) == 1
+        else f"{len(project_labels)} proyectos relacionados"
+        if project_labels
+        else "Sin proyecto confirmado"
+    )
+    provider, provider_context = _provider(item.provenance if item else None)
+    active_transfer = any(_active_transfer(transfer) for transfer in transfers)
+    status_tone = (
+        "issue"
+        if alerts or (item and item.maintenance_failure_id)
+        else "maintenance"
+        if item and (item.maintenance_status or item.maintenance_is_stopped is True)
+        else "transfer"
+        if active_transfer
+        else "neutral"
+    )
+
     missing = []
     if item is None:
-        missing.append("El registro de la maquinaria no fue devuelto en esta lectura acotada.")
+        missing.append(_signal("alert-circle", "Ficha de maquinaria", "Fuera de la lectura"))
     elif item.location is None:
-        missing.append("Ubicación física de la maquinaria no proporcionada.")
+        missing.append(_signal("eye-check", "Ubicación", "Sin confirmar"))
     if not project_ids:
-        missing.append("Proyecto o ubicación asignada no identificados.")
+        missing.append(_signal("layout-dashboard", "Proyecto", "Sin relación confirmada"))
     if not transfers:
-        missing.append("Sin tarea Startrack confirmada para la asignación y período actuales.")
-        missing.append("Recepción física no evaluable sin un traslado vinculado.")
-    if transfers and all(transfer.receipt is None for transfer in transfers):
-        missing.append("Recepción física sin constancia vinculada.")
-    if workflow is None or not workflow.available:
-        missing.append("Registro persistido de movimientos no disponible en esta vista.")
-    elif not workflow.complete:
-        missing.append("Registro persistido parcial; puede haber evidencia fuera de la ventana.")
-    detail = [
-        html.P("Maquinaria", className="graph-detail-kicker"),
-        html.H2(node.label),
-        html.P(
-            item.name if item else "Tipo y descripción no disponibles",
-            className="graph-detail-subtitle",
-        ),
-        _facts(
+        missing.extend(
             [
-                ("ID normalizado", node.entity_id),
-                ("ID original", node.source_id),
-                ("Tipo informado", item.equipment_class if item else None),
-                ("Estado administrativo", node.status),
-                ("Fuente", node.source),
-                ("Observación", node.age),
-                ("Proyecto conocido", ", ".join(sorted(project_ids)) or None),
-                ("Proyectos distintos en evidencia", len(project_ids)),
-                (
-                    "Período de asignación",
-                    (
-                        f"{item.assignment_starts_on or 'inicio no informado'} → "
-                        f"{item.assignment_ends_on or 'fin no informado'}"
-                    )
-                    if item and (item.assignment_starts_on or item.assignment_ends_on)
-                    else None,
-                ),
-                (
-                    "Ubicación observada",
-                    item.location.label if item and item.location else None,
-                ),
+                _signal("truck", "Traslado", "Sin tarea vinculada"),
+                _signal("clipboard-check", "Recepción", "Sin traslado evaluable"),
             ]
+        )
+    elif all(transfer.receipt is None for transfer in transfers):
+        missing.append(_signal("clipboard-check", "Recepción", "Sin constancia vinculada"))
+    if workflow is None or not workflow.available:
+        missing.append(_signal("database", "Historial ECON", "No disponible"))
+    elif not workflow.complete:
+        missing.append(_signal("database", "Historial ECON", "Cobertura parcial"))
+
+    detail = [
+        html.Div(
+            [
+                html.Span(
+                    html.Img(src=f"/assets/graph-{node.subtype}.svg", alt=""),
+                    className="graph-detail-hero-icon",
+                    **{"aria-hidden": "true"},
+                ),
+                html.Div(
+                    [
+                        html.P("Maquinaria", className="graph-detail-kicker"),
+                        html.H2(node.label),
+                        html.P(
+                            item.name if item else "Tipo no disponible",
+                            className="graph-detail-subtitle",
+                        ),
+                    ]
+                ),
+                html.Span(
+                    [icon("alert-triangle", 14) if status_tone == "issue" else None, node.status],
+                    className=f"graph-detail-status graph-detail-status--{status_tone}",
+                ),
+            ],
+            className="graph-detail-hero",
+        ),
+        html.Div(
+            [
+                _visual_fact(
+                    "layout-dashboard",
+                    "Proyecto",
+                    project_summary,
+                    (
+                        f"{len(project_ids)} proyecto relacionado"
+                        if len(project_ids) == 1
+                        else f"{len(project_ids)} proyectos relacionados"
+                        if project_ids
+                        else None
+                    ),
+                ),
+                _visual_fact(
+                    "arrows-exchange",
+                    "Período",
+                    _period(item.assignment_starts_on, item.assignment_ends_on) if item else None,
+                ),
+                _visual_fact("database", "Origen", provider, provider_context),
+                _visual_fact("eye-check", "Observación", node.age),
+                *(
+                    [_visual_fact("eye-check", "Ubicación", item.location.label)]
+                    if item and item.location
+                    else []
+                ),
+            ],
+            className="graph-detail-visual-grid",
         ),
     ]
+
     if project_evidence:
         detail.append(
             html.Section(
                 [
-                    html.H3("Trazabilidad por proyecto"),
+                    html.Div(
+                        [
+                            html.H3("Recorrido por proyectos"),
+                            html.Span(
+                                str(len(project_ids)),
+                                className="graph-detail-count",
+                                title="Proyectos relacionados en la evidencia visible",
+                            ),
+                        ],
+                        className="graph-detail-section-heading",
+                    ),
                     html.Ul(
                         [
                             html.Li(
                                 [
-                                    html.Strong(project_id),
+                                    html.Div(
+                                        [
+                                            icon("layout-dashboard", 18),
+                                            html.Strong(_project_label(project_id, graph)),
+                                        ],
+                                        className="graph-detail-event-title",
+                                    ),
                                     html.Ul(
                                         [
-                                            html.Li(value)
-                                            for value in dict.fromkeys(project_evidence[project_id])
-                                        ]
+                                            _signal(icon_name, label, value)
+                                            for icon_name, label, value in project_evidence[
+                                                project_id
+                                            ]
+                                        ],
+                                        className=(
+                                            "graph-detail-signals graph-detail-signals--nested"
+                                        ),
                                     ),
-                                ]
+                                ],
+                                className="graph-detail-project",
                             )
                             for project_id in sorted(project_evidence)
-                        ]
+                        ],
+                        className="graph-detail-timeline",
                     ),
-                    html.P(
-                        "El conteo cubre sólo la evidencia visible y relaciona la unidad "
-                        "con proyectos por ID. Una solicitud o asignación no prueba que la "
-                        "máquina haya estado físicamente allí.",
-                        className="graph-detail-note",
+                    html.Div(
+                        [
+                            icon("eye-check", 15),
+                            html.Span("Evidencia documental · no confirma presencia física"),
+                        ],
+                        className="graph-detail-proof",
                     ),
                 ]
             )
         )
+
     if item and item.operators is not None:
         detail.append(
             html.Section(
                 [
-                    html.H3("Operadores asociados en Prisma"),
+                    html.H3("Operadores"),
                     html.Ul(
                         [
-                            html.Li(
-                                f"{operator.name or 'Nombre no informado'} · "
-                                f"{operator.worker_code or operator.id} · "
-                                + (
-                                    "activo"
+                            _signal(
+                                "user-circle",
+                                operator.name or "Operador sin nombre",
+                                (
+                                    "Activo"
                                     if operator.is_active is True
-                                    else "inactivo"
+                                    else "Inactivo"
                                     if operator.is_active is False
-                                    else "vigencia no informada"
-                                )
+                                    else "Vigencia pendiente"
+                                ),
                             )
                             for operator in item.operators
-                        ]
+                        ],
+                        className="graph-detail-signals",
                     )
                     if item.operators
-                    else html.P("Prisma informó que no hay operadores asociados."),
+                    else html.Div(_signal("user-circle", "Operadores", "Sin asignación")),
                 ]
             )
         )
+
     if item and (item.assignment_note or item.project_rate):
         detail.append(
             html.Section(
                 [
-                    html.H3("Asignación administrativa"),
-                    _facts(
+                    html.H3("Asignación"),
+                    html.Div(
                         [
-                            ("Nota", item.assignment_note),
-                            (
-                                "Tarifa horaria informada",
-                                item.project_rate.hourly_rate if item.project_rate else None,
-                            ),
-                            (
-                                "Proyecto de la tarifa",
-                                item.project_rate.project_id if item.project_rate else None,
-                            ),
-                        ]
+                            _visual_fact("clipboard-check", "Nota", item.assignment_note)
+                            if item.assignment_note
+                            else None,
+                            _visual_fact(
+                                "database",
+                                "Tarifa informada",
+                                item.project_rate.hourly_rate,
+                                "Moneda no informada",
+                            )
+                            if item.project_rate and item.project_rate.hourly_rate is not None
+                            else None,
+                        ],
+                        className="graph-detail-visual-grid",
                     ),
-                    html.P(
-                        "La fuente no aporta aquí una moneda; la tarifa no se interpreta "
-                        "como costo de traslado ni como duración.",
-                        className="graph-detail-note",
-                    )
-                    if item.project_rate
-                    else None,
                 ]
             )
         )
+
     if item and (
         item.maintenance_failure_id or item.maintenance_status or item.maintenance_is_stopped
     ):
+        maintenance_signals = []
+        if item.maintenance_status:
+            maintenance_signals.append(
+                _signal(
+                    "alert-triangle",
+                    "Mantenimiento",
+                    item.maintenance_status,
+                    tone="maintenance",
+                )
+            )
+        if item.maintenance_is_stopped is True:
+            maintenance_signals.append(_signal("alert-circle", "Paro", "Confirmado", tone="issue"))
+        if item.maintenance_failure_id:
+            maintenance_signals.append(
+                _signal("alert-triangle", "Falla", "Evidencia vinculada", tone="issue")
+            )
         detail.append(
             html.Section(
                 [
                     html.H3("Mantenimiento e incidentes"),
-                    _facts(
-                        [
-                            ("ID de falla", item.maintenance_failure_id),
-                            ("Estado de mantenimiento", item.maintenance_status),
-                            (
-                                "Paro explícito",
-                                "Sí" if item.maintenance_is_stopped is True else "No informado",
-                            ),
-                        ]
-                    ),
+                    html.Ul(maintenance_signals, className="graph-detail-signals"),
                 ]
             )
         )
+
     if transfers:
         detail.append(
             html.Section(
                 [
-                    html.H3("Traslados vinculados"),
-                    html.Ul(sum((_transfer_lines(t) for t in transfers), [])),
-                ]
-            )
-        )
-    if movements:
-        detail.append(
-            html.Section(
-                [
-                    html.H3("Historial y evidencia"),
+                    html.H3("Traslados"),
                     html.Ul(
-                        [
-                            html.Li(
-                                f"{movement.movement_reference} · {movement.state} · "
-                                f"{len(movement.events)} evento(s) · destino POI "
-                                f"{movement.mapping.get('poi_id') or 'no informado'}"
-                            )
-                            for movement in movements
-                        ]
+                        sum((_transfer_lines(transfer) for transfer in transfers), []),
+                        className="graph-detail-timeline",
                     ),
                 ]
             )
         )
+
+    if movements:
+        detail.append(
+            html.Section(
+                [
+                    html.H3("Historial ECON"),
+                    html.Ul(
+                        [
+                            _signal(
+                                "arrows-exchange",
+                                "Movimiento registrado",
+                                f"{movement.state} · {len(movement.events)} evento(s)",
+                            )
+                            for movement in movements
+                        ],
+                        className="graph-detail-signals",
+                    ),
+                ]
+            )
+        )
+
     if alerts:
         detail.append(
             html.Section(
                 [
-                    html.H3("Incidentes confirmados por reglas"),
-                    html.Ul([html.Li(f"{alert.title}: {alert.description}") for alert in alerts]),
+                    html.H3("Incidentes confirmados"),
+                    html.Ul(
+                        [
+                            _signal(
+                                "alert-triangle",
+                                alert.title,
+                                alert.description,
+                                tone="issue",
+                            )
+                            for alert in alerts
+                        ],
+                        className="graph-detail-signals",
+                    ),
                 ],
                 className="graph-detail-incidents",
             )
         )
+
     if len(project_ids) > 1:
         detail.append(
-            html.P(
-                "Contradicción visible: las fuentes relacionan esta unidad con más de un "
-                "proyecto. Revisa los IDs y la vigencia.",
-                className="graph-detail-warning",
+            html.Div(
+                [
+                    icon("alert-triangle", 16),
+                    html.Span("Asignaciones simultáneas · revisar vigencia"),
+                ],
+                className="graph-detail-proof graph-detail-proof--warning",
             )
         )
     if missing:
         detail.append(
             html.Section(
-                [html.H3("Datos pendientes"), html.Ul([html.Li(value) for value in missing])]
+                [
+                    html.H3("Cobertura pendiente"),
+                    html.Ul(missing, className="graph-detail-signals"),
+                ]
             )
         )
-    detail.append(
-        html.P(
-            "Mover o ampliar este nodo sólo cambia la vista; nunca modifica Prisma, "
-            "Startrack ni el registro operativo.",
-            className="graph-detail-note",
-        )
-    )
     return detail
 
 
@@ -796,9 +1064,7 @@ def _node(node: GraphNode):
         classes.append("graph-node--maintenance")
     if transfer_active:
         classes.append("graph-node--active-transfer")
-    tooltip = " · ".join(
-        [node.label, node.source_id or node.entity_id, node.status, node.source, node.age]
-    )
+    tooltip = " · ".join([node.label, node.status, node.source, node.age])
     label_class = f"graph-node-label graph-node-label--{node.kind}"
     return html.Button(
         [
@@ -890,21 +1156,54 @@ def _edge_detail(edge: GraphEdge, nodes: dict[str, GraphNode], hub: HubResponse)
     ]
     heading = "Traslado confirmado" if edge.kind == "transfer" else "Asignación verificada"
     content = [
-        html.P("Conexión operativa", className="graph-detail-kicker"),
-        html.H2(heading),
-        _facts(
+        html.Div(
             [
-                ("Maquinaria", source.label if source.kind == "machine" else target.label),
-                ("Proyecto", target.label if target.kind == "place" else source.label),
-                ("Solicitudes", len(requests)),
-                ("Traslados", len(transfers)),
-                ("Actividad", "En traslado" if edge.active else "Sin actividad confirmada"),
-            ]
+                html.Span(
+                    icon("arrows-exchange", 22),
+                    className="graph-detail-hero-icon graph-detail-hero-icon--ui",
+                ),
+                html.Div(
+                    [
+                        html.P("Conexión operativa", className="graph-detail-kicker"),
+                        html.H2(heading),
+                        html.P(
+                            f"{source.label}  →  {target.label}",
+                            className="graph-detail-subtitle",
+                        ),
+                    ]
+                ),
+            ],
+            className="graph-detail-hero",
+        ),
+        html.Div(
+            [
+                _visual_fact("bulldozer", "Maquinaria", source.label),
+                _visual_fact("layout-dashboard", "Proyecto", target.label),
+                _visual_fact("clipboard-list", "Solicitudes", len(requests)),
+                _visual_fact(
+                    "truck",
+                    "Actividad",
+                    "En traslado" if edge.active else "Sin traslado activo",
+                    tone="transfer" if edge.active else "neutral",
+                ),
+            ],
+            className="graph-detail-visual-grid",
         ),
         html.Section(
             [
                 html.H3("Evidencia de la relación"),
-                html.Ul([html.Li(value) for value in dict.fromkeys(edge.evidence)]),
+                html.Ul(
+                    [
+                        _signal(
+                            "check",
+                            "Correspondencia verificada",
+                            _evidence_label(value),
+                            tone="active",
+                        )
+                        for value in dict.fromkeys(edge.evidence)
+                    ],
+                    className="graph-detail-signals",
+                ),
             ]
         ),
     ]
@@ -917,22 +1216,32 @@ def _edge_detail(edge: GraphEdge, nodes: dict[str, GraphNode], hub: HubResponse)
                         [
                             html.Li(
                                 [
-                                    html.Strong(request.provenance.source_id or request.id),
-                                    html.Span(f" · {request.status}"),
-                                    html.Br(),
-                                    html.Span(
-                                        f"Período solicitado: {request.starts_on or 'pendiente'} "
-                                        f"→ {request.ends_on or 'pendiente'}"
+                                    html.Div(
+                                        [
+                                            icon("clipboard-list", 16),
+                                            html.Strong(f"Solicitud {request.status.lower()}"),
+                                        ],
+                                        className="graph-detail-event-title",
                                     ),
-                                    html.Br(),
                                     html.Span(
-                                        f"Solicita: {request.requested_by or 'no informado'} · "
-                                        f"Aprueba: {request.approved_by or 'no informado'}"
+                                        _period(request.starts_on, request.ends_on)
+                                        or "Período pendiente",
+                                        className="graph-detail-event-meta",
                                     ),
-                                ]
+                                    html.Span(
+                                        f"Solicita · {request.requested_by or 'Pendiente'}",
+                                        className="graph-detail-event-meta",
+                                    ),
+                                    html.Span(
+                                        f"Aprueba · {request.approved_by or 'Pendiente'}",
+                                        className="graph-detail-event-meta",
+                                    ),
+                                ],
+                                className="graph-detail-event",
                             )
                             for request in requests
-                        ]
+                        ],
+                        className="graph-detail-timeline",
                     ),
                 ]
             )
@@ -947,10 +1256,12 @@ def _edge_detail(edge: GraphEdge, nodes: dict[str, GraphNode], hub: HubResponse)
             )
         )
     content.append(
-        html.P(
-            "La línea representa correspondencia documental. Su longitud no representa "
-            "distancia, duración, avance ni tiempo restante.",
-            className="graph-detail-note",
+        html.Div(
+            [
+                icon("eye-check", 15),
+                html.Span("Relación documental · la geometría no mide tiempo ni distancia"),
+            ],
+            className="graph-detail-proof",
         )
     )
     return html.Aside(

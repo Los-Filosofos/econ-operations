@@ -176,7 +176,7 @@ def test_unavailable_source_and_unavailable_registry_are_not_zero(hub):
     assert len(requests_in_scope(hub, QueryContext(), registry(available=False))) == 2
     payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
     assert "operations-graph" in payload
-    assert "Registro persistido de movimientos no disponible" in payload
+    assert "Historial ECON" in payload and "No disponible" in payload
     hub.sources[0].status = "error"
     assert requests_in_scope(hub, QueryContext()) == []
     payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
@@ -313,13 +313,14 @@ def test_overview_serializes_accessible_graph_without_charts_tables_or_fake_kpis
     assert '"type": "AgGrid"' not in payload and '"type": "Table"' not in payload
     assert "decision-count" not in payload and "Solicitudes en vista" not in payload
     for request in hub.requests:
-        assert request.provenance.source_id in payload
+        assert request.provenance.source_id not in payload
+    assert "Solicitud pendiente" in payload and "Solicitud aprobada" in payload
     assert "porcentaje" not in payload and "utilización" not in payload
 
 
 def test_unavailable_registry_and_source_age_remain_visible_in_graph_details(hub):
     hub.requests[0].starts_on = "ambiguous"
     payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
-    assert "Registro persistido de movimientos no disponible" in payload
+    assert "Historial ECON" in payload and "No disponible" in payload
     assert "Fecha documental 12/09/2026" in payload
     assert "Tiempo no disponible" not in payload

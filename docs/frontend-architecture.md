@@ -60,9 +60,15 @@ detiene la animación.
 Hover o foco muestra identidad, estado, fuente y antigüedad. Seleccionar abre un
 detalle temporal con asignación, destino, estado, responsable disponible,
 historial, evidencia, incidentes, recepción y faltantes. Una conexión seleccionada
-muestra sus IDs, solicitudes, períodos y evidencia. La selección resalta el flujo
+muestra entidades legibles, solicitudes, períodos y evidencia. La selección resalta el flujo
 relacionado y atenúa el resto. El autoencuadre abre el flujo principal en móvil;
 zoom, centrado, rueda y pan sólo cambian la presentación y nunca escriben datos.
+
+El detalle contextual prioriza códigos operativos legibles, iconos, una matriz
+compacta de hechos y una línea de eventos. UUID, claves normalizadas y referencias
+técnicas se conservan en el modelo y en las relaciones internas, pero no se
+imprimen en la ficha ordinaria. Si una fuente no ofrece código o nombre legible,
+la interfaz indica «identificado» sin exponer fragmentos de la clave como etiqueta.
 
 `dashboard/theme.py` es la única fuente de color, compartida por Mantine, AG
 Grid y el template Plotly `econ`:
@@ -181,8 +187,9 @@ permanecen hechos separados.
 
 El detalle de maquinaria cuenta proyectos distintos usando únicamente IDs que
 aparecen en asignaciones, solicitudes, traslados o movimientos persistidos
-visibles. Es trazabilidad documental de la lectura, no prueba de presencia
-física ni una historia completa cuando la cobertura es parcial.
+visibles. Los presenta por su código o nombre legible, no por el UUID. Es
+trazabilidad documental de la lectura, no prueba de presencia física ni una
+historia completa cuando la cobertura es parcial.
 
 ## Accesibilidad
 

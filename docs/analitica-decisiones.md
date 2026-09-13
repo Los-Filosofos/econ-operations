@@ -48,8 +48,10 @@ que no exista; tampoco una ausencia de alertas demuestra ausencia de riesgo.
 
 La trazabilidad por maquinaria cuenta IDs de proyecto distintos respaldados por
 asignaciones, solicitudes, traslados o movimientos persistidos visibles. El
-detalle enumera la evidencia de cada proyecto. Ese conteo no afirma presencia
-física y no se presenta como historial completo cuando la cobertura es parcial.
+detalle los representa por códigos legibles y eventos con iconos; las claves
+técnicas permanecen en el modelo, no en la ficha visual. Ese conteo no afirma
+presencia física y no se presenta como historial completo cuando la cobertura es
+parcial.
 
 Las incidencias de envío se atienden antes de sugerir otro movimiento. Un envío
 incierto requiere conciliación; una consulta del registro indisponible no se
