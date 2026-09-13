@@ -87,6 +87,12 @@ class ObservationData(BaseModel):
     last_status_change_date: Fact = None
     objective: Fact = None
     remote_id: Fact = None
+    # Job Data Object facts kept as provider strings: expected duration and closing place.
+    start_time: Fact = None
+    duration: Fact = None
+    poi_name: Fact = None
+    completed_lat: Fact = None
+    completed_lon: Fact = None
     latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
     longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
 

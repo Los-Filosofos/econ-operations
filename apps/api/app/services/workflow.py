@@ -40,6 +40,11 @@ OBSERVED_JOB_FIELDS = {
     "changed_date",
     "closed_date",
     "last_status_change_date",
+    "start_time",
+    "duration",
+    "poi_name",
+    "completed_lat",
+    "completed_lon",
 }
 
 

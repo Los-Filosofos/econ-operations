@@ -47,6 +47,10 @@ PostgreSQL.
   interpretación de estados distintos.
 - **Operaciones:** prepara y guarda el traslado, consulta su envío, conserva
   cambios de estado y registra una recepción con responsable y constancia.
+- **Integración:** traza completa de una solicitud —lo leído de Prisma, la
+  transformación de ECON con sus reglas, el payload preparado para Startrack, lo
+  que Startrack devuelve y los tiempos del traslado—. Demuestra en una pantalla
+  que la API acepta los datos de Prisma y produce el payload del proveedor.
 - **Fuentes y cobertura:** diferencia muestras proporcionadas y lecturas live.
 - **Administración** (solo `admin`): usuarios, roles, activación y contraseñas.
 
@@ -112,7 +116,7 @@ sirve interfaz y API juntas.
 [Analítica](docs/analitica-decisiones.md) ·
 [Mapeo y responsabilidades](docs/equivalencias-prisma-startrack.md) ·
 [Gráficos y diagramas](docs/entregables-visuales.md) ·
-[Backlog](output/auditoria-2026-09-12/README.md) ·
+[Backlog](https://github.com/Los-Filosofos/econ-operations/issues) ·
 [OneDrive](docs/onedrive/README.md).
 
 Los originales con accesos permanecen en `.context-work/`, excluida de Git.

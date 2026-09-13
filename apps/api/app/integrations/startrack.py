@@ -137,8 +137,16 @@ class StartrackJob(BaseModel):
     closed_date: str | None = None
     last_status_change_date: str | None = None
     job_type_id: str | None = None
+    job_type_remote_id: str | None = None
+    assigned_user_remote_ids: list[str] | None = None
     form_ids: list[str] | None = None
     required_form_ids: list[str] | None = None
+    # Documented in the Job Data Object: expected duration in seconds and closing evidence.
+    duration: str | None = None
+    address: str | None = None
+    poi_name: str | None = None
+    completed_lat: str | None = None
+    completed_lon: str | None = None
 
 
 class StartrackPoi(BaseModel):

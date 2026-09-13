@@ -45,6 +45,14 @@ OPENAPI_TAGS = [
         "description": "Maquinaria, solicitudes y evidencia relacionada por IDs explícitos.",
     },
     {
+        "name": "Integración",
+        "description": (
+            "Recorrido de los datos de una solicitud: lo que entrega Prisma, cómo lo normaliza "
+            "ECON, qué recibiría Startrack en POST /api/job y qué devuelve la tarea observada. "
+            "Solo lectura: no crea ni modifica tareas."
+        ),
+    },
+    {
         "name": "Traslados",
         "description": (
             "Planes locales, catálogos y seguimiento. Guardar un plan no crea una tarea. "

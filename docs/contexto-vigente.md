@@ -118,6 +118,18 @@ y mapeo en [equivalencias](equivalencias-prisma-startrack.md).
 
 ## Implementado y pendiente
 
+La página `/integracion` y `GET /api/v1/integration/{request_id}` publican la
+**traza de integración** de una solicitud: qué llegó de Prisma, qué reglas
+explícitas aplicó ECON, qué payload queda preparado para Startrack, qué
+devolvió Startrack y los tiempos del traslado. Sirve al jurado como prueba
+verificable de RF-01 a RF-03 en una sola pantalla: la API acepta los datos de
+Prisma, los transforma con reglas visibles y produce el payload de Startrack,
+sin inventar los campos que ninguna de las dos plataformas expone. Los límites
+temporales están en
+[tiempos del traslado](solucion-integracion.md#tiempos-del-traslado-qué-se-sabe-y-qué-no)
+y los nombres equivalentes, en el
+[glosario de sinónimos](equivalencias-prisma-startrack.md#glosario-de-sinónimos-entre-plataformas).
+
 Implementado: lectura acotada de Prisma; SDK Startrack de lectura y creación con
 habilitación independiente; planes, cortes, eventos, cola transaccional y
 recepción declarada en PostgreSQL ([ADR 0004](adr/0004-persistent-transfer-workflow.md));
@@ -133,7 +145,7 @@ presentación final de hasta diez diapositivas; reproducción del PDF del manual
 detección de cambios Prisma posteriores al envío, orden determinista de
 observaciones, cobertura por fuente y bandeja durable de eventos; vincular el
 usuario autenticado a la declaración de recepción. El backlog con
-criterios está en [output/auditoria-2026-09-12](../output/auditoria-2026-09-12/README.md).
+criterios está en [los issues del repositorio](https://github.com/Los-Filosofos/econ-operations/issues).
 Las propuestas de [sincronización y escala](sincronizacion-y-discrepancias.md)
 no están implementadas.
 

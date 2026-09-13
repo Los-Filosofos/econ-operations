@@ -57,6 +57,7 @@ from app.dashboard.evidence_views import (
     request_timeline,
     source_comparison,
 )
+from app.dashboard.integration_views import integration_page
 from app.dashboard.workflow_views import (
     STATES,
     matching_movements,
@@ -69,6 +70,8 @@ from app.dashboard.workflow_views import (
 from app.models.hub import EquipmentRecord, HubResponse, RequestRecord
 
 MODES = {"fixture": "Muestras proporcionadas", "live": "Sandbox actual (sintético)"}
+# Only the lists let `q` narrow what is shown; every other page keeps the origin as text.
+SEARCHABLE = frozenset({"/", "/solicitudes", "/maquinaria", "/operaciones"})
 RELATIONS = {
     "confirmed": "Vínculo confirmado",
     "candidate": "Vínculo por revisar",
@@ -134,7 +137,33 @@ def navigation(path: str, context: QueryContext):
     ]
 
 
-def scope(hub: HubResponse, context: QueryContext | None = None, workflow=None):
+def searchable(path: str | None) -> bool:
+    """Whether this page shows the full query bar; details and utilities never do."""
+    normalized = (path or "/").rstrip("/") or "/"
+    return normalized in SEARCHABLE or normalized == "/resumen"
+
+
+def origin_link(context: QueryContext, path: str):
+    """Change the data source from a page without the query bar, keeping mode/q/filter."""
+    other = "live" if context.mode == "fixture" else "fixture"
+    alternate = QueryContext(mode=other, query=context.query, filter=context.filter)
+    return link(
+        f"Cambiar a {MODES[other].lower()}",
+        alternate.href(path, filter=context.filter),
+        size="xs",
+    )
+
+
+def origin_line(context: QueryContext, path: str):
+    """Scope line for pages without the query bar: origin as text plus one way to change it."""
+    return dmc.Group(
+        [dmc.Text(MODES[context.mode], size="xs", fw=500), origin_link(context, path)],
+        gap="md",
+        className="scope-line",
+    )
+
+
+def scope(hub: HubResponse, context: QueryContext | None = None, workflow=None, path=None):
     count = f"{hub.scope.requests_returned} solicitudes"
     if context is not None and context.filter != "all":
         selected = len(requests_in_scope(hub, context, workflow))
@@ -152,6 +181,7 @@ def scope(hub: HubResponse, context: QueryContext | None = None, workflow=None):
             dmc.Text(coverage, size="xs", c="dimmed"),
             dmc.Text(equipment, size="xs", c="dimmed"),
             link("Fuentes y cobertura", (context or QueryContext()).href("/fuentes"), size="xs"),
+            origin_link(context, path) if context is not None and not searchable(path) else None,
         ],
         gap="md",
         className="scope-line",
@@ -1004,6 +1034,12 @@ PAGES = [
         "detail": equipment_detail,
     },
     {"path": "/operaciones", "label": "Operaciones", "icon": "truck", "render": None},
+    {
+        "path": "/integracion",
+        "label": "Integración",
+        "icon": "arrows-exchange",
+        "render": integration_page,
+    },
     {
         "path": "/fuentes",
         "label": "Fuentes",

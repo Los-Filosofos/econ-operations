@@ -104,6 +104,36 @@ Rutas documentadas útiles para la siguiente prueba: `/api/job`, `/api/job/statu
 
 El límite general publicado es 240 peticiones por IP cada dos minutos, con respuesta `529` al excederlo; algunas rutas tienen límites inferiores. Los webhooks existen como función del producto, pero ciertos envíos de ubicaciones requieren configuración por un administrador del sistema. No se verificó habilitación para este cliente. [Límites](https://support.gps-platform.com/api/intro/), [webhooks](https://support.gps-platform.com/admin/webhooks/).
 
+## 13/09/2026: doc de Startrack no accesible desde el entorno
+
+El 13 de septiembre de 2026, `https://support.gps-platform.com/` **no era
+accesible desde el entorno de desarrollo**: no se pudo recuperar ninguna de las
+páginas del centro de recursos API citadas en esta documentación. Los enlaces se
+conservan porque siguen siendo la referencia del proveedor; la fecha de la
+última consulta directa que sí funcionó es el 12/09/2026.
+
+Para no dejar la revisión sin contrato, los nombres se contrastaron ese día con
+tres fuentes disponibles y verificables:
+
+| Fuente | Qué aporta | Límite |
+| --- | --- | --- |
+| Texto de la página oficial *API: Jobs* pegado por el usuario | Job Data Object completo, catálogos de tipo y estado, paginación, autenticación Basic y formato de fecha `YYYY-MM-DD HH:mm:ss±hh:mm` | Es una transcripción aportada, no una descarga verificada por nosotros; conviene revalidarla cuando el dominio vuelva a responder |
+| DTO probados en [`startrack.py`](../apps/api/app/integrations/startrack.py) | `StartrackJob`, `StartrackPoi`, `StartrackUser`, `StartrackVehicle`, `StartrackJobStatus`, `StartrackJobType`, `StartrackVisit`, `StartrackTaskDraft`, con los nombres que el cliente pide y valida | Comprobados con transporte simulado; no acreditan la respuesta real de la cuenta |
+| Pantallas observadas de Prisma y Startrack (12–13/09/2026) | Rótulos y controles reales: «Titulo», «ID remoto», «Completar antes de», «Ventana horaria de entrega», «Duración», «Origen», «Artículos», modal «Asignar maquinaria» | Evidencia de interfaz, no contrato de API: un rótulo visible no autoriza a inventar una clave |
+
+Diferencias que salieron de ese contraste y ya están recogidas en el
+[glosario de sinónimos](equivalencias-prisma-startrack.md#glosario-de-sinónimos-entre-plataformas):
+el objeto público **sí** publica `duration` (duración esperada, en segundos),
+`address`, `poi_name`, `assigned_user_remote_ids`, `job_type_remote_id`,
+`closed_date`, `completed_lat`/`completed_lon` y `x`/`y`, que el DTO actual no
+lee; y **no** publica «Completar antes de», «Origen», «Ventana horaria de
+entrega» ni «Artículos», visibles en el formulario. La doc de estados escribe
+`notifcation_via`, mientras la respuesta observada usa `notification_via`.
+
+Cualquier campo sin respaldo en el OpenAPI de Prisma, en el texto de la página
+*API: Jobs*, en los DTO o en el diccionario del kit queda marcado como
+**sin contrato público consultado** y no se envía.
+
 ## Arquitectura recomendada a partir de esta evidencia
 
 ```mermaid

@@ -10,7 +10,16 @@ from plotly.utils import PlotlyJSONEncoder
 from app.core.config import Settings
 from app.dashboard.analytics import request_operation
 from app.dashboard.context import QueryContext, parse_context
-from app.dashboard.views import PAGES, REQUEST_FILTERS, filter_tabs, navigation, render_page, scope
+from app.dashboard.views import (
+    PAGES,
+    REQUEST_FILTERS,
+    filter_tabs,
+    navigation,
+    origin_line,
+    render_page,
+    scope,
+    searchable,
+)
 from app.main import create_app
 from app.models.hub import HubResponse, TransferRecord
 from app.models.workflow import WorkflowOverview
@@ -342,3 +351,132 @@ def test_transfer_needs_exact_request_and_completion_never_creates_receipt(clien
     assert "Sin evidencia de llegada vinculada" in detail
     equipment.transfers[0].destination_project_id = "test:project:different-destination"
     assert "Conciliación del destino del traslado" in request_operation(hub, request).missing
+
+
+def wire(identifier):
+    """Dash serializes a pattern id as sorted JSON; ALL travels as ["ALL"]."""
+    return json.dumps(identifier, sort_keys=True, separators=(",", ":"))
+
+
+ALL_MARK = ["ALL"]
+APPLY_WIRE = wire({"field": ALL_MARK, "type": "query-apply"})
+SEARCH_WIRE = wire({"field": ALL_MARK, "type": "query-search"})
+MODE_WIRE = wire({"field": ALL_MARK, "type": "query-mode"})
+TABS_WIRE = wire({"page": ALL_MARK, "type": "filter-tabs"})
+
+
+def query_bar(client, path, search="?mode=fixture"):
+    response = client.post(
+        "/_dash-update-component",
+        json={
+            "output": "query-controls.children",
+            "outputs": {"id": "query-controls", "property": "children"},
+            "inputs": [{"id": "url", "property": "pathname", "value": path}],
+            "state": [{"id": "url", "property": "search", "value": search}],
+            "changedPropIds": ["url.pathname"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["response"]["query-controls"]["children"]
+
+
+def apply_query(client, *, clicks, submits=None, tabs=None, mode="fixture", query="", search=""):
+    response = client.post(
+        "/_dash-update-component",
+        json={
+            "output": "url.search",
+            "outputs": {"id": "url", "property": "search"},
+            "inputs": [
+                {"id": APPLY_WIRE, "property": "n_clicks", "value": clicks},
+                {"id": SEARCH_WIRE, "property": "n_submit", "value": submits or []},
+                {"id": TABS_WIRE, "property": "value", "value": tabs or []},
+            ],
+            "state": [
+                {"id": MODE_WIRE, "property": "value", "value": [mode] if mode else []},
+                {"id": SEARCH_WIRE, "property": "value", "value": [query] if mode else []},
+                {"id": "url", "property": "search", "value": search},
+            ],
+            "changedPropIds": [wire({"field": "apply", "type": "query-apply"}) + ".n_clicks"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json().get("response", {}).get("url", {}).get("search")
+
+
+LIST_PAGES = ["/", "/resumen", "/solicitudes", "/maquinaria", "/operaciones"]
+QUIET_PAGES = [
+    "/solicitudes/nexus%3Arequest%3Aany",
+    "/maquinaria/nexus%3Aequipment%3Aany",
+    "/operaciones/movement-id",
+    "/fuentes",
+    "/administracion",
+    "/integracion",
+]
+
+
+@pytest.mark.parametrize("path", LIST_PAGES)
+def test_the_query_bar_only_mounts_where_the_search_narrows_a_list(client, path):
+    bar = query_bar(client, path)
+    assert bar is not None
+    assert "query-search" in json.dumps(bar)
+    assert "query-mode" in json.dumps(bar) and "query-apply" in json.dumps(bar)
+
+
+@pytest.mark.parametrize("path", QUIET_PAGES)
+def test_details_sources_administration_and_integration_have_no_search(client, path):
+    assert query_bar(client, path) is None
+
+
+def test_the_mounted_bar_carries_the_url_state_it_will_reapply(client):
+    bar = query_bar(client, "/solicitudes", "?mode=live&q=CF-03&filter=unassigned")
+    controls = {
+        control["props"]["id"]["type"]: control["props"].get("value")
+        for control in bar["props"]["children"]
+    }
+    assert controls["query-search"] == "CF-03"
+    assert controls["query-mode"] == "live"
+    # An unreadable address never seeds the controls with an invented value.
+    fallback = query_bar(client, "/solicitudes", "?mode=production")
+    values = {
+        control["props"]["id"]["type"]: control["props"].get("value")
+        for control in fallback["props"]["children"]
+    }
+    assert values == {"query-search": "", "query-mode": "fixture", "query-apply": None}
+
+
+def test_applying_the_bar_keeps_the_current_filter_and_ignores_a_bare_mount(client):
+    assert (
+        apply_query(client, clicks=[1], mode="live", query=" CF-03 ", search="?filter=unassigned")
+        == "?mode=live&q=CF-03&filter=unassigned"
+    )
+    assert apply_query(client, clicks=[1], mode="fixture", query="", search="?mode=live") == (
+        "?mode=fixture&q="
+    )
+    # Wildcard callbacks re-run when the bar mounts; that is not an applied query.
+    assert apply_query(client, clicks=[0], mode="live", query="CF-03", search="?mode=fixture") is (
+        None
+    )
+    assert apply_query(client, clicks=[], submits=[], mode=None, search="?mode=fixture") is None
+
+
+def test_a_page_without_the_bar_keeps_the_origin_and_a_way_to_change_it(client):
+    hub = HubResponse.model_validate(client.get("/api/v1/hub").json())
+    context = QueryContext(mode="fixture", query="CF-03", filter="unassigned")
+    detail = json.dumps(
+        scope(hub, context, None, "/solicitudes/x"), cls=PlotlyJSONEncoder, ensure_ascii=False
+    )
+    assert "Cambiar a sandbox actual (sintético)" in detail
+    assert "mode=live" in detail and "q=CF-03" in detail and "filter=unassigned" in detail
+    listing = json.dumps(
+        scope(hub, context, None, "/solicitudes"), cls=PlotlyJSONEncoder, ensure_ascii=False
+    )
+    assert "Cambiar a" not in listing
+    line = json.dumps(
+        origin_line(QueryContext(mode="live"), "/administracion"),
+        cls=PlotlyJSONEncoder,
+        ensure_ascii=False,
+    )
+    assert "Sandbox actual (sintético)" in line
+    assert "Cambiar a muestras proporcionadas" in line
+    assert "/administracion?mode=fixture" in line
+    assert searchable("/operaciones") and not searchable("/operaciones/movement")

@@ -9,7 +9,7 @@ caso son sintéticos. Empezar por el [contexto vigente](contexto-vigente.md).
 | Documento | Para qué sirve |
 | --- | --- |
 | [Requisitos y entregables](matriz-requisitos-entregables.md) | RF-01 a RF-06, RNF-01 a RNF-04, evidencia y brechas |
-| [Equivalencias Prisma y Startrack](equivalencias-prisma-startrack.md) | Mapeo del formulario, campos sin equivalente y RACI propuesta |
+| [Equivalencias Prisma y Startrack](equivalencias-prisma-startrack.md) | [Glosario de sinónimos](equivalencias-prisma-startrack.md#glosario-de-sinónimos-entre-plataformas), mapeo del formulario, campos sin equivalente y RACI propuesta |
 | [Diccionario del modelo ECON](diccionario-modelo-econ.md) | Inventario generado de campos, tipos, ejemplos y procedencia |
 | [Manual de mapeo e integración](manual-mapeo-integracion.md) | Recorrido del operador y diccionario técnico esencial |
 | [Decisiones técnicas](decisiones-tecnicas.md) | Resumen de dos páginas exportado a PDF |
@@ -18,14 +18,16 @@ caso son sintéticos. Empezar por el [contexto vigente](contexto-vigente.md).
 | [Indicadores y referencias ISO](kpis-y-referencias-iso.md) | Fórmulas y requisitos de evidencia; sin resultados ni certificación |
 
 PDFs en [`output/pdf`](../output/pdf). Backlog con criterios de aceptación en
-[`output/auditoria-2026-09-12`](../output/auditoria-2026-09-12/README.md).
+[los issues del repositorio](https://github.com/Los-Filosofos/econ-operations/issues).
 
 ## Implementación y operación
 
 - [Desarrollo local](desarrollo.md), [base de datos](database.md) y
   [despliegue](despliegue-backend.md).
 - [Guía operativa](solucion-integracion.md): planes, cola, ciclos, conciliación
-  y recepción explícita.
+  y recepción explícita, con los
+  [tiempos del traslado](solucion-integracion.md#tiempos-del-traslado-qué-se-sabe-y-qué-no)
+  que se pueden y no se pueden afirmar.
 - [Arquitectura de interfaz](frontend-architecture.md) (Mantine, paleta
   semántica, rutas y acceso), [API en Swagger](api-swagger.md)
   y [README del servicio](../apps/api/README.md).

@@ -1,6 +1,8 @@
 # Solución de integración y operación local
 
-Actualizado el **12 de septiembre de 2026**. Este documento describe el código
+Actualizado el **12 de septiembre de 2026**; la sección
+[tiempos del traslado](#tiempos-del-traslado-qué-se-sabe-y-qué-no) se añadió el
+**13 de septiembre de 2026**. Este documento describe el código
 implementado y su operación local. Una prueba con respuestas controladas no
 acredita que las credenciales o los contratos completos de los sandboxes hayan
 sido validados. El contexto de negocio se conserva en
@@ -120,6 +122,90 @@ hechos se muestran sin inferir descarga o aceptación física. La recepción pue
 registrarse sin observación GPS, pero siempre requiere su declaración explícita.
 Los eventos conservan por separado fecha del hecho, fecha de observación y fecha
 de registro; una lectura nueva no rejuvenece una posición antigua.
+
+## Tiempos del traslado: qué se sabe y qué no
+
+«¿Cuánto puede tardar el vehículo?» tiene dos respuestas distintas y hoy solo
+una está disponible. Lo **planificado** (cuándo debería salir y cuánto debería
+durar) se declara al crear la tarea. Lo **observado** (cuándo llegó de verdad,
+cuándo se recibió) se reconstruye con instantes de tres sistemas. Lo que **no
+existe** en los contratos consultados es el trayecto: ETA en ruta, distancia
+recorrida y tiempo de viaje medido. La página `/integracion` muestra los tres
+bloques con esa separación.
+
+### Instantes que existen en las fuentes
+
+| Instante | Dónde vive (nombre exacto) | Qué significa y qué no |
+| --- | --- | --- |
+| Salida programada | `TransferMapping.scheduled_date` + `scheduled_time` → `StartrackJob.start_date` + `start_time` | Decisión humana registrada en ECON y enviada a la tarea. `start_time` es `HH:mm:ss` **sin zona**: la de la cuenta Startrack debe confirmarse antes de restar horas. |
+| Duración esperada | `StartrackJob.duration`, en **segundos** (formulario: «Duración», en minutos) | Valor planificado que la doc oficial publica en el Job Data Object. Hoy `StartrackJob` no lo lee ni `TransferMapping` lo produce. **No** es una duración medida ni un ETA. |
+| Creación de la tarea | `StartrackJob.creation_date` (solo lectura) | Cuándo Startrack registró la tarea. No es cuándo se preparó el plan en ECON ni cuándo arrancó el vehículo. |
+| Último cambio | `StartrackJob.changed_date`, `last_status_change_date` | Cuándo se modificó la tarea o cambió su estado. Un cambio de estado no dice a qué estado ni por quién. |
+| Cierre de la tarea | `StartrackJob.closed_date` (solo lectura), con `completed_lat`/`completed_lon` o `x`/`y` | Cuándo se **completó o canceló**. Los dos casos comparten campo: sin `status` + `workflow_role` no se sabe cuál. El punto de cierre es dónde se pulsó el botón. |
+| Llegada observada al destino | `StartrackVisit.start_date` y `end_date`, con `poi_id` de la geocerca de destino y `vehicle_id`/`driver_id` | Presencia acotada del activo rastreado en la geocerca. El informe **no** devuelve `job_id`: la atribución al traslado la hace ECON por correspondencia explícita, y el GPS puede ser del transportador. |
+| Despacho desde ECON | `Movement.queued_at`, `sending_at`, `sent_at` | Cuándo se encoló, se reclamó y se confirmó el envío. `sent_at` acredita una tarea creada, **no** una salida física. |
+| Recepción declarada | `ReceiptRecord.received_at` (con `receiver` y `reference`) | Declaración explícita del proyecto, con zona horaria obligatoria. Ni el GPS ni una tarea completada la generan. |
+| Fechas de cada evidencia | `OperationEvent.event_time`, `observed_at`, `recorded_at` | Cuándo ocurrió el hecho, cuándo se leyó y cuándo se guardó. Una lectura nueva no rejuvenece una posición antigua. |
+
+Las fechas ISO del proveedor tienen el formato `YYYY-MM-DD HH:mm:ss±hh:mm`, con
+espacio en lugar de `T`: un parser ISO estricto las rechaza. Un texto sin zona
+se conserva como texto y no acredita un instante comparable.
+
+### Las dos duraciones que muestra `/integracion`
+
+Se calculan solo cuando ambos extremos existen y son interpretables; si falta
+uno, la página muestra el faltante en lugar de un número.
+
+1. **Programado → llegada observada**: de `start_date` + `start_time` a
+   `StartrackVisit.start_date` en la geocerca de destino. Mide desfase respecto
+   al plan, no tiempo de viaje: el vehículo pudo salir antes o después.
+2. **Llegada → recepción**: de `StartrackVisit.start_date` a
+   `ReceiptRecord.received_at`. Mide cuánto tardó el destino en acreditar la
+   entrega después de que se observó presencia. Con recepción sin visita
+   correlacionada, la primera duración queda vacía y la segunda no se calcula.
+
+Ambas son **observaciones de una muestra sintética**, no indicadores. No se
+publican como promedios ni se comparan entre proyectos mientras no estén
+definidos población, exclusiones y política de reprogramaciones
+([analítica](analitica-decisiones.md)).
+
+### Lo que hoy no se puede afirmar
+
+| Pregunta | Por qué no hay respuesta |
+| --- | --- |
+| ¿Cuál es el ETA del vehículo en ruta? | Ningún campo del Job Data Object ni del informe de visitas publica una estimación de llegada. |
+| ¿Cuántos kilómetros son y cuánto se tarda en recorrerlos? | El contrato consultado no expone distancia ni tiempo de viaje del traslado. El «Mapa de rastreo» y el «Listado de rutas» de Startrack muestran telemetría, pero **esa telemetría no está expuesta en la API que usamos**. |
+| ¿Hay fecha límite de entrega? | «Completar antes de» existe en el formulario real y **no aparece** en el Job Data Object público. `Solicitud.fecha_fin` es fin de uso, no vencimiento del traslado. |
+| ¿Hay ventana horaria comprometida? | «Ventana horaria de entrega» existe en el formulario real y **no aparece** en el objeto público. No se reutiliza `start_time` con otro significado. |
+| ¿Desde dónde sale? | «Origen» existe en el formulario y el objeto público tiene una sola geocerca (`poi_id`). Sin origen no hay trayecto que medir. |
+| ¿Cuánto duró realmente el traslado? | `duration` es esperada, no medida; `closed_date` cubre completar o cancelar; la visita acredita presencia, no salida. Faltaría un instante de salida acreditado. |
+
+### Qué pedir al proveedor para poder responderlo
+
+Ninguna de estas peticiones está implementada; se enumeran para la conversación
+con Startrack y con MAIC, con el campo y su unidad, para no inventar nombres.
+
+1. **Confirmar `duration`**: unidad exacta (segundos), si es editable después de
+   crear la tarea y si el producto la usa para calcular algo. Con eso, ECON
+   podría enviar una duración esperada y contrastarla con la observada.
+2. **Fecha límite y ventana**: nombre de API de «Completar antes de» y de la
+   «Ventana horaria de entrega» (inicio y fin), o confirmación de que solo
+   existen en la interfaz. Sin contrato no se envían.
+3. **Origen**: si el objeto admite una geocerca de salida o si la práctica del
+   producto es crear dos tareas. Determina si el trayecto es modelable.
+4. **Telemetría de ruta**: qué endpoint publica recorridos, distancia y
+   velocidad por vehículo y ventana (el centro de recursos lista *Rutas*,
+   *Ubicaciones* e *Informes*), con sus límites de consulta y su formato de
+   fecha.
+5. **Instante de salida acreditado**: si un cambio de estado a un valor con
+   `workflow_role` `0` intermedio (por ejemplo «En ruta») queda registrado con
+   su fecha, o si `last_status_change_date` es el único disponible. Un histórico
+   de cambios de estado permitiría medir el traslado sin telemetría.
+6. **Zona horaria de la cuenta**: para poder restar `start_time` y visitas sin
+   suponer `America/El_Salvador`.
+7. **Prisma**: si `PATCH /api/maquinaria/requests/{id}/approve` o el historial
+   registran un instante de entrega o de puesta a disposición distinto de
+   `approved_at`.
 
 ## SDK, sincronización y límites de cobertura
 

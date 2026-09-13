@@ -1,8 +1,12 @@
 # Equivalencias de datos entre Prisma, ECON y Startrack
 
-Revisión: **12 de septiembre de 2026**. Alcance: sandbox sintético, formulario de
-tarea suministrado por el usuario y código vigente. Este documento responde a
-RF-01, RF-02 y RF-03 del [brief](onedrive/02-brief-del-reto.md).
+Revisión: **12 de septiembre de 2026**; el
+[glosario de sinónimos](#glosario-de-sinónimos-entre-plataformas) y las
+inconsistencias internas se añadieron el **13 de septiembre de 2026**. Alcance:
+sandbox sintético, formulario de tarea suministrado por el usuario, texto de la
+página oficial *API: Jobs* aportado por el usuario y código vigente. Este
+documento responde a RF-01, RF-02 y RF-03 del
+[brief](onedrive/02-brief-del-reto.md).
 
 **Una solicitud de Prisma no es una tarea de Startrack.** Prisma aporta el
 proyecto, el requerimiento, su aprobación y la maquinaria asignada. Logística
@@ -62,6 +66,90 @@ La unicidad documentada de `POI.remote_id` por cliente no debe trasladarse a
 `CF-03` o el número ilustrativo `24` del diccionario tampoco acreditan IDs API
 de la cuenta. [Contrato de geocercas](https://support.gps-platform.com/api/pois/),
 [contrato de tareas](https://support.gps-platform.com/api/jobs/).
+
+## Glosario de sinónimos entre plataformas
+
+Cada plataforma llama de forma distinta a cosas parecidas y, a veces, llama
+igual a cosas distintas. Esta tabla nombra el **concepto de negocio** y, al lado,
+el nombre exacto en cada sistema. Que un concepto aparezca en dos columnas
+**no acredita identidad de registros**: sigue siendo obligatoria la
+correspondencia explícita descrita en
+[identidad y cardinalidad](#identidad-y-cardinalidad).
+
+Origen de cada nombre: Prisma, del [OpenAPI suministrado](../econ-hackathon-openapi.json)
+y de los DTO de [`nexus.py`](../apps/api/app/integrations/nexus.py); Startrack,
+del texto de la página oficial *API: Jobs* aportado por el usuario el 13 de
+septiembre de 2026 y de los DTO probados en
+[`startrack.py`](../apps/api/app/integrations/startrack.py); ECON, de sus modelos
+([hub](../apps/api/app/models/hub.py), [operaciones](../apps/api/app/models/operations.py),
+[preparación](../apps/api/app/services/transfers.py)). Las etiquetas entre
+comillas angulares proceden del [diccionario del kit](onedrive/06-diccionario-de-datos/README.md)
+o de la pantalla observada: son rótulos de negocio, no claves de API.
+
+Un campo del contrato público que **todavía no está en el DTO** de ECON se marca
+como *documentado, no leído*: existe en la documentación del proveedor, pero
+`StartrackJob` no lo pide ni lo conserva. Un rótulo visible sin campo en los
+contratos leídos se marca **sin contrato público consultado**; eso describe el
+límite de esta revisión, no una carencia demostrada del producto. El acceso a
+`support.gps-platform.com` desde el entorno de desarrollo estuvo bloqueado el
+13/09/2026: ver la [nota fechada](integraciones-reales.md#13092026-doc-de-startrack-no-accesible-desde-el-entorno).
+
+| Concepto | Prisma (nombre exacto) | Startrack (nombre exacto) | ECON (nombre exacto) | Nota |
+| --- | --- | --- | --- | --- |
+| Unidad física de maquinaria | `Equipo.no_activo`, `Equipo.clave`, `Equipo.nombre`; «No. de activo», «Nombre del equipo» | `StartrackVehicle.id`, `description`, `vin`; «Descripción», «ID remoto» | `EquipmentRecord.asset_number`, `code`, `name` | «Maquinaria/equipo» y «vehículo/activo rastreado» son objetos de plataformas distintas. `CF-03` aparece en `no_activo` y en `description`, pero el kit no declara unicidad ni clave foránea; `vin` es el identificador remoto de Startrack, no `no_activo`. `clave=null` con `no_activo` con texto es un caso real y se conserva separado. |
+| Identificador técnico de la unidad | `Equipo.id` (UUID) | `StartrackVehicle.id` | `EquipmentRecord.id` con prefijo `nexus:equipment:`; UUID original en `provenance.source_id` | Tres espacios de identificadores distintos. El prefijo evita colisiones locales; no es un ID de proveedor. |
+| Clase o tipo de la maquinaria | `Equipo.clase_equipo`; `Solicitud.tipo`; «Clase de equipo», «Tipo» | «Tipo» de vehículo del diccionario del kit — **sin contrato público consultado** (`StartrackVehicle` no expone tipo) | `EquipmentRecord.equipment_class`; `RequestRecord.machinery_type` | Es una categoría de máquina. **No es** `job_type_id`: «Cargador frontal» no se convierte en el tipo de tarea «Traslado». |
+| Tipo de tarea | Sin equivalente | `StartrackJob.job_type_id`; `job_type_remote_id` (*documentado, no leído*); catálogo `StartrackJobType.id`, `name`, `remote_id`, `deactivated`; «Tipo» del formulario | `TransferMapping.job_type_id` | Categoría del trabajo, del catálogo `GET /api/job/type` (ejemplos publicados: `Venta`, `Revision de equipos`, `Mantenimiento`, `Pedido`, `Visita`). Distinta de `clase_equipo` aunque ambas pantallas se rotulen «Tipo». `job_type_remote_id` permite referir el tipo por un ID externo propio. |
+| Operador, motorista, conductor o usuario asignable | `Operador.id`, `Operador.nombre`, `Operador.cod_trabajador` (`MOT-xxx`); `Equipo.associated_operators`; `operator_id` del cuerpo de aprobación; «Solicita», «Conductor» | `StartrackUser.id`, `name`; `StartrackVehicle.driver_id`; `StartrackVisit.driver_id`; `StartrackJob.assigned_user_ids`; `assigned_user_remote_ids` (*documentado, no leído*); «Asignar a» | `EquipmentOperator.id`, `name`, `worker_code`; `TransferMapping.assigned_user_ids` | Cuatro roles distintos: persona en Prisma, conductor del activo, usuario que ejecuta la tarea y firmante de la visita. La correspondencia se hace **por el código documentado `MOT-xxx`, nunca por nombre**; un UUID de operador no es un `StartrackUser.id`. `assigned_user_remote_ids` es la vía documentada para asignar por ID externo y **es la candidata natural para el código `MOT-xxx`**, pendiente de confirmar con el proveedor. |
+| Solicitante y aprobador | `Solicitud.requested_by_user_id`, `requested_by_name`, `approved_by_user_id`, `approved_by_name` | `created_by` (RO; usuario que creó la tarea) | `RequestRecord.requested_by_id`, `requested_by`, `approved_by_user_id`, `approved_by` | Quien pide y quien aprueba en Prisma no son el usuario que ejecuta la tarea, ni el creador de la tarea, ni el receptor. |
+| Proyecto | `Solicitud.project_id`, `project_name`; `Proyecto.id`, `name`; «Proyecto» | Sin campo de proyecto en el Job Data Object | `RequestRecord.project_id`, `project_name`; `Movement.project_source_id` | El proyecto llega a Startrack solo convertido en destino (POI) y en texto del título. |
+| Geocerca, POI o destino | Sin equivalente | `StartrackJob.poi_id`; `poi_name` (*documentado, no leído*); catálogo `StartrackPoi.id`, `name`, `remote_id`; «geocerca_id», «Nombre», «Destino» | `TransferMapping.poi_id` | Prisma no tiene geocercas. La correspondencia proyecto↔POI es manual y por ID; el nombre compartido `PROY-014 - The Hub - Proyecto Xi - La Unión` es una pista del ejercicio, no una clave. `POI.remote_id` tiene unicidad documentada por cliente; `Job.remote_id`, no. El objeto público tiene **una sola geocerca**: `poi_name` es su nombre, no un segundo destino. |
+| Origen del traslado | `Equipo.project_id` es asignación administrativa, no punto de salida | «Origen» del formulario — **sin contrato público consultado** (el Job Data Object solo tiene `poi_id`) | Sin campo | No inventar `origin_poi_id`. Un traslado con origen explícito exigiría modelar una segunda operación. |
+| Solicitud de maquinaria | `Solicitud.id` (UUID); «Solicitudes de maquinaria» | Sin equivalente | `RequestRecord.provenance.source_id`; `Movement.request_source_id`; `RequestRecord.id` con prefijo `nexus:request:` | Una solicitud no es una tarea; puede originar varios movimientos. |
+| Tarea de traslado | Sin equivalente | `StartrackJob.id`; «tarea_id» | `Movement.id` (local) y `Movement.job_id` (ID devuelto por Startrack) | Tres identificadores para tres objetos: solicitud, movimiento local y tarea remota. |
+| Referencia externa de la tarea | Sin campo de referencia de movimiento en la solicitud | `StartrackJob.remote_id`; «ID remoto» (IDR en el listado) | `Movement.movement_reference` → `StartrackTaskDraft.remote_id` | Es una referencia creada en ECON, **no un UUID de solicitud renombrado**. El proveedor no publica unicidad de `Job.remote_id`. |
+| Título de la tarea | Sin equivalente (se deriva de `no_activo` y `project_name`) | `StartrackJob.objective` (requerido, máx. 255); «Titulo» en la pantalla, «Título» en el diccionario | Texto derivado en el borrador, máx. 255 caracteres | La clave API es `objective`, no «título». El texto ayuda a leer; no une fuentes. |
+| Descripción de la tarea | `Solicitud.comentarios`; «Observaciones» en la pantalla | `StartrackJob.description` | `RequestRecord.comments` (se conserva; el borrador actual **no** lo transmite) | La descripción enviada hoy lleva los tres UUID y la referencia del movimiento, no el comentario del gerente. |
+| Dirección o referencia del destino | `Proyecto.description` puede ser solo una ciudad | `StartrackJob.address`, máx. 500 (*documentado, no leído*) | Sin campo en el borrador | Una ciudad no es una dirección estructurada. No geocodificar por suposición. |
+| Período de uso solicitado | `Solicitud.fecha_inicio`, `Solicitud.fecha_fin`; «Período» | Sin equivalente | `RequestRecord.starts_on`, `ends_on` | Es cuándo el proyecto necesita la máquina. No es fecha de traslado ni ventana de entrega. |
+| Período de asignación de la unidad | `Equipo.fecha_inicio_uso`, `fecha_fin_uso`, `observaciones_asignacion` | Sin equivalente | `EquipmentRecord.assignment_starts_on`, `assignment_ends_on`, `assignment_note` | Hecho de la asignación administrativa; distinto del período solicitado y de la programación del traslado. |
+| Programación del traslado | Sin equivalente | `StartrackJob.start_date` (requerido, `YYYY-MM-DD`), `start_time` (`HH:mm:ss`); «Fecha programada» | `TransferMapping.scheduled_date`, `scheduled_time` | Se indica expresamente. `start_time` no lleva zona: la de la cuenta debe confirmarse. Las fechas ISO del proveedor usan `YYYY-MM-DD HH:mm:ss±hh:mm`, con espacio en lugar de `T`. |
+| Duración esperada del traslado | Sin equivalente. `minimum_usage_hours` es uso del equipo, no viaje | `StartrackJob.duration`, **en segundos** (*documentado, no leído*); «Duración» del formulario, en minutos | Sin campo | Es una duración **planificada**, no medida. Convertir requiere minutos × 60; no confundir con horas de uso ni con la diferencia entre `fecha_inicio` y `fecha_fin`. |
+| Plazo y ventana de entrega | Sin equivalente | «Completar antes de» y «Ventana horaria de entrega» del formulario — **sin contrato público consultado** | Sin campo | Ver [tiempos del traslado](solucion-integracion.md#tiempos-del-traslado-qué-se-sabe-y-qué-no). No reutilizar `fecha_fin` como vencimiento ni `start_time` como ventana. |
+| Estado de la solicitud | `Solicitud.status`: `PENDIENTE`, `APROBADA`, `RECHAZADA`; «Estado de solicitud» | Sin equivalente | `RequestRecord.status` | Estado del flujo administrativo de Prisma. |
+| Estado de la maquinaria | `Equipo.estado`: `DISPONIBLE`, `OCUPADA`, `OBSOLETA`; «Estado» | «Estado» de vehículo en el diccionario (ejemplo `Normal`, sin catálogo) — **sin contrato público consultado** | `EquipmentRecord.machinery_status` | Disponibilidad administrativa del inventario. `OCUPADA` no significa GPS en destino. |
+| Estado de la tarea | Sin equivalente | `StartrackJob.status` es un **ID**; su significado lo da el catálogo `StartrackJobStatus.id`, `name`, `workflow_role`, `color`, `deactivated` | `Movement.status`, `Movement.workflow_role` | **Tres «Estado» de objetos distintos** —solicitud, máquina y tarea— que no se comparan ni se traducen entre sí. Presets `0 Pendiente`, `1 Completada`, `2 Cancelada`, pero cada cliente define los suyos (`Entregado` con rol `1`, `No se pudo entregar` con rol `2`): el nombre no basta, se consulta `workflow_role`. Los desconocidos se conservan. |
+| Estado del envío en ECON | Sin equivalente | Sin equivalente | `Movement.state`: `draft`, `blocked`, `queued`, `sending`, `sent`, `unknown`, `failed` | Es un cuarto estado, propio del hub: describe el despacho, no la ejecución ni la entrega. |
+| Cierre de la tarea y lugar de cierre | Sin equivalente | `StartrackJob.closed_date`, `last_status_change_date` (RO); `completed_lat`, `completed_lon`, `x`, `y` (RO; *documentados, no leídos* salvo las dos fechas) | `OperationEvent` con `event_time` y `observed_at` | `closed_date` cubre **completar o cancelar**: no equivale a entregar. El punto de cierre es dónde se pulsó el botón, no el destino planificado. |
+| Falla y mantenimiento | `Equipo.active_failure_id`, `active_failure_status`, `active_failure_is_paro`; catálogo `SIN_REVISAR`, `PENDIENTE_INTERVENCION`, `EN_PROCESO`, `ESPERA_REPUESTOS`, `TRASLADO_STD`, `EN_PRUEBAS`, `FINALIZADO`, `RECHAZADO` | **Sin equivalente** en el Job Data Object; el módulo «Mantenimiento» del diccionario («Referencia», «Fecha de servicio(s)», «Odometro», «Horometro», «Motivo de reparación») está **sin contrato público consultado** | `EquipmentRecord.maintenance_failure_id`, `maintenance_status`, `maintenance_is_stopped` | Restricción independiente del traslado. `null`/ausente no se convierte en `false`. Ojo: `TRASLADO_STD` es un paso del flujo de falla en Prisma, **no** el traslado de maquinaria de este proyecto. |
+| Tarifa y horas mínimas | `Equipo.precio_x_hora`, `catalog_precio_x_hora`, `current_project_rate`, `project_rates`, `effective_precio_x_hora`, `minimum_usage_hours`; «Tarifa por hora (proyecto)» del modal de asignación | **Sin equivalente**. «Artículos» del formulario (Cant., SKU, volumen, peso, «Precio unitario» en GTQ) describe mercancía y está **sin contrato público consultado** | `EquipmentRecord.project_rate` (`hourly_rate`, `project_id`, `effective_from`, `effective_to`) | El dinero no cruza a la tarea. Una tarifa por hora no es duración ni precio de artículo. |
+| Visita o llegada observada | Sin equivalente | `StartrackVisit.start_date`, `end_date`, `poi_id`, `vehicle_id`, `driver_id` (informe de visitas a POI) | `OperationEvent.kind`, `event_time`, `observed_at`, `recorded_at` | Evidencia espacial acotada, sin `job_id` que acredite causalidad. Entrar en la geocerca no prueba descarga; el GPS puede ser del transportador. |
+| Recepción | Sin equivalente | **Sin equivalente**; una tarea `Completada` no es una recepción | `ReceiptRecord.receiver`, `received_at`, `reference`; clase de evidencia `manual_declaration` | Solo existe como declaración explícita en ECON, con responsable, instante con zona y referencia de constancia. |
+| Activo rastreado por GPS del traslado | Sin equivalente | `StartrackVehicle.id` (se usa al filtrar `StartrackVisit.vehicle_id`) | `Movement.tracked_vehicle_id` | Elección separada: el GPS puede estar en la máquina o en el transportador. No es un campo del Job. |
+| Coordenadas | Historial de maquinaria: `gps_latitude`, `gps_longitude`, `gps_accuracy_meters`, `gps_captured_at` | `POI.x`, `POI.y` (geocerca); `Job.completed_lat`, `completed_lon`, `x`, `y` (cierre); «Latitud», «Longitud» del kit, enteros `133376152` / `-878486967` sin escala documentada | Sin geometría conservada (`StartrackPoi` guarda `id`, `name`, `remote_id` y fechas) | Las coordenadas de entrada del formulario no están en el objeto público: solo hay las de cierre. No dividir los enteros del diccionario para fabricar grados. |
+| Empresa, grupo o etiqueta del equipo participante | `Equipo.empresa` («The Hub», «Los Filósofos») | «Grupo» (`Vehículos-Hackathon`, `Conductores-Hackathon`), «Etiquetas» (`Equipo 14 - The Hub`), `user_group_ids` de tipos y estados | `EquipmentRecord.company` | `empresa` se describe como «código interno» pero contiene el nombre del equipo participante. No se convierte en entidad legal. |
+| Organización o cliente | `Equipo.org_id`, `Solicitud.org_id` (fuera de los DTO) | `client_id` (RO) en Job y JobStatus | Fuera del modelo; la operación se acota por proveedor y entorno | `org_id` **no** equivale a `client_id`. Son particiones de dos productos distintos. |
+| Formularios de la tarea | Sin equivalente | `StartrackJob.form_ids`, `required_form_ids`; «Formularios» | `StartrackTaskDraft.form_ids`, `required_form_ids` (no propagados desde `TransferMapping`) | Un formulario respondido no es, por sí solo, criterio de recepción. |
+| Contacto y notificaciones de la tarea | Sin equivalente en la solicitud | `contact_name`, `phone_number`, `contact_email`, `notification_emails_csv`, `notification_phone_numbers_csv`, `notify_contact` (*documentados, no leídos*); en el catálogo de estados, `notification_via`, `notification_message`, `notification_form_id` | Sin campo; el borrador fuerza `notify_contact` a `False` | El valor por defecto del proveedor es `true`: crear una tarea sin desactivarlo puede avisar a terceros. Por eso ECON lo envía siempre apagado. |
+| Adjuntos y campos personalizados | Sin adjuntos de solicitud en el contrato leído | `files` (estándar de archivos), `custom_fields` (JSON Schema) — *documentados, no leídos* | Sin campo | Un adjunto no equivale a evidencia de recepción. |
+
+### Inconsistencias internas que ya conoce el kit
+
+No son diferencias entre plataformas, sino dentro de cada una. Se listan porque
+obligan a comparar por ID y a normalizar antes de contar, no a «corregir» el
+dato de origen.
+
+| Dónde | Qué se observa | Consecuencia práctica |
+| --- | --- | --- |
+| Prisma, catálogo de clases | `GET /api/maquinaria/equipos/tipos-disponibles` devuelve a la vez `Retroexcavadora` y `Retroexcavadoras`; el diccionario del kit solo enumera `Retroexcavadora`, y el modal «Solicitar maquinaria» observado ofrece `Retroexcavadoras` | Dos clases distintas para la misma máquina: agrupar por `clase_equipo` produce dos filas. No se fusionan sin decisión del proveedor. |
+| Prisma, estado de maquinaria | El contrato enumera `DISPONIBLE`, `OCUPADA`, `OBSOLETA`; el diccionario del kit enumera `Disponible; Ocupada; Mant. preventivo; Mant. correctivo; Obsoletas`; la fila de mantenimiento del diccionario ejemplifica `CF-03 - Obsoleto` | Tres grafías del mismo concepto (`OBSOLETA` / `Obsoletas` / `Obsoleto`) y dos valores (`Mant. preventivo`, `Mant. correctivo`) que **no existen** en el enum del contrato: el estado de mantenimiento vive en `active_failure_status`, no en `estado`. |
+| Prisma, diccionario de mantenimiento | El campo se llama `Estado  ` (con dos espacios finales) y su ejemplo es `CF-03 - Obsoleto`, una etiqueta compuesta de unidad y estado | Hay que aclarar si contiene un estado o una concatenación; no se parte por el guion. |
+| Prisma, flujo de falla | El catálogo de `active_failure_status` incluye `TRASLADO_STD` | La palabra «traslado» ya está ocupada por un paso de mantenimiento. Al hablar con el proveedor conviene decir «tarea de traslado en Startrack». |
+| Startrack, formulario de tarea | El campo se rotula **«Titulo»** sin tilde (y el error dice «Titulo es obligatorio»), mientras el diccionario escribe «Título»; la clave API es `objective` | Buscar por rótulo falla. Se referencia siempre `objective`. |
+| Startrack, doc oficial de estados | El Job Status Data Object publica `notifcation_via` (sic), mientras la respuesta observada usa `notification_via` | Un cliente que lea el nombre de la doc no encuentra el campo. Se lee el de la respuesta y se documenta la errata. |
+| Startrack, diccionario del kit | La fila «Título» lleva `TAR-014` en la columna «Tipo de dato»; el ejemplo de «Tipo» de tarea es `Trasalado` (errata de «Traslado»); «Anadir tipo de servicio» aparece dos veces, con `Catálogo` y `catalogo` | Ni `TAR-014` es un tipo de dato ni `Trasalado` un valor de catálogo verificado. Se conservan tal cual y se preguntan. |
+| Startrack, identificadores | «ID remoto» (`78093`) y «tarea_id» (`24`) declaran `Texto / ID` pero se almacenan como números; el DTO acepta enteros solo en informes (`ReportIdentifier`) y jamás reformatea una cadena como `00042` | Hay que acordar un tipo canónico de identificador antes de comparar, o los ceros iniciales se pierden. |
+| Ambas, formato de fecha | La UI de Prisma usa `DD/MM/AAAA` salvo el modal «Asignar maquinaria», que muestra `09/11/2026` y `09/26/2026` en `MM/DD/AAAA`; su API usa `AAAA-MM-DD`; Startrack publica `YYYY-MM-DD HH:mm:ss±hh:mm` con espacio en lugar de `T`; el diccionario guarda el período como un texto único `11/09/2026 - 14/09/2026` | Una fecha copiada de pantalla puede invertir día y mes, y un parser ISO estricto rechaza el instante de Startrack. Solo se transcriben fechas desde la API. |
 
 ## Matriz completa del formulario de tarea suministrado
 
