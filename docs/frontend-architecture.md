@@ -14,11 +14,12 @@ No hay aplicación React, `apps/web` ni compilación o despliegue web separado.
 | `/` y `/resumen` | Asuntos por revisar por solicitud, calendario de uso solicitado y distribución por estado desplegable |
 | `/solicitudes` | Proyecto/solicitud, maquinaria, período, estado, traslado y recepción en seis columnas |
 | `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento |
-| `/maquinaria/{id}` | Ficha de evidencia accesible desde la solicitud |
+| `/maquinaria` | Inventario consultado, incluidos equipos sin solicitud, con filtros y acceso por ID |
+| `/maquinaria/{id}` | Comparación de evidencia por fuente, interpretación de estados y ubicación fechada |
 | `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción |
 | `/fuentes` | Procedencia, alcance y estado de las consultas |
 
-El sidebar contiene Resumen, Solicitudes y Operaciones, con Fuentes como utilidad
+El sidebar contiene Resumen, Solicitudes, Maquinaria y Operaciones, con Fuentes como utilidad
 secundaria. En móvil se abre con Menú y se cierra por botón, fondo, Escape o
 navegación; conserva el foco dentro del menú abierto y lo devuelve al control.
 
@@ -33,6 +34,11 @@ rectos. Se mantienen salto al contenido, foco visible, etiquetas, encabezados,
 teclado de AG Grid y desplazamiento horizontal de tablas. Los gráficos Plotly
 tienen tablas alternativas; ver [definiciones analíticas](analitica-decisiones.md).
 
+La [revisión de interfaz](revision-frontend-2026-09-12.md) mejora la legibilidad
+y la comparación de fuentes. Los iconos SVG locales acompañan texto en navegación
+y acciones, con tamaño y trazo coherentes; no codifican estados ni sustituyen
+etiquetas. Se reducen contenedores anidados sin ocultar campos ni evidencia.
+
 ## Servicios y módulos
 
 FastAPI y Dash llaman al mismo servicio de lectura; no hay HTTP interno.
@@ -45,10 +51,12 @@ proyecciones ya consultadas.
 | `dashboard/application.py` | Layout, callbacks, consultas, acciones y stores por navegador |
 | `dashboard/context.py` | Parámetros URL validados y enlaces con IDs codificados |
 | `dashboard/analytics.py`, `dashboard/views.py` | Relación solicitud/unidad, tablas, fichas y procedencia |
+| `dashboard/equipment_views.py`, `dashboard/evidence_views.py` | Inventario completo de la consulta y comparación de hechos por origen |
 | `dashboard/decision_priorities.py` | Un asunto con evidencia y siguiente paso por solicitud |
 | `dashboard/decision_analytics.py`, `dashboard/decision_views.py` | Población filtrada, calendario y distribución por estado |
 | `dashboard/workflow_forms.py`, `dashboard/workflow_views.py`, `dashboard/workflow_actions.py` | Preparación, registro de movimientos y recepción |
 | `services/hub.py` | Proyección de lectura `HubResponse`, compartida con HTTP |
+| `services/evidence.py` | Proyección de evidencia persistida mediante identidades y períodos compatibles |
 | `services/workflow.py`, `services/ledger.py` | Reglas operativas, persistencia, cortes, eventos y cola transaccional |
 | `dashboard/assets` | CSS, Inter con licencia OFL y recursos ECON |
 
@@ -69,6 +77,13 @@ clave `[modo, búsqueda]`. Cambiar página o filtro visual reutiliza esa lectura
 Actualizar vuelve a consultarla. Un store separado conserva `WorkflowOverview`
 por modo. Los planes, cortes, eventos y recepciones persisten en PostgreSQL:
 el store del navegador es una proyección, no el registro durable.
+
+`WorkflowOverview.available` indica si se pudo leer el registro y `complete`
+si todos los movimientos de ese modo/solicitud caben en la ventana. Se consulta
+un registro adicional para detectar truncación y se devuelven hasta 100.
+Un resultado parcial conserva los movimientos observados, pero no acredita la
+ausencia de otros ni habilita recomendaciones que presuponen ese conocimiento.
+Esto es independiente de la cobertura integrada de `HubResponse.scope`.
 
 Pydantic valida las proyecciones antes de presentarlas. Una respuesta de otro
 modo o búsqueda se oculta; un fallo de lectura no sirve el resultado anterior

@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 API = ROOT / "apps" / "api"
 sys.path.insert(0, str(API))
 
+from app.api.documentation import MODE_DESCRIPTION
 from app.integrations.fixtures import fixture_records
 from app.integrations.startrack import Identifier, StartrackTaskDraft
 from app.models.hub import DataMode
@@ -58,10 +59,20 @@ PRISMA_FIELDS = {
         "created_at": "created_at",
         "updated_at": "updated_at",
         "approved_at": "approved_at",
+        "approved_by_user_id": "approved_by_user_id",
     },
 }
 
 MEANINGS = {
+    "configured": "Configuración de acceso disponible en el servidor; no demuestra conexión ni consulta exitosa.",
+    "last_evidence_at": "Observación más reciente de evidencia local del proveedor; no renueva sus hechos al consultar el panel.",
+    "evidence_current_assignment": "El movimiento corresponde a la asignación y período vigentes de la solicitud; false conserva evidencia histórica.",
+    "evidence_origin": "Observación de tarea o acuse de creación: un acuse no demuestra consulta posterior del estado.",
+    "source_data": "Campos conservados de la observación de tarea; vacío si solo existe acuse de creación.",
+    "approved_by_user_id": "ID original del usuario que aprobó en Prisma, cuando la fuente lo aporta.",
+    "checked_at": "Instante de consulta del registro local; no fecha de actualización de sus evidencias.",
+    "movements_returned": "Cantidad de movimientos locales en la ventana consultada; null si no se pudo evaluar.",
+    "operation_evidence": "Disponibilidad y cobertura de movimientos usados por la proyección; ver OperationEvidenceStatus.",
     "id": "Identificador del objeto; su ámbito depende del modelo, nunca de un nombre visible.",
     "source": "Fuente de la evidencia; en ReceiptRecord identifica declaración manual.",
     "source_id": "ID original del proveedor; conservar separado del ID local y de etiquetas.",
@@ -117,7 +128,7 @@ MEANINGS = {
     "requests_total": "Total de solicitudes informado por el origen antes del filtro local.",
     "equipment_returned": "Equipos incluidos tras aplicar la búsqueda local.",
     "requests_returned": "Solicitudes incluidas tras aplicar la búsqueda local.",
-    "complete": "Completitud del ámbito integrado/catálogos, no simple éxito de una llamada.",
+    "complete": "Completitud del ámbito consultado según el modelo, no simple éxito de una llamada.",
     "equipment_count": "Conteo de equipos devueltos; null si no se obtuvo lectura evaluable.",
     "administratively_available": "Equipos devueltos cuyo estado administrativo es Disponible; no disponibilidad física.",
     "active_failures": "Equipos devueltos con referencia de falla activa.",
@@ -171,7 +182,7 @@ MEANINGS = {
     "available": "Disponibilidad de consulta del registro local de operaciones.",
     "management_enabled": "Capacidad de gestión habilitada por servidor y contexto local; no autorización desde navegador.",
     "sending_enabled": "Habilitación de envío evaluada por servidor; no demuestra conectividad ni permisos remotos.",
-    "movements": "Movimientos locales de la consulta; cero solo es interpretable con available=true.",
+    "movements": "Movimientos locales de la ventana consultada; ausencia solo evaluable con available=true y complete=true.",
     "last_sync_at": "recorded_at del último SourceSnapshot por modo; no acredita sincronización exitosa de todas las fuentes.",
     "pois": "Catálogo acotado de geocercas para elegir IDs; no maestro de equivalencias aprobado.",
     "users": "Catálogo acotado de usuarios Startrack asignables; separado de operadores Prisma.",
@@ -199,6 +210,10 @@ MEANINGS = {
 }
 
 OVERRIDES = {
+    (
+        "WorkflowOverview",
+        "complete",
+    ): "Todos los movimientos locales del modo/solicitud caben en la lectura acotada a 100; false ante truncación, fallo o cobertura desconocida. No certifica cobertura de proveedores.",
     (
         "EquipmentRecord",
         "code",
@@ -240,9 +255,10 @@ OVERRIDES = {
 }
 
 MODEL_ORIGINS = {
+    "OperationEvidenceStatus": "ECON: cobertura del registro local consultado por services/evidence.py",
     "Provenance": "ECON añade metadatos al dato Prisma/Startrack",
     "SourceStatus": "ECON: disponibilidad y cobertura del conector",
-    "TransferRecord": "Proyección prevista de traslado; sin muestra proporcionada",
+    "TransferRecord": "Proyección de evidencia persistida del traslado; sin tareas en la muestra proporcionada",
     "LocationObservation": "Proyección de ubicación; sin muestra proporcionada",
     "EquipmentRecord": "Prisma → normalización ECON; fixtures.py / hub.py",
     "RequestRecord": "Prisma → normalización ECON; fixtures.py / hub.py",
@@ -285,6 +301,7 @@ def api_inputs() -> list[type[BaseModel]]:
         "Identifier": Identifier,
         "TransferMapping": TransferMapping,
         "datetime": datetime,
+        "MODE_DESCRIPTION": MODE_DESCRIPTION,
     }
     # Only three reviewed, repository-owned DTO declarations; no source documents or input text.
     exec(  # noqa: S102

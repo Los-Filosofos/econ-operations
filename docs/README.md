@@ -5,6 +5,12 @@ La aplicación usa Dash y FastAPI en Python, con PostgreSQL. Todos los datos del
 caso son sintéticos; muestras del archivo y consultas del sandbox conservan su
 procedencia. El [contexto vigente](contexto-vigente.md) resume las decisiones.
 
+La [revisión integral de interfaz, datos y API](revision-integral-2026-09-12.md)
+explica cómo leer los Markdown, qué gráficos respalda la muestra y qué falta para
+cerrar la entrega. Incluye la [revisión visual](revision-frontend-2026-09-12.md),
+la [auditoría de datos](revision-datos-2026-09-12.md) y la
+[guía de endpoints en Swagger](api-swagger.md).
+
 ## Entrega visual y matrices
 
 Comenzar por [gráficos, diagramas y PDFs](entregables-visuales.md).
