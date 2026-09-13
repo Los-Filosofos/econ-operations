@@ -118,7 +118,7 @@ flowchart LR
 
 ![Arquitectura escalable propuesta](assets/entregables/diagrama-escala.png)
 
-Propuesta, no despliegue. La [arquitectura de flota](arquitectura-escalable-flota.md)
+Propuesta, no despliegue. La [sección de escala](sincronizacion-y-discrepancias.md#escala-a-miles-de-vehículos-propuesta)
 contiene hipótesis de carga, retención, límites de API y pruebas pendientes.
 
 ```mermaid

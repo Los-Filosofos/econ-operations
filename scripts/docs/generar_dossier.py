@@ -712,7 +712,7 @@ def build_dossier():
         "Arquitectura objetivo: separar recepción, operación e histórico analítico.",
         "diagrama-escala.png",
         "Hipótesis de prueba: 10.000 vehículos, un evento cada 10 s, producen 1.000 eventos/s medios. Hay que probar ráfagas, recuperación y límites del proveedor; no es capacidad demostrada.",
-        "Fuente: docs/arquitectura-escalable-flota.md. Kafka y ClickHouse están propuestos; no instalados ni desplegados por esta entrega.",
+        "Fuente: docs/sincronizacion-y-discrepancias.md, sección de escala. Kafka y ClickHouse están propuestos; no instalados ni desplegados por esta entrega.",
     )
 
     story += [

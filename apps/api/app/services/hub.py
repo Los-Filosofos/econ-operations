@@ -1,3 +1,5 @@
+"""Shared read projection for HTTP and Dash; never fall back between data modes."""
+
 from datetime import UTC, date, datetime, timedelta, timezone
 
 from sqlalchemy.engine import Engine
@@ -10,8 +12,14 @@ from app.integrations.fixtures import (
     FIXTURE_REQUESTS_TOTAL,
     fixture_records,
 )
-from app.integrations.nexus import NexusConnector, NexusReadError, NexusSnapshot
-from app.integrations.startrack import StartrackClient
+from app.integrations.nexus import (
+    NexusConnector,
+    NexusEquipment,
+    NexusReadError,
+    NexusRequest,
+    to_records,
+)
+from app.integrations.startrack import StartrackClient, StartrackReadConfig
 from app.models.hub import (
     AlertRecord,
     DataMode,
@@ -28,20 +36,32 @@ from app.services.evidence import project_operation_evidence
 
 # El Salvador has no daylight-saving offset. Date-only plans stay dates.
 BUSINESS_TIMEZONE = timezone(timedelta(hours=-6), name="America/El_Salvador")
+PENDING = {"PENDIENTE", "PENDING"}
+APPROVED = {"APROBADA", "APPROVED"}
+SCOPE_DESCRIPTION = (
+    "Los conteos describen únicamente los registros devueltos y el filtro local. "
+    "No son KPIs globales, disponibilidad física ni tendencias históricas. "
+    "Las muestras del contrato tienen cobertura parcial, sin corte conjunto. "
+    "En vivo se consultan páginas acotadas. La evidencia local de Startrack "
+    "no acredita una consulta actual ni cobertura integrada completa."
+)
 
 
 def _plan_date(value: str | None) -> date | None:
-    if value is None:
-        return None
+    """A documented day stays a day; a zoned instant is read in El Salvador; unzoned is unknown."""
     try:
-        if len(value) == 10:
+        if value and len(value) == 10:
             return date.fromisoformat(value)
-        instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if instant.tzinfo is not None:
-            return instant.astimezone(BUSINESS_TIMEZONE).date()
+        instant = datetime.fromisoformat(value) if value else None
     except ValueError:
-        pass
-    return None
+        return None
+    return instant.astimezone(BUSINESS_TIMEZONE).date() if instant and instant.tzinfo else None
+
+
+def _alert(code: str, key: str, severity: str, title: str, owner: str, **fields) -> AlertRecord:
+    return AlertRecord(
+        id=f"{code}:{key}", code=code, severity=severity, title=title, owner=owner, **fields
+    )
 
 
 def evaluate_alerts(
@@ -49,52 +69,51 @@ def evaluate_alerts(
 ) -> list[AlertRecord]:
     alerts = []
     for item in equipment:
-        display_name = item.asset_number or item.code or item.name
-        if item.maintenance_failure_id:
-            stopped = item.maintenance_is_stopped
-            alerts.append(
-                AlertRecord(
-                    id=f"active-failure:{item.id}",
-                    code="active_failure",
-                    severity="warning",
-                    equipment_id=item.id,
-                    title=f"{display_name}: falla activa registrada",
-                    description=(
-                        "Revisar el diagnóstico y la decisión de paro. Una falla activa no "
-                        "equivale por sí sola a indisponibilidad física."
-                    ),
-                    owner="Mantenimiento",
-                    evidence=[
-                        f"active_failure_id={item.maintenance_failure_id}",
-                        "active_failure_is_paro="
-                        f"{stopped if stopped is not None else 'desconocido'}",
-                    ],
-                )
+        if not item.maintenance_failure_id:
+            continue
+        name = item.asset_number or item.code or item.name
+        stopped = item.maintenance_is_stopped
+        alerts.append(
+            _alert(
+                "active_failure",
+                item.id,
+                "warning",
+                f"{name}: falla activa registrada",
+                "Mantenimiento",
+                equipment_id=item.id,
+                description=(
+                    "Revisar el diagnóstico y la decisión de paro. Una falla activa no "
+                    "equivale por sí sola a indisponibilidad física."
+                ),
+                evidence=[
+                    f"active_failure_id={item.maintenance_failure_id}",
+                    f"active_failure_is_paro={stopped if stopped is not None else 'desconocido'}",
+                ],
             )
-            for transfer in item.transfers:
-                pending = (
-                    transfer.workflow_role.strip().lower() == "pending"
-                    if transfer.workflow_role is not None
-                    else transfer.status.upper() in {"PENDIENTE", "PENDING"}
-                )
-                if not (
-                    stopped is True
-                    and item.relation_status == "confirmed"
-                    and transfer.evidence_current_assignment
-                    and pending
-                ):
-                    continue
+        )
+        for transfer in item.transfers:
+            pending = (
+                transfer.workflow_role.strip().lower() == "pending"
+                if transfer.workflow_role is not None
+                else transfer.status.upper() in PENDING
+            )
+            if (
+                stopped is True
+                and item.relation_status == "confirmed"
+                and transfer.evidence_current_assignment
+                and pending
+            ):
                 alerts.append(
-                    AlertRecord(
-                        id=f"maintenance-transfer:{item.id}:{transfer.id}",
-                        code="maintenance_blocks_transfer",
-                        severity="critical",
+                    _alert(
+                        "maintenance_blocks_transfer",
+                        f"{item.id}:{transfer.id}",
+                        "critical",
+                        f"{name}: revisar traslado pendiente",
+                        "Mantenimiento y Logística",
                         equipment_id=item.id,
-                        title=f"{display_name}: revisar traslado pendiente",
                         description=(
                             "Hay una falla con paro y una tarea pendiente vinculada con evidencia."
                         ),
-                        owner="Mantenimiento y Logística",
                         evidence=[
                             f"active_failure_id={item.maintenance_failure_id}",
                             "active_failure_is_paro=true",
@@ -107,47 +126,53 @@ def evaluate_alerts(
     for item in requests:
         status = item.status.upper()
         starts_on = _plan_date(item.starts_on)
-        if status in {"PENDIENTE", "PENDING"} and starts_on is not None and as_of is not None:
-            if starts_on <= as_of.astimezone(BUSINESS_TIMEZONE).date():
-                alerts.append(
-                    AlertRecord(
-                        id=f"pending-start:{item.id}",
-                        code="pending_request_started",
-                        severity="warning",
-                        equipment_id=item.machinery_id,
-                        request_id=item.id,
-                        title="Solicitud pendiente con inicio alcanzado",
-                        description=(
-                            "Priorizar revisión y asignación. Esta señal no acredita "
-                            "incumplimiento de entrega."
-                        ),
-                        owner="Proyectos y Logística",
-                        evidence=[f"status={item.status}", f"fecha_inicio={item.starts_on}"],
-                    )
-                )
-        if status in {"APROBADA", "APPROVED"} and not item.machinery_id:
+        if (
+            status in PENDING
+            and starts_on is not None
+            and as_of is not None
+            and starts_on <= as_of.astimezone(BUSINESS_TIMEZONE).date()
+        ):
             alerts.append(
-                AlertRecord(
-                    id=f"approved-unassigned:{item.id}",
-                    code="approved_without_equipment",
-                    severity="warning",
+                _alert(
+                    "pending_request_started",
+                    item.id,
+                    "warning",
+                    "Solicitud pendiente con inicio alcanzado",
+                    "Proyectos y Logística",
+                    equipment_id=item.machinery_id,
                     request_id=item.id,
-                    title="Solicitud aprobada sin unidad vinculada",
+                    description=(
+                        "Priorizar revisión y asignación. Esta señal no acredita "
+                        "incumplimiento de entrega."
+                    ),
+                    evidence=[f"status={item.status}", f"fecha_inicio={item.starts_on}"],
+                )
+            )
+        if status in APPROVED and not item.machinery_id:
+            alerts.append(
+                _alert(
+                    "approved_without_equipment",
+                    item.id,
+                    "warning",
+                    "Solicitud aprobada sin unidad vinculada",
+                    "Logística",
+                    request_id=item.id,
                     description=(
                         "Revisar la asignación; la aprobación no confirma "
                         "una unidad ni un traslado."
                     ),
-                    owner="Logística",
                     evidence=[f"status={item.status}", "maquinaria_id=ausente"],
                 )
             )
     return alerts
 
 
-def _map_live(
-    snapshot: NexusSnapshot, observed_at: datetime
+def map_live(
+    equipment: list[NexusEquipment], requests: list[NexusRequest], observed_at: datetime
 ) -> tuple[list[EquipmentRecord], list[RequestRecord]]:
-    def provenance(source_id: str) -> Provenance:
+    """Current sandbox rows share the read completion instant as their observation time."""
+
+    def provenance(_collection: str, _index: int, source_id: str) -> Provenance:
         return Provenance(
             source="nexus",
             source_id=source_id,
@@ -156,54 +181,13 @@ def _map_live(
             is_synthetic=True,
         )
 
-    requests = [
-        RequestRecord(
-            id=f"nexus:request:{item.id}",
-            project_id=item.project_id,
-            project_name=item.project_name,
-            machinery_id=f"nexus:equipment:{item.maquinaria_id}" if item.maquinaria_id else None,
-            status=item.status,
-            starts_on=item.fecha_inicio,
-            ends_on=item.fecha_fin,
-            machinery_type=item.tipo,
-            requested_by=item.requested_by_name,
-            requested_by_id=item.requested_by_user_id,
-            comments=item.comentarios,
-            created_at=item.created_at,
-            updated_at=item.updated_at,
-            approved_at=item.approved_at,
-            approved_by_user_id=item.approved_by_user_id,
-            provenance=provenance(item.id),
-        )
-        for item in snapshot.requests
-    ]
-    equipment = [
-        EquipmentRecord(
-            id=f"nexus:equipment:{item.id}",
-            code=item.clave,
-            asset_number=item.no_activo,
-            name=item.nombre,
-            company=item.empresa,
-            equipment_class=item.clase_equipo,
-            project_id=item.project_id,
-            project_name=item.project_name,
-            machinery_status=item.estado,
-            maintenance_failure_id=item.active_failure_id,
-            maintenance_status=item.active_failure_status,
-            maintenance_is_stopped=item.active_failure_is_paro,
-            request_ids=[r.id for r in requests if r.machinery_id == f"nexus:equipment:{item.id}"],
-            relation_status="unlinked",
-            relation_note=(
-                "No hay vínculo validado con una tarea de Startrack. Las solicitudes listadas "
-                "se relacionan solo por maquinaria_id exacto; no prueban asignación vigente."
-            ),
-            provenance=provenance(item.id),
-            created_at=item.created_at,
-            updated_at=item.updated_at,
-        )
-        for item in snapshot.equipment
-    ]
-    return equipment, requests
+    return to_records(
+        equipment,
+        requests,
+        provenance,
+        "No hay vínculo validado con una tarea de Startrack. Las solicitudes listadas "
+        "se relacionan solo por maquinaria_id exacto; no prueban asignación vigente.",
+    )
 
 
 def _matches(search: str, *values: str | None) -> bool:
@@ -235,40 +219,39 @@ def _filter_records(
 def _startrack_status(
     settings: Settings, mode: DataMode, client: StartrackClient | None
 ) -> SourceStatus:
-    configured = (
-        client.configured
-        if client is not None
-        else bool(
-            settings.startrack_api_key
-            and settings.startrack_api_key.get_secret_value().strip()
-            and settings.startrack_password
-            and settings.startrack_password.get_secret_value().strip()
-        )
-    )
+    config = client.config if client is not None else StartrackReadConfig.from_settings(settings)
     if mode == "fixture":
-        status = "fixture"
-        message = (
-            "Las muestras del archivo no contienen tareas de Startrack. "
-            "Este modo no consulta el proveedor."
+        status, message = (
+            "fixture",
+            (
+                "Las muestras del archivo no contienen tareas de Startrack. "
+                "Este modo no consulta el proveedor."
+            ),
         )
-    elif not settings.allow_live_reads or (client is not None and not client.config.enabled):
-        status = "disabled"
-        message = "Las lecturas de Startrack están deshabilitadas en el servidor."
-    elif not configured:
-        status = "not_configured"
-        message = "Faltan credenciales de Startrack configuradas en el servidor."
+    elif not settings.allow_live_reads or not config.enabled:
+        status, message = (
+            "disabled",
+            "Las lecturas de Startrack están deshabilitadas en el servidor.",
+        )
+    elif not config.configured:
+        status, message = (
+            "not_configured",
+            "Faltan credenciales de Startrack configuradas en el servidor.",
+        )
     else:
-        status = "not_queried"
-        message = (
-            "SDK configurado; esta lectura no consultó Startrack. "
-            "El seguimiento se consulta mediante la sincronización explícita."
+        status, message = (
+            "not_queried",
+            (
+                "SDK configurado; esta lectura no consultó Startrack. "
+                "El seguimiento se consulta mediante la sincronización explícita."
+            ),
         )
     return SourceStatus(
         id="startrack",
         label="Startrack",
         status=status,
         environment="sandbox",
-        configured=configured,
+        configured=config.configured,
         message=message,
     )
 
@@ -289,84 +272,56 @@ def read_hub(
     equipment: list[EquipmentRecord] = []
     requests: list[RequestRecord] = []
     observed_at = None
-    equipment_total = requests_total = None
-    complete = False
-    available = False
+    totals: tuple[int | None, int | None] = (None, None)
+    nexus = SourceStatus(
+        id="nexus",
+        label="Prisma / Nexus",
+        status="disabled",
+        environment="sandbox",
+        message="Las lecturas en vivo están deshabilitadas en este servidor.",
+    )
     if mode == "fixture":
         equipment, requests = fixture_records()
         observed_at = FIXTURE_AS_OF
-        equipment_total, requests_total = FIXTURE_EQUIPMENT_TOTAL, FIXTURE_REQUESTS_TOTAL
-        available = True
-        sources = [
-            SourceStatus(
-                id="nexus",
-                label="Prisma / Nexus",
-                status="fixture",
-                environment="sandbox",
-                observed_on=FIXTURE_OBSERVED_ON,
-                message=(
-                    "Muestras sintéticas del OpenAPI proporcionado, documentadas el 12/09/2026. "
-                    "No tienen un corte conjunto ni acreditan el estado actual del sandbox."
-                ),
-            ),
-            _startrack_status(settings, mode, startrack),
-        ]
-    else:
-        nexus_status = "disabled"
-        message = "Las lecturas en vivo están deshabilitadas en este servidor."
-        if settings.allow_live_reads:
-            nexus_status = "not_configured"
-            message = "Faltan credenciales de Nexus configuradas en el servidor."
-            if connector.configured:
-                try:
-                    snapshot = connector.read()
-                    observed_at = datetime.now(UTC)
-                    equipment, requests = _map_live(snapshot, observed_at)
-                    equipment_total, requests_total = (
-                        snapshot.equipment_total,
-                        snapshot.requests_total,
-                    )
-                    available = True
-                    # Nexus page completion does not imply a complete integrated operation.
-                    nexus_status = "connected" if snapshot.complete else "partial"
-                    message = (
-                        "Lectura acotada de Prisma en el sandbox."
-                        if snapshot.complete
-                        else "Lectura parcial: se alcanzó el límite o cambió la paginación."
-                    )
-                except NexusReadError as error:
-                    nexus_status, message = "error", str(error)
-        sources = [
-            SourceStatus(
-                id="nexus",
-                label="Prisma / Nexus",
-                status=nexus_status,
-                environment="sandbox",
-                observed_at=observed_at,
-                message=message,
-            ),
-            _startrack_status(settings, mode, startrack),
-        ]
+        totals = (FIXTURE_EQUIPMENT_TOTAL, FIXTURE_REQUESTS_TOTAL)
+        nexus.status, nexus.observed_on = "fixture", FIXTURE_OBSERVED_ON
+        nexus.message = (
+            "Muestras sintéticas del OpenAPI proporcionado, documentadas el 12/09/2026. "
+            "No tienen un corte conjunto ni acreditan el estado actual del sandbox."
+        )
+    elif settings.allow_live_reads:
+        nexus.status = "not_configured"
+        nexus.message = "Faltan credenciales de Nexus configuradas en el servidor."
+        if connector.configured:
+            try:
+                snapshot = connector.read()
+                observed_at = nexus.observed_at = datetime.now(UTC)
+                equipment, requests = map_live(snapshot.equipment, snapshot.requests, observed_at)
+                totals = (snapshot.equipment_total, snapshot.requests_total)
+                # Nexus page completion does not imply a complete integrated operation.
+                nexus.status = "connected" if snapshot.complete else "partial"
+                nexus.message = (
+                    "Lectura acotada de Prisma en el sandbox."
+                    if snapshot.complete
+                    else "Lectura parcial: se alcanzó el límite o cambió la paginación."
+                )
+            except NexusReadError as error:
+                nexus.status, nexus.message = "error", str(error)
+    available = mode == "fixture" or nexus.status in {"connected", "partial"}
     equipment, requests = _filter_records(equipment, requests, search)
     hub = HubResponse(
         mode=mode,
         generated_at=datetime.now(UTC),
         data_as_of=observed_at,
-        sources=sources,
+        sources=[nexus, _startrack_status(settings, mode, startrack)],
         scope=HubScope(
             search=search,
-            equipment_total=equipment_total,
-            requests_total=requests_total,
+            equipment_total=totals[0],
+            requests_total=totals[1],
             equipment_returned=len(equipment),
             requests_returned=len(requests),
-            complete=complete,
-            description=(
-                "Los conteos describen únicamente los registros devueltos y el filtro local. "
-                "No son KPIs globales, disponibilidad física ni tendencias históricas. "
-                "Las muestras del contrato tienen cobertura parcial, sin corte conjunto. "
-                "En vivo se consultan páginas acotadas. La evidencia local de Startrack "
-                "no acredita una consulta actual ni cobertura integrada completa."
-            ),
+            complete=False,
+            description=SCOPE_DESCRIPTION,
         ),
         summary=HubSummary(),
         equipment=equipment,

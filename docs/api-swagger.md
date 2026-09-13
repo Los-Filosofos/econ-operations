@@ -31,7 +31,7 @@ de aprobación. El flujo actual prepara movimientos desde registros existentes.
 Desde la raíz, con el entorno local preparado según [desarrollo](desarrollo.md):
 
 ```powershell
-.\scripts\dev.ps1
+./scripts/dev.sh   # o .\scripts\dev.ps1 en PowerShell
 ```
 
 En otra terminal:
@@ -40,14 +40,17 @@ En otra terminal:
 $econApi = 'http://127.0.0.1:8050'
 Invoke-RestMethod "$econApi/health/live"
 Invoke-RestMethod "$econApi/health/ready"
-$econHub = Invoke-RestMethod "$econApi/api/v1/hub?mode=fixture"
+# Iniciar sesión una vez y reutilizar la cookie ($econSession, ver «Autenticarse en Swagger»).
+$econHub = Invoke-RestMethod "$econApi/api/v1/hub?mode=fixture" -WebSession $econSession
 $econHub.scope
 $econHub.sources
 $econHub.equipment | Select-Object asset_number, machinery_status, maintenance_is_stopped
 $econHub.requests | Select-Object status, project_name, starts_on, ends_on
-Invoke-RestMethod "$econApi/api/v1/hub?mode=fixture&search=CF-03"
-Invoke-RestMethod "$econApi/api/v1/operations?mode=fixture"
+Invoke-RestMethod "$econApi/api/v1/hub?mode=fixture&search=CF-03" -WebSession $econSession
+Invoke-RestMethod "$econApi/api/v1/operations?mode=fixture" -WebSession $econSession
 ```
+
+Los endpoints de salud son públicos; el resto responde `401` sin sesión.
 
 La muestra sin filtro contiene cinco equipos de quince informados en el archivo
 y dos solicitudes de PROY-014. No contiene una operación documentada del equipo
@@ -56,8 +59,39 @@ RE-03/MOT-006/PROY-006. Buscar RE-03 no debe fabricar esa operación.
 `fixture` lee ejemplos proporcionados y evidencia local de ese mismo modo,
 sin consultas a proveedores. `live` lee el sandbox sintético; está deshabilitado
 por defecto y nunca usa fixtures como sustituto. Ningún parámetro del navegador
-habilita proveedores. No hay login de aplicación ni botón Authorize para sus
-credenciales: estas permanecen en configuración del servidor.
+habilita proveedores. Las credenciales de proveedores permanecen en la
+configuración del servidor y no se introducen en Swagger.
+
+### Autenticarse en Swagger
+
+Todo `/api/v1/*` exige sesión (401 sin ella). La sesión es la cookie HttpOnly
+`econ_session`, declarada en OpenAPI como esquema `APIKeyCookie`; Swagger no
+puede escribirla desde **Authorize** porque el navegador la gestiona. La forma
+práctica es iniciar sesión en la misma pestaña y dejar que el navegador la
+envíe:
+
+1. Abrir `POST /api/v1/auth/login`, Try it out, cuerpo
+   `{"email": "admin@example.com", "password": "…"}` y Execute. La respuesta
+   `200` devuelve el usuario y sus `permissions`; la cookie queda en el
+   navegador.
+2. Comprobar con `GET /api/v1/auth/me`. Desde entonces Swagger envía la cookie
+   en cada Execute del mismo origen.
+3. `POST /api/v1/auth/logout` responde `204` y elimina la cookie.
+
+Desde PowerShell, conservar la cookie con una sesión web:
+
+```powershell
+$econLogin = @{ email = 'admin@example.com'; password = (Read-Host -AsSecureString 'Contraseña' | ConvertFrom-SecureString -AsPlainText) } | ConvertTo-Json
+Invoke-RestMethod "$econApi/api/v1/auth/login" -Method Post -ContentType 'application/json' -Body $econLogin -SessionVariable econSession
+Invoke-RestMethod "$econApi/api/v1/auth/me" -WebSession $econSession
+Invoke-RestMethod "$econApi/api/v1/hub?mode=fixture" -WebSession $econSession
+```
+
+Diez fallos de login desde una IP en quince minutos devuelven `429`. Con
+sesión pero sin el permiso de la operación, la respuesta es `403`. Con
+`AUTH_REQUIRED=false` (solo desarrollo) no hay login y la gestión depende de
+`ALLOW_LOCAL_MANAGEMENT` desde loopback. Roles y permisos:
+[ADR 0005](adr/0005-session-auth-and-roles.md).
 
 ## Operaciones disponibles
 
@@ -65,13 +99,19 @@ credenciales: estas permanecen en configuración del servidor.
 | --- | --- |
 | `GET /health/live` | Responde `{"status":"ok"}` si el proceso atiende. No consulta SQL ni proveedores. |
 | `GET /health/ready` | Ejecuta `SELECT 1`. Un 200 no acredita tablas migradas ni acceso a proveedores. |
+| `POST /api/v1/auth/login` | Crea la cookie de sesión. `401` con credenciales inválidas o usuario inactivo, sin revelar si el email existe; `429` tras diez fallos por IP en quince minutos. |
+| `POST /api/v1/auth/logout` | Elimina la cookie; `204` aunque no hubiera sesión. |
+| `GET /api/v1/auth/me` | Usuario activo de la cookie y sus permisos efectivos. |
+| `GET /api/v1/users` | Lista usuarios sin hashes. Exige `manage_users` (solo `admin`). |
+| `POST /api/v1/users` | Crea un usuario activo con rol y contraseña de al menos 12 caracteres; `409` si el email existe. |
+| `PATCH /api/v1/users/{user_id}` | Cambia nombre, rol, estado o contraseña. `409` al desactivar la propia cuenta o dejar el sistema sin `admin` activo; una contraseña nueva cierra las sesiones previas. |
 | `GET /api/v1/hub` | Consulta maquinaria, solicitudes y evidencia relacionada. Revisar `sources`, `scope`, `operation_evidence` y procedencia. |
 | `GET /api/v1/operations` | Lee una página de planes e historial locales, 100 movimientos por defecto. Revisar `available`, `complete`, `coverage` y `message`. |
 | `GET /api/v1/operations/catalogs` | Consulta catálogos acotados de Startrack. Siempre es live; no declara selector de modo. Añadir `mode=fixture` no cambia el origen. |
-| `POST /api/v1/operations/plans` | Guarda correspondencias y preparación local. Un 201 puede ser un plan `blocked`; revisar `preparation`. |
-| `POST /api/v1/operations/{movement_id}/queue` | Revalida un plan live y lo encola. No envía el POST a Startrack en esa petición. |
-| `POST /api/v1/operations/sync` | Guarda un corte; en live puede encolar, enviar hasta diez tareas y consultar seguimiento. |
-| `POST /api/v1/operations/{movement_id}/receipt` | Guarda una declaración manual para un movimiento live `sent` con `job_id`. |
+| `POST /api/v1/operations/plans` | Guarda correspondencias y preparación local (`manage_transfers`). Un 201 puede ser un plan `blocked`; revisar `preparation`. |
+| `POST /api/v1/operations/{movement_id}/queue` | Revalida un plan live y lo encola (`manage_transfers`). No envía el POST a Startrack en esa petición. |
+| `POST /api/v1/operations/sync` | Guarda un corte (`manage_transfers`); en live puede encolar, enviar hasta diez tareas y consultar seguimiento. |
+| `POST /api/v1/operations/{movement_id}/receipt` | Guarda una declaración manual para un movimiento live `sent` con `job_id` (`declare_reception`). |
 
 ### Filtros y ámbito
 
@@ -123,6 +163,7 @@ Ejecutar en **una terminal nueva**, desde la raíz:
 uv sync --project apps/api --locked
 $econDemoDb = Join-Path ([System.IO.Path]::GetTempPath()) ('econ-swagger-' + [guid]::NewGuid() + '.db')
 $env:DATABASE_URL = 'sqlite:///' + $econDemoDb.Replace('\', '/')
+$env:AUTH_REQUIRED = 'false'          # ensayo local sin usuarios; nunca en un despliegue
 $env:ALLOW_LOCAL_MANAGEMENT = 'true'
 $env:ALLOW_LIVE_READS = 'false'
 $env:ALLOW_LIVE_WRITES = 'false'
@@ -130,6 +171,11 @@ $env:AUTO_QUEUE_TRANSFERS = 'false'
 uv run --directory apps/api alembic upgrade head
 uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8052
 ```
+
+Con `AUTH_REQUIRED=false` la gestión se concede a la petición loopback del
+propio navegador. Para ensayar con login, omitir esa variable, definir
+`SESSION_SECRET`, crear un `admin` con `app.cli.create_user` y autenticarse
+como se explica arriba.
 
 Abrir `http://127.0.0.1:8052/docs`. En `POST /operations/plans`, seleccionar
 **Ensayo local con la muestra proporcionada de PROY-014**, pulsar Try it out y
@@ -178,9 +224,12 @@ principal en 8050 conserva su configuración y PostgreSQL.
 | HTTP | Ejemplo o interpretación |
 | --- | --- |
 | `200` | Consulta o ciclo atendido; revisar cobertura, disponibilidad y advertencias en el cuerpo. |
-| `201` | Plan guardado o recuperado por identidad; revisar si quedó `draft` o `blocked`. |
-| `409` | Rechazo del flujo: gestión/live deshabilitados, dependencia no disponible, identidad/estado incompatible, registro no encontrado o evidencia inválida. El contrato actual usa 409 también para estas causas. |
+| `201` | Plan o usuario guardado (plan: recuperado por identidad; revisar si quedó `draft` o `blocked`). |
+| `401` | Sin sesión válida: iniciar sesión en `POST /api/v1/auth/login`. |
+| `403` | La sesión no tiene el permiso de la operación (`manage_transfers`, `declare_reception` o `manage_users`). |
+| `409` | Rechazo del flujo: gestión/live deshabilitados, dependencia no disponible, identidad/estado incompatible, registro no encontrado, evidencia inválida, email repetido o cambio que dejaría sin administrador. El contrato actual usa 409 también para estas causas. |
 | `422` | Validación estructural: modo inválido, campo requerido ausente, longitud excesiva, fecha mal formada o campos adicionales en cuerpos estrictos. |
+| `429` | Demasiados intentos de login desde la misma IP; esperar quince minutos. |
 | `503` | `/health/ready` no pudo consultar SQL. No devuelve detalles de conexión. |
 
 Ejemplo real de rechazo con configuración predeterminada:
@@ -196,8 +245,8 @@ La referencia de constancia es texto: el endpoint no sube archivos ni verifica
 firmas. Repetir una declaración idéntica conserva la original; una modificación
 posterior genera conflicto. Ni GPS ni cierre de tarea producen recepción.
 
-`queue` exige lecturas/escrituras live, gestión local y credenciales de ambos
-proveedores. `sync` no debe tratarse como un GET: con habilitaciones puede
+`queue` exige lecturas/escrituras live, permiso `manage_transfers` y
+credenciales de ambos proveedores. `sync` no debe tratarse como un GET: con habilitaciones puede
 procesar la cola. Un envío `unknown` se concilia por lectura y correspondencia
 exacta; no repetir la creación para resolver una respuesta incierta.
 
@@ -219,4 +268,7 @@ Las descripciones usan las capacidades oficiales de FastAPI para
 [metadatos y etiquetas](https://fastapi.tiangolo.com/tutorial/metadata/),
 [configuración de Swagger UI](https://fastapi.tiangolo.com/how-to/configure-swagger-ui/)
 y [respuestas adicionales](https://fastapi.tiangolo.com/advanced/additional-responses/).
-No se añadió otro framework ni se cambió la autenticación del servicio.
+La sesión se declara con `fastapi.security.APIKeyCookie`; `tests/test_auth.py`
+y `tests/test_users.py` cubren login y logout, secreto obligatorio, límite de
+intentos, 401/redirección, permisos por rol, cierre de sesión al desactivar o
+cambiar la contraseña, protección del último `admin`, la CLI y la migración.

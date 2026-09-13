@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import update
 
 from app.core.access import management_scope
 from app.core.config import Settings
@@ -10,6 +10,7 @@ from app.core.database import build_engine
 from app.main import create_app
 from app.models import metadata
 from app.models.hub import EquipmentRecord, Provenance, RequestRecord
+from app.models.operations import Movement
 from app.services.ledger import OperationsLedger
 from app.services.transfers import TransferMapping
 from app.services.workflow import WorkflowService
@@ -74,15 +75,12 @@ def test_selection_with_over_100_movements_new_inserts_and_restart(tmp_path):
         mov = ledger.create("live", req, eq, mp)
         # Give deterministic distinct initial timestamps so order is strictly monotonic
         mov_time = base_time + timedelta(minutes=i)
-        with ledger.engine.connect() as conn:
+        with ledger.engine.begin() as conn:
             conn.execute(
-                text(
-                    "UPDATE operation_movements "
-                    "SET created_at = :t, next_review_at = :t WHERE id = :id"
-                ),
-                {"t": mov_time, "id": mov.id},
+                update(Movement)
+                .where(Movement.id == mov.id)
+                .values(created_at=mov_time, next_review_at=mov_time)
             )
-            conn.commit()
         created_ids.append(mov.id)
 
     # Verify oldest movement is created_ids[0]

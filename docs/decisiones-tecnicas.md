@@ -55,9 +55,9 @@ Startrack en esta cuenta sigue pendiente.
 | Tiempo muerto | Requiere jornada, intervalos y causas confirmadas, mantenimiento y señal adecuada al tipo de equipo. Velocidad cero no acredita inactividad. |
 | Responsabilidades | RACI propuesta para Mantenimiento, Logística y Técnica de Proyectos; necesita validación empresarial. No implementa permisos de usuarios. |
 
-La validación funcional previa documenta 308 pruebas y construcción del
-contenedor. Esta entrega visual verifica fuentes, cálculos y documentos; no
-equivale a pruebas de carga ni a validación de proveedores. Para escalar se
+La validación funcional se ejecuta con `scripts/check.sh` o `scripts/check.ps1`
+(Ruff, formato, pytest y contenedor). Esta entrega visual verifica fuentes,
+cálculos y documentos; no equivale a pruebas de carga ni a validación de proveedores. Para escalar se
 deben medir eventos/segundo, retraso, recuperación y consultas concurrentes con
 generadores aislados y contratos de entrega acordados.
 
@@ -67,5 +67,4 @@ valor no se calcula con la muestra actual. No se afirman ahorros, cumplimiento
 ISO ni resultados de producción.
 
 Referencias: [guía implementada](solucion-integracion.md),
-[sincronización propuesta](sincronizacion-y-discrepancias.md) y
-[escala propuesta](arquitectura-escalable-flota.md).
+[sincronización y escala propuestas](sincronizacion-y-discrepancias.md).

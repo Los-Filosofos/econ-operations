@@ -32,7 +32,9 @@ def test_swagger_describes_public_operations_and_actual_errors(tmp_path):
                 }
                 assert "422" in responses
         assert schema["components"]["schemas"]["WorkflowOverview"]["properties"]["complete"]
-        assert "securitySchemes" not in schema["components"]
+        assert "APIKeyCookie" in schema["components"]["securitySchemes"]
+        assert schema["paths"]["/api/v1/users"]["get"]["security"] == [{"APIKeyCookie": []}]
+        assert schema["paths"]["/api/v1/auth/login"]["post"]["responses"]["401"]
 
 
 def test_documented_fixture_plan_and_sync_work_without_remote_calls(tmp_path):

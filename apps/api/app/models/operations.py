@@ -1,16 +1,49 @@
 """Durable operation records; source facts and receipt remain separate evidence."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Index, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Index,
+    TypeDecorator,
+    UniqueConstraint,
+)
 from sqlmodel import Field, SQLModel
 
 from app.models.hub import DataMode, Provenance
 
 MovementState = Literal["draft", "blocked", "queued", "sending", "sent", "unknown", "failed"]
 ObservationKind = Literal["task_state", "arrival"]
+
+
+class UTCDateTime(TypeDecorator):
+    """Timezone-aware column on PostgreSQL; SQLite stores naive text that is read back as UTC."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return value.astimezone(UTC) if value is not None and value.tzinfo else value
+
+    def process_result_value(self, value, dialect):
+        return value.replace(tzinfo=UTC) if value is not None and value.tzinfo is None else value
+
+
+def _instant(nullable: bool = False) -> Any:
+    return Field(
+        default=None if nullable else ..., sa_column=Column(UTCDateTime, nullable=nullable)
+    )
+
+
+def _json(nullable: bool = False) -> Any:
+    if nullable:
+        return Field(default=None, sa_column=Column(JSON(none_as_null=True)))
+    return Field(sa_column=Column(JSON, nullable=False))
 
 
 class Movement(SQLModel, table=True):
@@ -34,26 +67,26 @@ class Movement(SQLModel, table=True):
     machinery_source_id: str = Field(max_length=255)
     project_source_id: str = Field(max_length=255)
     tracked_vehicle_id: str | None = Field(default=None, max_length=255)
-    mapping: dict = Field(sa_column=Column(JSON, nullable=False))
-    source_request: dict = Field(sa_column=Column(JSON, nullable=False))
-    source_equipment: dict | None = Field(default=None, sa_column=Column(JSON(none_as_null=True)))
+    mapping: dict = _json()
+    source_request: dict = _json()
+    source_equipment: dict | None = _json(nullable=True)
     source_request_hash: str = Field(max_length=64)
     source_equipment_hash: str | None = Field(default=None, max_length=64)
     identity_hash: str = Field(max_length=64)
-    payload: dict | None = Field(default=None, sa_column=Column(JSON(none_as_null=True)))
-    preparation: dict = Field(sa_column=Column(JSON, nullable=False))
+    payload: dict | None = _json(nullable=True)
+    preparation: dict = _json()
     state: str = Field(max_length=16)
     job_id: str | None = Field(default=None, max_length=255)
     status: str | None = Field(default=None, max_length=255)
     workflow_role: str | None = Field(default=None, max_length=255)
     reason_code: str | None = Field(default=None, max_length=64)
-    created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
-    updated_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
-    next_review_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
-    queued_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
-    sending_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
-    sent_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
-    receipt: dict | None = Field(default=None, sa_column=Column(JSON(none_as_null=True)))
+    created_at: datetime = _instant()
+    updated_at: datetime = _instant()
+    next_review_at: datetime = _instant()
+    queued_at: datetime | None = _instant(nullable=True)
+    sending_at: datetime | None = _instant(nullable=True)
+    sent_at: datetime | None = _instant(nullable=True)
+    receipt: dict | None = _json(nullable=True)
 
 
 class OperationEvent(SQLModel, table=True):
@@ -68,11 +101,11 @@ class OperationEvent(SQLModel, table=True):
     state: str | None = Field(default=None, max_length=16)
     source_id: str | None = Field(default=None, max_length=255)
     evidence_hash: str | None = Field(default=None, max_length=64)
-    event_time: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
-    observed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
-    recorded_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    event_time: datetime | None = _instant(nullable=True)
+    observed_at: datetime | None = _instant(nullable=True)
+    recorded_at: datetime = _instant()
     data: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
-    provenance: dict | None = Field(default=None, sa_column=Column(JSON(none_as_null=True)))
+    provenance: dict | None = _json(nullable=True)
 
 
 class SourceSnapshot(SQLModel, table=True):
@@ -81,11 +114,11 @@ class SourceSnapshot(SQLModel, table=True):
 
     id: str = Field(primary_key=True, max_length=36)
     mode: str = Field(max_length=16, index=True)
-    recorded_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
-    generated_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
-    data_as_of: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    recorded_at: datetime = _instant()
+    generated_at: datetime = _instant()
+    data_as_of: datetime | None = _instant(nullable=True)
     content_hash: str = Field(max_length=64)
-    content: dict = Field(sa_column=Column(JSON, nullable=False))
+    content: dict = _json()
 
 
 class ReceiptRecord(BaseModel):

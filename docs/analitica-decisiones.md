@@ -25,8 +25,8 @@ conserva fecha documental, pero no un instante común de observación: no permit
 clasificar atrasos con el reloj actual. `generated_at` es el momento de armar la
 respuesta, no una fecha de actualización de las fuentes.
 
-La [revisión de datos](revision-datos-2026-09-12.md) detalla los hallazgos de esta
-etapa y la evidencia necesaria para habilitar otras mediciones. Junto a los
+Los límites de la muestra y la evidencia necesaria para otras mediciones están
+en [contexto vigente](contexto-vigente.md#límites-de-los-datos). Junto a los
 gráficos se muestran solicitudes de la vista, filas devueltas, total informado
 por el origen antes de búsqueda, procedencia y corte conocido. El calendario
 declara cuántos períodos son representables sobre las solicitudes de la vista.
@@ -74,7 +74,9 @@ describe planificación; no reconstruye cambios históricos de estado.
 
 `app/dashboard/decision_priorities.py` deriva los asuntos por solicitud;
 `decision_analytics.py` selecciona la población y prepara los gráficos;
-`decision_views.py` los presenta. Las reglas del contrato compartido permanecen
+`views.py` (`overview`) los presenta con el template Plotly `econ` de
+`theme.py`, que colorea cada estado con la paleta cualitativa compartida. Las
+reglas del contrato compartido permanecen
 en `app/services/hub.py`. Los cambios deben mantener alineados los modelos
 Pydantic y sus consumidores Dash; ver [arquitectura de interfaz](frontend-architecture.md).
 
@@ -92,5 +94,5 @@ existe, pero por sí sola no acredita una serie histórica completa o comparable
 
 No se publican resultados de productividad, ahorro, cumplimiento ISO o variaciones
 mensuales con estas muestras. Las ampliaciones de
-[sincronización y discrepancias](sincronizacion-y-discrepancias.md) y
-[escala de flota](arquitectura-escalable-flota.md) son propuestas pendientes de implementación.
+[sincronización, discrepancias y escala](sincronizacion-y-discrepancias.md)
+son propuestas pendientes de implementación.

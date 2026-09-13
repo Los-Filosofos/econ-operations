@@ -41,10 +41,12 @@ flowchart LR
 ```
 
 - `apps/api/app/dashboard`: páginas, formularios, navegación y tablas. Dash y
-  FastAPI comparten el servicio Python; no hay frontend React ni `apps/web`.
+  FastAPI comparten el mismo servicio Python.
 - `app/api`: contratos HTTP tipados. El hub consulta las fuentes;
-  `/api/v1/operations` permite consultar movimientos y, con gestión local
-  habilitada, guardar planes, ponerlos en cola, sincronizar y registrar recepción.
+  `/api/v1/operations` permite consultar movimientos y, con una sesión cuyo rol
+  tenga `manage_transfers` (recepción: `declare_reception`), guardar planes,
+  ponerlos en cola, sincronizar y registrar recepción. `/api/v1/auth` y
+  `/api/v1/users` gestionan sesión y usuarios ([ADR 0005](adr/0005-session-auth-and-roles.md)).
 - `app/services/transfers.py`: valida solicitud aprobada, unidad y correspondencias
   antes de producir un borrador. No llama al proveedor.
 - `app/services/workflow.py`: aplica habilitaciones, consulta vigencia y catálogos,
@@ -143,11 +145,11 @@ Desde la raíz del repositorio, conservar el `.env` existente y su `DATABASE_URL
 Si falta, partir de `apps/api/.env.example`. No modificar el nombre del proyecto
 Compose ni borrar su volumen.
 
-```powershell
+```sh
 uv sync --project apps/api --locked
 docker compose up -d --wait db
 uv run --directory apps/api alembic upgrade head
-.\scripts\dev.ps1
+./scripts/dev.sh   # PowerShell: .\scripts\dev.ps1
 ```
 
 La migración es explícita y se ejecuta sobre la base indicada por `DATABASE_URL`.
@@ -164,30 +166,38 @@ comprobar la conexión y la migración antes de guardar o sincronizar.
 
 | Variable | Valor inicial | Efecto |
 | --- | --- | --- |
-| `ALLOW_LOCAL_MANAGEMENT` | `false` | Permite gestión desde el servidor local y ejecución de ciclos CLI. |
+| `AUTH_REQUIRED` | `true` | Exige sesión en toda ruta salvo salud y `/login`. `false` solo en desarrollo. |
+| `SESSION_SECRET` | — | Obligatorio con `AUTH_REQUIRED=true`; firma la cookie `econ_session`. |
+| `SESSION_HTTPS_ONLY` | `false` | `true` tras TLS: la cookie solo viaja por HTTPS. |
+| `SESSION_MAX_AGE_SECONDS` | `28800` | Caducidad de la sesión. |
+| `ALLOW_LOCAL_MANAGEMENT` | `false` | Solo con `AUTH_REQUIRED=false`: concede gestión a peticiones loopback del mismo origen. |
 | `ALLOW_LIVE_READS` | `false` | Permite las consultas reales del sandbox; requiere las credenciales correspondientes. |
 | `ALLOW_LIVE_WRITES` | `false` | Permite enviar tareas Startrack tras las comprobaciones del flujo. |
 | `AUTO_QUEUE_TRANSFERS` | `false` | Permite poner en cola planes guardados que se validen durante un ciclo. |
 
 Prisma utiliza `NEXUS_EMAIL` y `NEXUS_PASSWORD`. Startrack utiliza
 `STARTRACK_API_KEY` y `STARTRACK_PASSWORD`. No introducir secretos en formularios,
-URLs, código, capturas, registros o variables `VITE_*`. Una sesión abierta de
+URLs, código, capturas o registros. Una sesión abierta de
 Startrack en el navegador no prueba que las credenciales de su API funcionen.
 
-La aplicación no tiene login. La gestión HTTP exige conexión loopback, nombre de
-host local y controles de origen; un indicador del navegador no concede permisos.
-No publicar el servicio con live habilitado ni reenviar un origen público hacia
-la gestión local. CORS no sustituye una barrera de acceso a datos privados.
-En despliegues públicos de muestras, mantener las cuatro habilitaciones en
-`false`.
+Los roles de usuario y las habilitaciones del servidor son capas distintas.
+El rol de la sesión decide **quién** puede actuar: `admin` y `logistica`
+guardan planes, encolan y sincronizan (`manage_transfers`); `admin`,
+`logistica` y `gerencia_proyecto` declaran recepción (`declare_reception`);
+`mantenimiento`, `control_costos` y `lectura` consultan; solo `admin`
+administra usuarios. Las habilitaciones deciden **qué puede hacer el
+servidor**: ningún rol enciende lecturas o escrituras remotas, y un flag del
+navegador no concede permisos. No publicar el servicio con live habilitado.
+En despliegues públicos de muestras, mantener `ALLOW_LIVE_READS`,
+`ALLOW_LIVE_WRITES` y `AUTO_QUEUE_TRANSFERS` en `false`.
 
 ## Ejecutar ciclos
 
-Para comprobar persistencia con las muestras proporcionadas, habilitar únicamente
-la gestión local en el proceso que ejecuta la CLI:
+El worker CLI no tiene sesión de usuario: actúa con autoridad de proceso sobre
+la base configurada y solo lo lanza quien administra el servidor. Para
+comprobar persistencia con las muestras proporcionadas:
 
 ```powershell
-$env:ALLOW_LOCAL_MANAGEMENT = "true"
 $env:ALLOW_LIVE_READS = "false"
 $env:ALLOW_LIVE_WRITES = "false"
 $env:AUTO_QUEUE_TRANSFERS = "false"
@@ -222,7 +232,7 @@ correspondencias nuevas a partir de coincidencias de nombres.
 
 ## Validación y trabajo pendiente con proveedores
 
-`scripts/check.ps1` ejecuta Ruff, formato y pytest. Las pruebas de integración
+`scripts/check.sh` (o `check.ps1`) ejecuta Ruff, formato y pytest. Las pruebas de integración
 usan respuestas HTTP controladas y bases SQLite aisladas; incluyen concurrencia
 de reclamaciones, idempotencia, resultados ambiguos, aislamiento de evidencia y
 separación de recepción. Sus IDs artificiales viven en tests y no se sirven como
@@ -238,8 +248,9 @@ del cliente prueban la codificación implementada, no su aceptación real. Antes
 de cualquier envío, revisar las tareas existentes y los IDs del caso concreto;
 la incertidumbre de un POST no se resuelve repitiéndolo.
 
-Los formularios de Startrack tienen soporte de consulta en el SDK. Todavía no
-se toma una respuesta de formulario como aceptación empresarial automática:
-el criterio de recepción y su correspondencia deben acordarse expresamente.
+El SDK no consulta respuestas de formularios de Startrack (la lectura sin uso
+se retiró). Una respuesta de formulario no se toma como aceptación empresarial
+automática: el criterio de recepción y su correspondencia deben acordarse
+expresamente antes de implementar esa lectura.
 Tampoco se afirma cobertura exhaustiva de registros, sincronización en tiempo
 real ni validación productiva a partir de estas pruebas locales.

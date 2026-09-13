@@ -5,17 +5,35 @@ from pathlib import Path
 from urllib.parse import urlencode
 from uuid import uuid4
 
+import dash_mantine_components as dmc
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from fastapi import FastAPI
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
+from app.dashboard.admin_views import admin_layout, admin_page, register_admin_callbacks
+from app.dashboard.auth_views import (
+    current_user,
+    header_user,
+    login_page,
+    login_target,
+    redirect,
+    register_auth_callbacks,
+)
+from app.dashboard.components import icon, link, loading, notice
 from app.dashboard.context import QueryContext, parse_context
-from app.dashboard.icons import icon
-from app.dashboard.views import empty, navigation, notice, render_page, scope
+from app.dashboard.theme import BRAND, MANTINE_THEME
+from app.dashboard.views import (
+    MODES,
+    REQUEST_FILTERS,
+    filter_tabs,
+    navigation,
+    render_page,
+    scope,
+    workflow_page,
+)
 from app.dashboard.workflow_actions import WorkflowInputError, execute_action
-from app.dashboard.workflow_forms import validation_controls
-from app.dashboard.workflow_views import workflow_page
+from app.dashboard.workflow_forms import action_button, plan_form, receipt_form
 from app.models.hub import HubResponse
 from app.models.workflow import WorkflowOverview
 from app.services.hub import read_hub
@@ -36,166 +54,189 @@ INDEX = """<!DOCTYPE html>
     <footer>{%config%}{%scripts%}{%renderer%}</footer>
   </body>
 </html>"""
+READ_ERROR = "No se pudo completar la consulta. Intenta actualizar de nuevo."
+INPUT_ERROR = (
+    "Revisa los campos obligatorios y los IDs. Usa fecha AAAA-MM-DD y hora HH:MM; "
+    "separa los IDs de usuarios con comas."
+)
+ACTION_ERROR = (
+    "No se pudo completar la acción. Actualiza el registro para consultar su estado "
+    "antes de repetirla."
+)
 
 
 def query_controls():
-    return html.Div(
+    return dmc.Group(
         [
-            html.Div(
-                [
-                    html.Label("Buscar", htmlFor="search"),
-                    dcc.Input(
-                        id="search",
-                        type="search",
-                        value="",
-                        maxLength=100,
-                        placeholder="Proyecto, solicitud o maquinaria…",
-                        autoComplete="off",
-                    ),
-                ],
-                className="search-control",
+            dmc.TextInput(
+                id="search",
+                label="Buscar",
+                value="",
+                placeholder="Proyecto, solicitud o maquinaria…",
+                leftSection=icon("search", 16),
+                autoComplete="off",
+                style={"flex": 1, "minWidth": 220},
             ),
-            html.Div(
-                [
-                    html.Label("Origen de datos", htmlFor="mode"),
-                    dcc.Dropdown(
-                        id="mode",
-                        value="fixture",
-                        clearable=False,
-                        searchable=False,
-                        options=[
-                            {"label": "Muestras proporcionadas", "value": "fixture"},
-                            {"label": "Sandbox actual (sintético)", "value": "live"},
-                        ],
-                    ),
-                ],
-                className="source-control",
+            dmc.Select(
+                id="mode",
+                label="Origen de datos",
+                value="fixture",
+                data=[{"value": value, "label": label} for value, label in MODES.items()],
+                allowDeselect=False,
+                w={"base": "100%", "xs": 240},
             ),
-            html.Button("Aplicar", id="apply", n_clicks=0, className="button primary"),
+            dmc.Button("Aplicar", id="apply", n_clicks=0, style={"alignSelf": "flex-end"}),
         ],
+        align="flex-end",
+        gap="sm",
         className="query-bar",
     )
 
 
+def brand(height=34):
+    return dmc.Anchor(
+        html.Img(src="/assets/econ-color.png", alt="Grupo ECON", height=height),
+        href="/",
+        **{"aria-label": "Inicio"},
+    )
+
+
 def layout():
-    return html.Div(
+    """Root shell: the route callback fills it with the login page or the application."""
+    return dmc.MantineProvider(
         [
             dcc.Location(id="url", refresh="callback-nav"),
-            dcc.Store(id="navigation-focus", storage_type="memory"),
-            html.A("Saltar al contenido", href="#content", className="skip-link"),
-            html.Div(
-                [
-                    html.Aside(
-                        [
-                            html.Div(
-                                [
-                                    html.Button(
-                                        "Cerrar",
-                                        id="sidebar-close",
-                                        n_clicks=0,
-                                        className="button sidebar-close",
-                                        type="button",
-                                        **{"aria-label": "Cerrar navegación lateral"},
-                                    ),
-                                    dcc.Link(
-                                        html.Img(src="/assets/econ-color.png", alt="Grupo ECON"),
-                                        href="/",
-                                        className="brand",
-                                    ),
-                                    html.P("Control de maquinaria", className="brand-caption"),
-                                ],
-                                className="sidebar-brand",
-                            ),
-                            html.Nav(id="navigation", **{"aria-label": "Navegación principal"}),
-                            html.Div(
-                                [
-                                    html.Span("Entorno del proyecto"),
-                                    html.Strong("Datos sintéticos"),
-                                ],
-                                className="sidebar-footer",
-                            ),
-                        ],
-                        id="sidebar",
-                        className="sidebar",
-                    ),
-                    html.Button(
-                        id="sidebar-dismiss",
-                        n_clicks=0,
-                        className="sidebar-backdrop",
-                        type="button",
-                        **{"aria-label": "Cerrar navegación", "tabIndex": -1},
-                    ),
-                    html.Div(
-                        [
-                            html.Header(
-                                [
-                                    html.Button(
-                                        [
-                                            html.Span(
-                                                className="menu-lines", **{"aria-hidden": True}
-                                            ),
-                                            "Menú",
-                                        ],
-                                        id="sidebar-toggle",
-                                        n_clicks=0,
-                                        className="button menu-toggle",
-                                        type="button",
-                                        **{"aria-controls": "sidebar", "aria-expanded": "false"},
-                                    ),
-                                    html.Span(
-                                        "Operación de maquinaria", className="workspace-title"
-                                    ),
-                                    html.Button(
-                                        [icon("refresh"), "Actualizar datos"],
-                                        id="refresh",
-                                        n_clicks=0,
-                                        className="button refresh-button",
-                                    ),
-                                ],
-                                className="workspace-bar",
-                            ),
-                            html.Div(
-                                [
-                                    query_controls(),
-                                    dcc.Loading(
-                                        [
-                                            dcc.Store(id="snapshot", storage_type="memory"),
-                                            dcc.Store(
-                                                id="workflow-snapshot", storage_type="memory"
-                                            ),
-                                            dcc.Store(
-                                                id="workflow-action-result", storage_type="memory"
-                                            ),
-                                            html.Div(id="scope"),
-                                            html.Div(
-                                                id="workflow-feedback", **{"aria-live": "polite"}
-                                            ),
-                                            html.Main(id="content", tabIndex=-1),
-                                        ],
-                                        target_components={
-                                            "snapshot": "data",
-                                            "workflow-snapshot": "data",
-                                            "workflow-action-result": "data",
-                                            "content": "children",
-                                        },
-                                        type="circle",
-                                        color="#144f81",
-                                        delay_show=150,
-                                        overlay_style={"visibility": "hidden"},
-                                    ),
-                                ],
-                                className="workspace-content",
-                            ),
-                        ],
-                        className="workspace",
-                    ),
-                ],
-                className="app-body",
-            ),
+            dcc.Store(id="view", storage_type="memory"),
+            html.Div(id="root"),
         ],
-        id="app-shell",
-        className="app",
+        theme=MANTINE_THEME,
     )
+
+
+def app_shell(auth_required: bool):
+    header = dmc.AppShellHeader(
+        dmc.Group(
+            [
+                dmc.ActionIcon(
+                    icon("menu-2", 22),
+                    id="burger",
+                    n_clicks=0,
+                    variant="subtle",
+                    color="gray",
+                    size="lg",
+                    hiddenFrom="sm",
+                    **{
+                        "aria-label": "Abrir navegación",
+                        "aria-controls": "mobile-navigation",
+                        "aria-expanded": "false",
+                    },
+                ),
+                brand(),
+                dmc.Text("Control de maquinaria", size="sm", c="dimmed", visibleFrom="xs"),
+                dmc.Group(
+                    [
+                        html.Div(header_user(current_user(), auth_required), id="header-user"),
+                        dmc.Button(
+                            dmc.Text("Actualizar", span=True, size="sm", visibleFrom="xs"),
+                            id="refresh",
+                            n_clicks=0,
+                            variant="default",
+                            size="sm",
+                            leftSection=icon("refresh", 16),
+                            **{"aria-label": "Actualizar"},
+                        ),
+                    ],
+                    gap="xs",
+                    ml="auto",
+                    wrap="nowrap",
+                ),
+            ],
+            h="100%",
+            px="md",
+            gap="md",
+            wrap="nowrap",
+        )
+    )
+    navbar = dmc.AppShellNavbar(
+        html.Nav(id="navigation", **{"aria-label": "Navegación principal"}), p="sm"
+    )
+    stores = [
+        dcc.Store(id="snapshot", storage_type="memory"),
+        dcc.Store(id="workflow-snapshot", storage_type="memory"),
+        dcc.Store(id="workflow-action-result", storage_type="memory"),
+    ]
+    main = dmc.AppShellMain(
+        dmc.Container(
+            [
+                query_controls(),
+                html.Div(id="scope"),
+                html.Div(id="workflow-feedback", **{"aria-live": "polite"}),
+                dcc.Loading(
+                    [*stores, html.Main(id="content", tabIndex=-1)],
+                    custom_spinner=dmc.Loader(color=BRAND, size="md"),
+                    target_components={
+                        "snapshot": "data",
+                        "workflow-snapshot": "data",
+                        "workflow-action-result": "data",
+                        "content": "children",
+                    },
+                    delay_show=150,
+                    overlay_style={"visibility": "hidden"},
+                ),
+            ],
+            size=1400,
+            px=0,
+        )
+    )
+    return html.Div(
+        [
+            html.A("Saltar al contenido", href="#content", className="skip-link"),
+            dmc.AppShell(
+                [header, navbar, main],
+                header={"height": 60},
+                navbar={"width": 236, "breakpoint": "sm", "collapsed": {"mobile": True}},
+                padding="md",
+            ),
+            dmc.Drawer(
+                html.Nav(id="mobile-navigation-links", **{"aria-label": "Navegación principal"}),
+                id="mobile-navigation",
+                title=brand(30),
+                opened=False,
+                size=280,
+                padding="md",
+                closeButtonProps={"aria-label": "Cerrar navegación"},
+            ),
+        ]
+    )
+
+
+def validation_controls():
+    """Every dynamic callback ID is declared without relaxing layout validation."""
+    return html.Div(
+        [
+            plan_form(),
+            receipt_form(),
+            action_button("queue", "Poner en cola"),
+            action_button("sync", "Sincronizar"),
+            filter_tabs(QueryContext(), REQUEST_FILTERS, "Filtros"),
+            # The signed-in header only exists inside a request; declare its IDs here.
+            dmc.MenuItem("Cerrar sesión", id="logout", n_clicks=0),
+        ]
+    )
+
+
+def workflow_from(snapshot, mode) -> WorkflowOverview | None:
+    if not isinstance(snapshot, dict) or snapshot.get("mode") != mode:
+        return None
+    try:
+        workflow = WorkflowOverview.model_validate(snapshot.get("overview"))
+        if any(movement.mode != mode for movement in workflow.movements):
+            raise ValueError("Los movimientos no corresponden al origen seleccionado.")
+        return workflow
+    except (ValidationError, ValueError):
+        if snapshot.get("error"):
+            return WorkflowOverview(available=False, message=snapshot["error"])
+        return None
 
 
 def create_dashboard(server: FastAPI) -> Dash:
@@ -213,64 +254,59 @@ def create_dashboard(server: FastAPI) -> Dash:
         suppress_callback_exceptions=False,
         meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
     )
+    settings = server.state.settings
     dashboard.layout = layout
-    dashboard.validation_layout = html.Div([layout(), validation_controls()])
+    dashboard.validation_layout = html.Div(
+        [
+            layout(),
+            app_shell(settings.auth_required),
+            login_page(None),
+            redirect("/"),
+            *admin_layout(),
+            validation_controls(),
+        ]
+    )
+    register_auth_callbacks(dashboard)
+    register_admin_callbacks(dashboard, server)
+
+    def anonymous() -> bool:
+        return settings.auth_required and current_user() is None
 
     @dashboard.callback(
-        Output("app-shell", "className"),
-        Output("sidebar-toggle", "aria-expanded"),
-        Input("sidebar-toggle", "n_clicks"),
-        Input("sidebar-dismiss", "n_clicks"),
-        Input("sidebar-close", "n_clicks"),
+        Output("root", "children"),
+        Output("view", "data"),
         Input("url", "pathname"),
-        State("app-shell", "className"),
-        prevent_initial_call=True,
+        State("url", "search"),
+        State("view", "data"),
     )
-    def toggle_navigation(_toggle, _dismiss, _close, _path, current_class):
-        opened = ctx.triggered_id == "sidebar-toggle" and "nav-open" not in (current_class or "")
-        return ("app nav-open", "true") if opened else ("app", "false")
+    def route(path, search, current):
+        path = (path or "/").rstrip("/") or "/"
+        user = current_user()
+        if path == "/login":
+            # Without AUTH_REQUIRED there is nothing to sign in to; the header says so.
+            if user or not settings.auth_required:
+                return redirect("/"), "redirect"
+            return login_page(search), "login"
+        if user is None and settings.auth_required:
+            return redirect(login_target(path, search)), "redirect"
+        if current == "app":
+            return no_update, no_update
+        return app_shell(settings.auth_required), "app"
 
-    dashboard.clientside_callback(
-        """function(classes) {
-            const panel = document.getElementById('sidebar');
-            const opened = (classes || '').includes('nav-open');
-            const mobile = window.matchMedia('(max-width: 980px)').matches;
-            if (panel) {
-                panel.onkeydown = function(event) {
-                    if (!opened || !mobile) return;
-                    if (event.key === 'Escape') {
-                        event.preventDefault();
-                        document.getElementById('sidebar-close').click();
-                    } else if (event.key === 'Tab') {
-                        const targets = panel.querySelectorAll('a[href], button');
-                        const first = targets[0];
-                        const last = targets[targets.length - 1];
-                        if (event.shiftKey && document.activeElement === first) {
-                            event.preventDefault();
-                            last.focus();
-                        } else if (!event.shiftKey && document.activeElement === last) {
-                            event.preventDefault();
-                            first.focus();
-                        }
-                    }
-                };
-            }
-            if (mobile) {
-                // Wait for Dash's DOM commit and the drawer's visibility transition.
-                window.setTimeout(function() {
-                    const shell = document.getElementById('app-shell');
-                    if (!shell || shell.classList.contains('nav-open') !== opened) return;
-                    const id = opened ? 'sidebar-close' : 'sidebar-toggle';
-                    const target = document.getElementById(id);
-                    if (target) target.focus();
-                }, 200);
-            }
-            return opened;
-        }""",
-        Output("navigation-focus", "data"),
-        Input("app-shell", "className"),
+    @dashboard.callback(
+        Output("mobile-navigation", "opened"),
+        Input("burger", "n_clicks"),
+        Input("url", "pathname"),
+        State("mobile-navigation", "opened"),
         prevent_initial_call=True,
     )
+    def toggle_navigation(_clicks, _path, opened):
+        # The drawer owns focus trapping, Escape, backdrop and focus return.
+        return not opened if ctx.triggered_id == "burger" else False
+
+    @dashboard.callback(Output("burger", "aria-expanded"), Input("mobile-navigation", "opened"))
+    def sync_burger(opened):
+        return "true" if opened else "false"
 
     @dashboard.callback(
         Output("mode", "value"),
@@ -288,20 +324,30 @@ def create_dashboard(server: FastAPI) -> Dash:
         Output("url", "search"),
         Input("apply", "n_clicks"),
         Input("search", "n_submit"),
+        Input({"type": "filter-tabs", "page": ALL}, "value"),
         State("mode", "value"),
         State("search", "value"),
         State("url", "search"),
         prevent_initial_call=True,
     )
-    def apply_query(_clicks, _submit, mode, query, search):
+    def apply_query(clicks, submit, tabs, mode, query, search):
+        # Wildcard callbacks re-run when the shell mounts; only a real click or Enter applies.
+        if not isinstance(ctx.triggered_id, dict) and not (clicks or submit):
+            return no_update
         # The read callback validates these values again before accessing the service.
-        params = {"mode": mode or "", "q": (query or "").strip()}
         try:
-            selected = parse_context(search).filter
+            current = parse_context(search)
         except ValueError:
-            selected = "all"
-        if selected != "all":
-            params["filter"] = selected
+            current = QueryContext()
+        if isinstance(ctx.triggered_id, dict):
+            selected_filter = next((value for value in tabs if value), None)
+            if not selected_filter or selected_filter == current.filter:
+                return no_update
+            params = {"mode": current.mode, "q": current.query, "filter": selected_filter}
+        else:
+            params = {"mode": mode or "", "q": (query or "").strip(), "filter": current.filter}
+        if params["filter"] == "all":
+            del params["filter"]
         return "?" + urlencode(params)
 
     @dashboard.callback(
@@ -313,6 +359,8 @@ def create_dashboard(server: FastAPI) -> Dash:
         State("snapshot", "data"),
     )
     async def load_snapshot(search, _refresh, path, action, previous):
+        if anonymous():
+            return no_update
         if ctx.triggered_id == "workflow-action-result" and (
             not isinstance(action, dict) or not action.get("ok")
         ):
@@ -341,11 +389,7 @@ def create_dashboard(server: FastAPI) -> Dash:
             )
         except Exception:
             # Never return exceptions, upstream bodies, credentials or the previous success.
-            return {
-                "key": context.read_key,
-                "hub": None,
-                "error": "No se pudo completar la consulta. Intenta actualizar de nuevo.",
-            }
+            return {"key": context.read_key, "hub": None, "error": READ_ERROR}
         return {"key": context.read_key, "hub": hub.model_dump(mode="json"), "error": None}
 
     @dashboard.callback(
@@ -354,11 +398,13 @@ def create_dashboard(server: FastAPI) -> Dash:
         Input("refresh", "n_clicks"),
         Input("workflow-action-result", "data"),
     )
-    async def load_workflow(search, _refresh, _action):
+    async def load_workflow(search, _refresh, action):
+        if anonymous():
+            return no_update
         if (
             ctx.triggered_id == "workflow-action-result"
-            and isinstance(_action, dict)
-            and not _action.get("ok")
+            and isinstance(action, dict)
+            and not action.get("ok")
         ):
             # Keep operator inputs in place so a validation error can be corrected.
             return no_update
@@ -387,7 +433,7 @@ def create_dashboard(server: FastAPI) -> Dash:
     )
     async def act_on_workflow(clicks, values, identifiers, search, path):
         trigger = ctx.triggered_id
-        if not isinstance(trigger, dict) or not any(clicks):
+        if anonymous() or not isinstance(trigger, dict) or not any(clicks):
             return no_update
         result = {"token": str(uuid4()), "path": path, "search": search}
         try:
@@ -396,34 +442,23 @@ def create_dashboard(server: FastAPI) -> Dash:
                 identifier["field"]: value
                 for identifier, value in zip(identifiers, values, strict=True)
             }
-            action = trigger.get("action")
-            movement = trigger.get("movement", "")
             message, record = await run_in_threadpool(
-                execute_action, server.state.workflow, action, context.mode, fields, movement
+                execute_action,
+                server.state.workflow,
+                trigger.get("action"),
+                context.mode,
+                fields,
+                trigger.get("movement", ""),
             )
             result.update({"ok": True, "message": message})
             if record is not None:
                 result["href"] = context.movement_href(record.id)
-        except WorkflowError as error:
-            result.update({"ok": False, "message": str(error)})
-        except WorkflowInputError as error:
+        except (WorkflowError, WorkflowInputError) as error:
             result.update({"ok": False, "message": str(error)})
         except (ValidationError, ValueError, TypeError, KeyError):
-            result.update(
-                {
-                    "ok": False,
-                    "message": "Revisa los campos obligatorios y los IDs. Usa fecha AAAA-MM-DD "
-                    "y hora HH:MM; separa los IDs de usuarios con comas.",
-                }
-            )
+            result.update({"ok": False, "message": INPUT_ERROR})
         except Exception:
-            result.update(
-                {
-                    "ok": False,
-                    "message": "No se pudo completar la acción. Actualiza el registro para "
-                    "consultar su estado antes de repetirla.",
-                }
-            )
+            result.update({"ok": False, "message": ACTION_ERROR})
         return result
 
     @dashboard.callback(
@@ -439,20 +474,20 @@ def create_dashboard(server: FastAPI) -> Dash:
             or result.get("search") != search
         ):
             return None
-        children = [
-            notice(
-                "Acción registrada" if result.get("ok") else "Acción no completada",
-                result.get("message", ""),
-                error=not result.get("ok"),
-            )
-        ]
-        if result.get("ok") and result.get("href"):
-            children.append(dcc.Link("Abrir movimiento", href=result["href"]))
-        return children
+        ok = bool(result.get("ok"))
+        return notice(
+            "Acción registrada" if ok else "Acción no completada",
+            result.get("message", ""),
+            error=not ok,
+            children=[link("Abrir movimiento", result["href"], mt="xs")]
+            if ok and result.get("href")
+            else None,
+        )
 
     @dashboard.callback(
         Output("content", "children"),
         Output("navigation", "children"),
+        Output("mobile-navigation-links", "children"),
         Output("scope", "children"),
         Input("url", "pathname"),
         Input("url", "search"),
@@ -461,67 +496,34 @@ def create_dashboard(server: FastAPI) -> Dash:
     )
     def render(path, search, snapshot, workflow_snapshot):
         path = (path or "/").rstrip("/") or "/"
+        if anonymous():
+            return redirect(login_target(path, search)), None, None, None
         try:
             context = parse_context(search)
         except ValueError as error:
-            return (
-                notice("Consulta inválida", str(error), error=True),
-                navigation(path, QueryContext()),
-                None,
-            )
+            nav = navigation(path, QueryContext())
+            return notice("Consulta inválida", str(error), error=True), nav, nav, None
         nav = navigation(path, context)
-        workflow = None
-        if isinstance(workflow_snapshot, dict) and workflow_snapshot.get("mode") == context.mode:
-            try:
-                workflow = WorkflowOverview.model_validate(workflow_snapshot.get("overview"))
-                if any(movement.mode != context.mode for movement in workflow.movements):
-                    raise ValueError("Los movimientos no corresponden al origen seleccionado.")
-            except (ValidationError, ValueError):
-                workflow = None
-                if workflow_snapshot.get("error"):
-                    workflow = WorkflowOverview(
-                        available=False,
-                        message=workflow_snapshot["error"],
-                        management_enabled=False,
-                        sending_enabled=False,
-                        movements=[],
-                        last_sync_at=None,
-                    )
+        if path == "/administracion":
+            return admin_page(), nav, nav, None
+        workflow = workflow_from(workflow_snapshot, context.mode)
         # Persisted evidence stays readable when the current provider read is unavailable.
         if path == "/operaciones" or path.startswith("/operaciones/"):
-            return (
-                workflow_page(path, workflow, context),
-                nav,
-                html.Div(
-                    "Muestras proporcionadas"
-                    if context.mode == "fixture"
-                    else "Sandbox actual (sintético)",
-                    className="scope-line",
-                ),
-            )
+            mode = dmc.Text(MODES[context.mode], size="xs", fw=500, className="scope-line")
+            return workflow_page(path, workflow, context), nav, nav, mode
         read_context = context.for_read(path)
         if not isinstance(snapshot, dict) or snapshot.get("key") != read_context.read_key:
-            return (
-                empty("Consultando la operación…", "Preparando los datos del origen seleccionado."),
-                nav,
-                None,
-            )
+            return loading(), nav, nav, None
         if snapshot.get("error"):
-            return notice("Consulta no disponible", snapshot["error"], error=True), nav, None
+            return notice("Consulta no disponible", snapshot["error"], error=True), nav, nav, None
         try:
             hub = HubResponse.model_validate(snapshot.get("hub"))
             if hub.mode != context.mode or hub.scope.search != read_context.query:
                 raise ValueError("La respuesta no corresponde a esta consulta.")
         except (ValidationError, ValueError):
-            return (
-                notice(
-                    "Respuesta no válida",
-                    "Actualiza la consulta para recuperar los datos.",
-                    error=True,
-                ),
-                nav,
-                None,
-            )
-        return render_page(path, hub, context, workflow), nav, scope(hub, context, workflow)
+            message = "Actualiza la consulta para recuperar los datos."
+            return notice("Respuesta no válida", message, error=True), nav, nav, None
+        page = render_page(path, hub, context, workflow)
+        return page, nav, nav, scope(hub, context, workflow)
 
     return dashboard

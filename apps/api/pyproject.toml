@@ -7,17 +7,20 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.20.0",
     "dash-ag-grid>=35,<36",
+    "dash-mantine-components>=2.8.0",
     "dash[fastapi]>=4.2,<5",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.141.1",
     "httpx>=0.28.1",
     "plotly>=6,<7",
     "psycopg[binary]>=3.3.5",
+    "pwdlib[argon2]>=0.3.1",
     "pydantic-settings>=2.15.0",
     "sqlmodel>=0.0.42",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.12.0",
     "pytest>=9.1.1",
     "ruff>=0.16.7",
 ]
@@ -35,3 +38,8 @@ select = ["E", "F", "I", "UP", "B", "FAST"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+    "error::DeprecationWarning",
+    # Emitted inside starlette.testclient itself (third party), not by application code.
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]

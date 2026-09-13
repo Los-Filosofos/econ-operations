@@ -1,7 +1,6 @@
 """Exercise real Dash HTTP callbacks, not just the component factory."""
 
 import json
-from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -9,9 +8,9 @@ from fastapi.testclient import TestClient
 from plotly.utils import PlotlyJSONEncoder
 
 from app.core.config import Settings
-from app.dashboard.analytics import calendar, distribution, request_operation
+from app.dashboard.analytics import request_operation
 from app.dashboard.context import QueryContext, parse_context
-from app.dashboard.views import NAVIGATION, filter_links, navigation, render_page, scope
+from app.dashboard.views import PAGES, REQUEST_FILTERS, filter_tabs, navigation, render_page, scope
 from app.main import create_app
 from app.models.hub import HubResponse, TransferRecord
 from app.models.workflow import WorkflowOverview
@@ -59,7 +58,7 @@ def test_cold_start_includes_styles_before_any_layout_request(tmp_path):
         assert 'rel="stylesheet" href="/assets/style.css' in response.text
         stylesheet = cold.get("/assets/style.css")
         assert stylesheet.headers["content-type"].startswith("text/css")
-        assert "--blue: #144f81" in stylesheet.text
+        assert "--econ-brand: #144f81" in stylesheet.text
 
 
 def test_one_server_serves_dash_assets_deep_links_and_existing_api(client):
@@ -142,7 +141,7 @@ def test_browser_sessions_keep_separate_queries(client):
 def test_every_page_and_details_serialize_and_keep_semantic_evidence(client):
     hub = HubResponse.model_validate(client.get("/api/v1/hub").json())
     context = QueryContext()
-    paths = [path for path, _ in NAVIGATION] + [
+    paths = [page["path"] for page in PAGES] + [
         *(context.request_href(item.id).split("?", 1)[0] for item in hub.requests),
         *(context.equipment_href(item.id).split("?", 1)[0] for item in hub.equipment),
         "/solicitudes/missing",
@@ -168,22 +167,6 @@ def test_every_page_and_details_serialize_and_keep_semantic_evidence(client):
     assert "Sin traslado vinculado" in detail
     assert "Muestra del contrato proporcionado" in detail
     assert "Sin lectura fechada" in detail
-
-
-def test_analytics_preserve_counts_missing_dates_and_partial_coverage(client):
-    hub = HubResponse.model_validate(client.get("/api/v1/hub").json())
-    assert sum(count for _, count in distribution(hub)) == len(hub.equipment)
-    assert calendar(hub) is None
-    hub.data_as_of = datetime(2026, 9, 12, 18, tzinfo=UTC)
-    hub.requests.append(hub.requests[0].model_copy(deep=True))
-    hub.requests[0].starts_on = "2026-02-30"
-    hub.requests[1].starts_on = "2026-09-12T01:00:00+00:00"
-    hub.requests[2].starts_on = "2027-01-01"
-    result = calendar(hub)
-    assert result["undated"] == 1 and result["outside"] == 1
-    assert result["days"][datetime(2026, 9, 11, tzinfo=UTC).date()] == 1
-    unavailable = HubResponse.model_validate(client.get("/api/v1/hub?mode=live").json())
-    assert calendar(unavailable) is None and distribution(unavailable) is None
 
 
 def test_links_round_trip_search_and_quote_record_ids():
@@ -221,13 +204,13 @@ def components(value):
 )
 def test_sidebar_has_one_current_section_and_filters_stay_on_requests(path, expected):
     context = QueryContext(mode="live", query="Proyecto Norte & Sur")
-    current = [link for link in navigation(path, context) if " active" in link.className]
+    current = [link for link in navigation(path, context) if link.active]
     assert len(current) == 1
     assert current[0].href == context.href(expected)
-    assert current[0].children.to_plotly_json()["props"]["aria-current"] == "page"
-    filters = filter_links(context).children
-    assert all(link.href.startswith("/solicitudes?") for link in filters)
-    assert any("filter=unassigned" in link.href for link in filters)
+    assert current[0].to_plotly_json()["props"]["aria-current"] == "page"
+    tabs = filter_tabs(QueryContext(filter="unassigned"), REQUEST_FILTERS, "Filtros")
+    assert tabs.value == "unassigned"
+    assert "unassigned" in [tab.value for tab in tabs.children.children]
     assert parse_context("?mode=fixture&filter=unassigned").filter == "unassigned"
 
 
@@ -266,12 +249,17 @@ def test_request_details_keep_source_ids_and_plan_inputs_inside_closed_disclosur
     hub = HubResponse.model_validate(client.get("/api/v1/hub").json())
     request = next(item for item in hub.requests if item.machinery_id)
     content = render_page(f"/solicitudes/{request.id}", hub, QueryContext())
-    disclosures = [
+    accordions = [
         component
         for component in components(content)
-        if component.to_plotly_json()["type"] == "Details"
+        if component.to_plotly_json()["type"] == "Accordion"
     ]
-    titles = {component.children[0].children: component for component in disclosures}
+    assert accordions and all(getattr(accordion, "value", None) is None for accordion in accordions)
+    titles = {
+        component.children[0].children: component
+        for component in components(content)
+        if component.to_plotly_json()["type"] == "AccordionItem"
+    }
     for title in [
         "Preparar traslado",
         "Referencias de integración",
@@ -279,7 +267,6 @@ def test_request_details_keep_source_ids_and_plan_inputs_inside_closed_disclosur
         "Estado y mantenimiento de la unidad",
     ]:
         assert title in titles
-        assert not getattr(titles[title], "open", False)
     ids = [
         getattr(component, "id", None)
         for component in components(titles["Referencias de integración"])

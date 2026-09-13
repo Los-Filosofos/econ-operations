@@ -62,11 +62,10 @@ def pattern(identifier):
     return json.dumps(identifier, sort_keys=True, separators=(",", ":"))
 
 
-def action(client, name, values=None, *, movement="", mode="fixture", headers=None):
+def action(client, name, values=None, *, movement="", mode="fixture"):
     values = values or {}
     response = client.post(
         "/_dash-update-component",
-        headers=headers,
         json={
             "output": "workflow-action-result.data",
             "outputs": {"id": "workflow-action-result", "property": "data"},
@@ -147,8 +146,9 @@ def test_save_callback_persists_explicit_plan_and_never_sends_fixture(client):
     ],
 )
 def test_browser_inputs_do_not_grant_local_management(client, headers):
-    result = action(client, "save", fields(), headers=headers)
-    assert not result["ok"]
+    # Cross-origin callbacks are refused before Dash runs them.
+    response = client.post("/_dash-update-component", headers=headers, json={})
+    assert response.status_code == 403
     assert overview(client)["overview"]["movements"] == []
 
 

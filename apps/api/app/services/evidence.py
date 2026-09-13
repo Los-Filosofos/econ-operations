@@ -17,17 +17,10 @@ from app.models.hub import (
 )
 from app.models.operations import MovementEventRecord, MovementRecord, ReceiptRecord
 from app.services.ledger import LedgerError, OperationsLedger, effective_event_sort_key
+from app.services.transfers import compatible_evidence
 
 MOVEMENT_LIMIT = 100
-
-
-def _compatible(left: Provenance, right: Provenance, *, source: bool = True) -> bool:
-    return (
-        (not source or left.source == right.source)
-        and left.environment == right.environment
-        and left.evidence_kind == right.evidence_kind
-        and left.is_synthetic == right.is_synthetic
-    )
+EPOCH = datetime.min.replace(tzinfo=UTC)
 
 
 def matching_current_movements(
@@ -49,7 +42,7 @@ def matching_current_movements(
             for item in hub.equipment
             if item.id == request.machinery_id
             and item.provenance.source_id
-            and _compatible(item.provenance, evidence)
+            and compatible_evidence(item.provenance, evidence)
         ),
         None,
     )
@@ -80,8 +73,8 @@ def matching_current_movements(
                 stored_request.get(field) == current_request.get(field)
                 for field in ("starts_on", "ends_on", "approved_at")
             )
-            and _compatible(stored_evidence, evidence)
-            and _compatible(machine_evidence, equipment.provenance)
+            and compatible_evidence(stored_evidence, evidence)
+            and compatible_evidence(machine_evidence, equipment.provenance)
         ):
             matches.append(movement)
     return matches
@@ -99,16 +92,9 @@ def _source_event(movement: MovementRecord, event: MovementEventRecord) -> bool:
         and provenance.source_id == event.source_id
         and provenance.observed_at == event.observed_at
         and provenance.environment == movement.environment
-        and _compatible(provenance, source, source=False)
+        and compatible_evidence(provenance, source, source=False)
         and (movement.mode == "live") == (provenance.evidence_kind == "live_read")
     )
-
-
-def _instant(value: datetime | None) -> datetime:
-    """Stored ledger timestamps are UTC; tolerate legacy naive values for stable ordering."""
-    if value is None:
-        return datetime.min.replace(tzinfo=UTC)
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecord:
@@ -125,10 +111,8 @@ def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecor
         key=effective_event_sort_key,
         default=None,
     )
-    provenance = (
-        latest.provenance
-        if latest
-        else Provenance(
+    if latest is None:
+        provenance = Provenance(
             source="startrack",
             source_id=movement.job_id,
             environment=request.provenance.environment,
@@ -137,7 +121,6 @@ def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecor
             evidence_kind=request.provenance.evidence_kind,
             source_reference=f"operation_movements/{movement.id}",
         )
-    )
     arrival_events = [
         event
         for event in movement.events
@@ -194,7 +177,7 @@ def _transfer(movement: MovementRecord, request: RequestRecord) -> TransferRecor
         recorded_at=latest.recorded_at if latest else movement.sent_at,
         evidence_origin="task_observation" if latest else "creation_acknowledgment",
         source_data=latest.data if latest else {},
-        provenance=provenance,
+        provenance=latest.provenance if latest else provenance,
         arrival_observed=arrival_observed,
         arrival_event_time=arrival_event_time,
         arrival_poi_id=arrival_poi_id,
@@ -249,16 +232,18 @@ def project_operation_evidence(hub: HubResponse, engine: Engine | None) -> HubRe
             )
     source = next((item for item in hub.sources if item.id == "startrack"), None)
     if source:
-        observations = [
-            event.observed_at
-            for movement in movements
-            if movement.environment == source.environment
-            for event in movement.events
-            if event.kind in {"task_state", "arrival"}
-            and event.observed_at is not None
-            and _source_event(movement, event)
-        ]
-        source.last_evidence_at = max(observations, key=_instant, default=None)
+        source.last_evidence_at = max(
+            (
+                event.observed_at
+                for movement in movements
+                if movement.environment == source.environment
+                for event in movement.events
+                if event.kind in {"task_state", "arrival"}
+                and event.observed_at is not None
+                and _source_event(movement, event)
+            ),
+            default=None,
+        )
         if source.last_evidence_at:
             source.message += " Hay evidencia histórica conservada; no es una consulta actual."
     return hub

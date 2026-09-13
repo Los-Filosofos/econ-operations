@@ -22,8 +22,14 @@ Antes de ejecutar esta versión sobre una base existente, aplicar explícitament
 de revisión entre ciclos y reinicios, con presupuestos independientes de
 revalidación y observación (25 por defecto). El arranque no migra la base.
 
+La [migración 0003_users](../apps/api/migrations/versions/0003_users.py) crea
+`users` para el inicio de sesión ([ADR 0005](adr/0005-session-auth-and-roles.md)).
+Las columnas de fecha usan `UTCDateTime` (`models/operations.py`): se guardan y
+devuelven instantes UTC con zona en PostgreSQL y SQLite.
+
 | Tabla | Contenido y límites |
 | --- | --- |
+| `users` | Email único, nombre, rol, hash argon2 de la contraseña, `is_active` y fecha de alta; nunca se devuelve el hash |
 | `operation_movements` | Plan, correspondencias, IDs de solicitud/maquinaria/proyecto, fuentes y huellas, payload, estado de envío, tarea confirmada y recepción declarada |
 | `operation_events` | Eventos de cada movimiento con ID de origen, evidencia, procedencia y fechas de evento, observación y registro separadas |
 | `operation_snapshots` | Cortes del hub con modo, contenido, huella, fecha de construcción, fecha de registro y corte de origen cuando existe |
@@ -72,15 +78,15 @@ Las pruebas usan SQLite aislado; el desarrollo normal conserva PostgreSQL.
 
 `fixture` y `live` mantienen registros separados y ambos corresponden a datos
 sintéticos del caso. Las muestras suministradas no se insertan en Prisma.
-Guardar planes localmente requiere habilitar gestión en el servidor; lecturas
+Guardar planes requiere una sesión con permiso `manage_transfers`; lecturas
 y escrituras remotas están deshabilitadas por defecto. Los controles y el worker
 se explican en [la guía operativa](solucion-integracion.md).
 
 ## Escala y operación pendientes
 
 Esta persistencia no acredita un historial completo de las fuentes ni capacidad
-para miles de vehículos. La [arquitectura de flota](arquitectura-escalable-flota.md)
-propone separar operación e histórico, medir carga y evaluar procesamiento
+para miles de vehículos. La [propuesta de escala](sincronizacion-y-discrepancias.md#escala-a-miles-de-vehículos-propuesta)
+plantea separar operación e histórico, medir carga y evaluar procesamiento
 paralelo; esas ampliaciones no están implementadas.
 
 Antes de dimensionar un despliegue, medir volumen y ritmo de eventos, retención,

@@ -252,7 +252,7 @@ def test_http_timeout_is_sanitized():
 
 def test_overall_budget_is_checked_after_response_and_lock_is_released(monkeypatch):
     now = [0.0]
-    monkeypatch.setattr("app.integrations.startrack.monotonic", lambda: now[0])
+    monkeypatch.setattr("app.integrations.http.monotonic", lambda: now[0])
 
     def handler(request):
         now[0] += 2
@@ -587,50 +587,6 @@ def test_visits_preserve_original_event_instants_and_scope_without_invented_pagi
     assert not result.complete and not hasattr(result.items[0], "received_at")
 
 
-def test_form_responses_preserve_epoch_and_nested_task_and_question_ids():
-    def handler(request):
-        assert request.url.path == "/api/form-responses"
-        assert request.url.params["form_id"] == "1483"
-        assert request.url.params["job_id"] == "42"
-        return httpx.Response(
-            200,
-            json={
-                "success": True,
-                "responses": [
-                    {
-                        "id": 3759,
-                        "user_id": "214",
-                        "date": 1789224000,
-                        "server_date": 1789224050,
-                        "gps_epoch": 1789223995,
-                        "job": {"id": "42", "remote_id": "movement-1", "title": "Traslado"},
-                        "poi": {"id": 520, "name": "Destino"},
-                        "1": "Revisado",
-                        "2": ["observacion"],
-                        "undocumented": "private-test-value",
-                    }
-                ],
-            },
-        )
-
-    client = StartrackClient(config(), httpx.MockTransport(handler))
-    try:
-        result = client.list_form_responses(
-            form_id="1483",
-            job_id="42",
-            start_date=date(2026, 9, 12),
-            end_date=date(2026, 9, 12),
-        )
-    finally:
-        client.close()
-    item = result.items[0]
-    assert item.id == "3759" and item.date == 1789224000 and item.gps_epoch == 1789223995
-    assert item.job.id == "42" and item.poi.id == "520"
-    assert item.answers == {"1": "Revisado", "2": ["observacion"]}
-    assert type(item).model_validate_json(item.model_dump_json()).answers == item.answers
-    assert not hasattr(item, "undocumented") and not result.complete
-
-
 @pytest.mark.parametrize(
     "change",
     [
@@ -671,43 +627,45 @@ def test_report_rate_limit_is_bounded_without_sleep_or_retry(monkeypatch):
 
     def handler(request):
         calls.append(request)
-        return httpx.Response(200, json={"success": True, "responses": []})
+        return httpx.Response(200, json={"success": True, "data": []})
 
     client = StartrackClient(config(), httpx.MockTransport(handler))
-    kwargs = {"form_id": "1", "start_date": date(2026, 9, 12), "end_date": date(2026, 9, 12)}
+    kwargs = {
+        "start_date": date(2026, 9, 12),
+        "end_date": date(2026, 9, 12),
+        "poi_ids": ("2",),
+        "vehicle_ids": ("3",),
+    }
     try:
         for _ in range(10):
-            client.list_form_responses(**kwargs)
+            client.list_visits(**kwargs)
         with pytest.raises(StartrackReadError, match="límite local"):
-            client.list_form_responses(**kwargs)
+            client.list_visits(**kwargs)
         assert len(calls) == 10
         now[0] = 301
-        client.list_form_responses(**kwargs)
+        client.list_visits(**kwargs)
         assert len(calls) == 11
     finally:
         client.close()
 
 
 def test_unpaged_report_record_overflow_is_visible():
+    visit = {"poi_id": 2, "vehicle_id": 3, "start_date": "2026-09-12T08:03:47-06:00"}
     client = StartrackClient(
         config(max_report_records=1),
         httpx.MockTransport(
             lambda _: httpx.Response(
-                200,
-                json={
-                    "success": True,
-                    "responses": [
-                        {"id": 1, "date": 1789224000},
-                        {"id": 2, "date": 1789224001},
-                    ],
-                },
+                200, json={"success": True, "data": [visit | {"id": 1}, visit | {"id": 2}]}
             )
         ),
     )
     try:
         with pytest.raises(StartrackReadError, match="límite de registros"):
-            client.list_form_responses(
-                form_id="1", start_date=date(2026, 9, 12), end_date=date(2026, 9, 12)
+            client.list_visits(
+                start_date=date(2026, 9, 12),
+                end_date=date(2026, 9, 12),
+                poi_ids=("2",),
+                vehicle_ids=("3",),
             )
     finally:
         client.close()

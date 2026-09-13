@@ -4,14 +4,16 @@ from datetime import UTC, datetime, time, timedelta
 from functools import wraps
 from threading import Lock
 
+from dash.exceptions import AppNotFoundError
 from pydantic import ValidationError
 from sqlalchemy import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.access import management_allowed, management_scope
+from app.core.auth import Permission, can, session_user
 from app.core.config import Settings
 from app.integrations.fixtures import fixture_records
-from app.integrations.nexus import NexusConnector, NexusReadError, NexusSnapshot
+from app.integrations.nexus import NexusConnector, NexusReadError
 from app.integrations.startrack import (
     StartrackClient,
     StartrackJob,
@@ -23,13 +25,29 @@ from app.integrations.startrack import (
 from app.models.hub import DataMode, EquipmentRecord, Provenance, RequestRecord
 from app.models.operations import MovementRecord
 from app.models.workflow import MappingCatalogs, OperationsCoverage, WorkflowOverview
-from app.services.hub import BUSINESS_TIMEZONE, _map_live, read_hub
+from app.services.hub import BUSINESS_TIMEZONE, map_live, read_hub
 from app.services.ledger import LedgerError, OperationsLedger
 from app.services.transfers import TransferMapping, prepare_transfer
+
+ACTIVE = {None, False, "0", "false"}
+DENIED = "La gestión requiere una sesión con permiso para esta operación."
+OBSERVED_JOB_FIELDS = {
+    "status",
+    "poi_id",
+    "remote_id",
+    "objective",
+    "start_date",
+    "changed_date",
+    "closed_date",
+    "last_status_change_date",
+}
 
 
 class WorkflowError(Exception):
     """Public messages contain neither credentials nor provider/database payloads."""
+
+
+PROVIDER_ERRORS = (WorkflowError, NexusReadError, StartrackReadError, LedgerError)
 
 
 def _boundary(method):
@@ -50,13 +68,34 @@ def _boundary(method):
 
 
 def _instant(value: str | None) -> datetime | None:
-    if not value:
-        return None
+    """Only zoned provider timestamps become instants; unzoned values stay unknown."""
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return parsed if parsed.tzinfo is not None else None
+        parsed = datetime.fromisoformat(value) if value else None
     except ValueError:
         return None
+    return parsed if parsed and parsed.tzinfo else None
+
+
+def _corresponds(draft: StartrackTaskDraft, job: StartrackJob, *, strict: bool) -> bool:
+    """Compare documented draft fields with a provider job; lists compare as sets.
+
+    strict requires every draft field to be echoed (unknown-outcome reconciliation);
+    otherwise omitted optional echoes are tolerated but contradictions are not.
+    """
+    actual = job.model_dump(exclude_none=True)
+    for field, expected in draft.payload().items():
+        if field == "notify_contact":
+            continue
+        if field not in actual:
+            if strict:
+                return False
+            continue
+        if isinstance(expected, list):
+            if set(expected) != set(actual[field]):
+                return False
+        elif expected != actual[field]:
+            return False
+    return True
 
 
 class WorkflowService:
@@ -75,10 +114,18 @@ class WorkflowService:
         if mode == "live" and not self.settings.allow_live_reads:
             raise WorkflowError("Las lecturas en vivo están deshabilitadas en este servidor.")
 
-    def _manage(self, mode: str) -> None:
+    def _manage(self, mode: str, permission: Permission = Permission.manage_transfers) -> None:
+        """Request authority comes from main.py (role or local dev mode); Dash callbacks share
+        one management scope, so the acting user's role is checked per action here."""
         self._mode(mode)
-        if not self.settings.allow_local_management or not management_allowed():
-            raise WorkflowError("La gestión está habilitada únicamente desde el servidor local.")
+        if not management_allowed():
+            raise WorkflowError(DENIED)
+        try:
+            user = session_user()
+        except AppNotFoundError:  # CLI worker or isolated tests: no Dash application
+            return
+        if user is not None and not can(user.role, permission):
+            raise WorkflowError(DENIED)
 
     def _send_enabled(self) -> bool:
         return bool(
@@ -105,16 +152,14 @@ class WorkflowService:
         page: int = 1,
         page_size: int = 100,
     ) -> WorkflowOverview:
+        page, page_size = max(1, page), max(1, min(page_size, 500))
         try:
             self._mode(mode)
-            bounded_page = max(1, page)
-            bounded_size = max(1, min(page_size, 500))
-            offset = (bounded_page - 1) * bounded_size
             movements, total = self.ledger.list_page(
                 mode,
                 request_source_id=request_source_id,
-                offset=offset,
-                limit=bounded_size,
+                offset=(page - 1) * page_size,
+                limit=page_size,
             )
             snapshot = self.ledger.last_snapshot(mode)
         except WorkflowError as error:
@@ -126,45 +171,42 @@ class WorkflowService:
                     "Registro no disponible: revisa la conexión y aplica la migración del servidor."
                 ),
             )
-        enabled = self.settings.allow_local_management and management_allowed()
-        total_pages = max(1, (total + bounded_size - 1) // bounded_size) if total > 0 else 1
-        has_more = bounded_page < total_pages
-        is_complete = total == len(movements) and bounded_page == 1
-        note = (
-            f"Mostrando {len(movements)} de {total} movimientos registrados "
-            f"(página {bounded_page} de {total_pages})."
-            if not is_complete
-            else f"Población completa: {total} movimientos registrados."
-        )
+        enabled = management_allowed()
+        total_pages = max(1, -(-total // page_size))
+        complete = total == len(movements) and page == 1
         coverage = OperationsCoverage(
             total=total,
             displayed=len(movements),
-            page=bounded_page,
-            page_size=bounded_size,
+            page=page,
+            page_size=page_size,
             total_pages=total_pages,
-            has_more=has_more,
-            is_complete=is_complete,
-            note=note,
+            has_more=page < total_pages,
+            is_complete=complete,
+            note=(
+                f"Población completa: {total} movimientos registrados."
+                if complete
+                else f"Mostrando {len(movements)} de {total} movimientos registrados "
+                f"(página {page} de {total_pages})."
+            ),
         )
+        if not complete:
+            message = (
+                f"Registro parcial: {coverage.note} Puede existir evidencia fuera de esta ventana."
+            )
+        elif mode == "fixture":
+            message = "Planes locales sobre las muestras proporcionadas. No se envían a Startrack."
+        else:
+            message = "Movimientos del sandbox: tarea, presencia GPS y recepción separadas."
         return WorkflowOverview(
             available=True,
-            complete=is_complete,
-            message=(
-                f"Registro parcial: {note} Puede existir evidencia fuera de esta ventana."
-                if not is_complete
-                else "Planes locales sobre las muestras proporcionadas. No se envían a Startrack."
-                if mode == "fixture"
-                else "Movimientos del sandbox: tarea, presencia GPS y recepción separadas."
-            ),
+            complete=complete,
+            message=message,
             management_enabled=enabled,
             sending_enabled=enabled and mode == "live" and self._send_enabled(),
             movements=movements,
             last_sync_at=snapshot.recorded_at if snapshot else None,
-            total=total,
-            page=bounded_page,
-            page_size=bounded_size,
-            total_pages=total_pages,
             coverage=coverage,
+            **coverage.model_dump(include={"total", "page", "page_size", "total_pages"}),
         )
 
     def _source_records(
@@ -178,22 +220,13 @@ class WorkflowService:
             machine = (
                 self.nexus.get_equipment(request.maquinaria_id) if request.maquinaria_id else None
             )
-            equipment, requests = _map_live(
-                NexusSnapshot(
-                    equipment=[machine] if machine else [],
-                    requests=[request],
-                    equipment_total=1 if machine else 0,
-                    requests_total=1,
-                    complete=False,
-                ),
-                datetime.now(UTC),
+            equipment, requests = map_live(
+                [machine] if machine else [], [request], datetime.now(UTC)
             )
-        request = next(
-            (item for item in requests if item.provenance.source_id == request_source_id), None
-        )
+        request = next((r for r in requests if r.provenance.source_id == request_source_id), None)
         if request is None:
             raise WorkflowError("La solicitud no se encontró en el origen seleccionado.")
-        return request, next((item for item in equipment if item.id == request.machinery_id), None)
+        return request, next((e for e in equipment if e.id == request.machinery_id), None)
 
     @_boundary
     def save_plan(
@@ -220,44 +253,31 @@ class WorkflowService:
         mapping = TransferMapping.model_validate(movement.mapping)
         if mapping.poi_id not in {item.id for item in self.startrack.list_pois().items}:
             raise WorkflowError("Destino sin validar en el catálogo acotado de geocercas.")
-        users = {item.id for item in self.startrack.list_users().items}
-        if not set(mapping.assigned_user_ids).issubset(users):
+        if not set(mapping.assigned_user_ids) <= {i.id for i in self.startrack.list_users().items}:
             raise WorkflowError("Hay usuarios sin validar en el catálogo de Startrack.")
-        if mapping.job_type_id:
-            job_types = {
-                item.id
-                for item in self.startrack.list_job_types().items
-                if item.deactivated in {None, False, "0", "false"}
-            }
-            if mapping.job_type_id not in job_types:
-                raise WorkflowError("Tipo de tarea sin validar o desactivado en Startrack.")
-        if movement.tracked_vehicle_id:
-            vehicles = {
-                item.id
-                for item in self.startrack.list_vehicles().items
-                if item.deactivated in {None, "0", "false"}
-            }
-            if movement.tracked_vehicle_id not in vehicles:
-                raise WorkflowError("Vehículo GPS sin validar en el catálogo acotado.")
+        if mapping.job_type_id and mapping.job_type_id not in {
+            item.id for item in self.startrack.list_job_types().items if item.deactivated in ACTIVE
+        }:
+            raise WorkflowError("Tipo de tarea sin validar o desactivado en Startrack.")
+        if movement.tracked_vehicle_id and movement.tracked_vehicle_id not in {
+            item.id for item in self.startrack.list_vehicles().items if item.deactivated in ACTIVE
+        }:
+            raise WorkflowError("Vehículo GPS sin validar en el catálogo acotado.")
 
-    def _fresh_plan(self, movement: MovementRecord):
+    def _fresh_plan(self, movement: MovementRecord) -> StartrackTaskDraft:
         request, equipment = self._source_records("live", movement.request_source_id)
-        mapping = TransferMapping.model_validate(movement.mapping)
-        preparation = prepare_transfer(request, equipment, mapping)
+        preparation = prepare_transfer(
+            request, equipment, TransferMapping.model_validate(movement.mapping)
+        )
         if movement.state in {"draft", "blocked"}:
-            movement = self.ledger.revalidate(movement.id, "live", request, equipment, preparation)
+            movement = self.ledger.revalidate(movement.id, "live", request, equipment)
         if preparation.draft is None:
             raise WorkflowError("La aprobación o asignación actual requiere revisión en Prisma.")
         if preparation.draft.payload() != movement.payload:
             raise WorkflowError("La solicitud cambió desde la preparación; revisa el movimiento.")
         return preparation.draft
 
-    @_boundary
-    def queue(self, movement_id: str) -> MovementRecord:
-        self._send_gate()
-        movement = self.ledger.get(movement_id, "live")
-        self._fresh_plan(movement)
-        self._validate_catalogs(movement)
+    def _previous_jobs(self, movement: MovementRecord) -> None:
         existing = self.startrack.find_jobs_by_remote_id(movement.movement_reference)
         if existing.items:
             raise WorkflowError("Ya existen tareas con esa referencia. Revisa la correspondencia.")
@@ -265,6 +285,14 @@ class WorkflowService:
             raise WorkflowError(
                 "La búsqueda de tareas previas quedó incompleta; revisa la referencia."
             )
+
+    @_boundary
+    def queue(self, movement_id: str) -> MovementRecord:
+        self._send_gate()
+        movement = self.ledger.get(movement_id, "live")
+        self._fresh_plan(movement)
+        self._validate_catalogs(movement)
+        self._previous_jobs(movement)
         return self.ledger.queue(movement_id, "live")
 
     @_boundary
@@ -277,7 +305,7 @@ class WorkflowService:
         reference: str,
         note: str | None = None,
     ) -> MovementRecord:
-        self._manage(mode)
+        self._manage(mode, Permission.declare_reception)
         return self.ledger.record_receipt(
             movement_id,
             mode,
@@ -287,51 +315,6 @@ class WorkflowService:
             note=note,
         )
 
-    @staticmethod
-    def _matches_job(movement: MovementRecord, job: StartrackJob) -> bool:
-        draft = StartrackTaskDraft.model_validate(movement.payload)
-        return bool(
-            job.remote_id == draft.remote_id
-            and job.poi_id == draft.poi_id
-            and job.objective == draft.objective
-            and job.start_date == draft.start_date.isoformat()
-            and set(job.assigned_user_ids or []) == set(draft.assigned_user_ids)
-            and (draft.job_type_id is None or job.job_type_id == draft.job_type_id)
-            and (draft.start_time is None or job.start_time == draft.start_time)
-            and (draft.description is None or job.description == draft.description)
-            and (draft.form_ids is None or set(job.form_ids or []) == set(draft.form_ids))
-            and (
-                draft.required_form_ids is None
-                or set(job.required_form_ids or []) == set(draft.required_form_ids)
-            )
-        )
-
-    @staticmethod
-    def _acknowledges_draft(draft: StartrackTaskDraft, job: StartrackJob) -> bool:
-        """Missing optional echoes are allowed; supplied contradictions remain uncertain."""
-        expected = draft.payload()
-        actual = job.model_dump(exclude_none=True)
-        for field in (
-            "objective",
-            "start_date",
-            "start_time",
-            "description",
-            "remote_id",
-            "poi_id",
-            "job_type_id",
-            "assigned_user_ids",
-            "form_ids",
-            "required_form_ids",
-        ):
-            if field not in expected or field not in actual:
-                continue
-            if isinstance(expected[field], list):
-                if set(expected[field]) != set(actual[field]):
-                    return False
-            elif expected[field] != actual[field]:
-                return False
-        return True
-
     def _dispatch(self, movement: MovementRecord) -> None:
         # The durable claim is already committed. Any unexpected crash is reconciled
         # as unknown, never automatically converted into another create attempt.
@@ -339,11 +322,12 @@ class WorkflowService:
             self._send_gate()
             draft = self._fresh_plan(movement)
             self._validate_catalogs(movement)
-            existing = self.startrack.find_jobs_by_remote_id(movement.movement_reference)
-            if existing.items or not existing.exhausted:
+            try:
+                self._previous_jobs(movement)
+            except WorkflowError:
                 self.ledger.finish_unknown(movement.id, "mapping_conflict")
                 return
-        except (WorkflowError, NexusReadError, StartrackReadError, LedgerError, ValidationError):
+        except (*PROVIDER_ERRORS, ValidationError):
             self.ledger.finish_failed(movement.id, "dispatch_blocked")
             return
         try:
@@ -353,25 +337,24 @@ class WorkflowService:
         except StartrackWriteUnknown:
             self.ledger.finish_unknown(movement.id, "ambiguous_response")
         else:
-            # The SDK validates the creation envelope, source ID and remote_id
-            # when supplied. Optional fields may be omitted in that response.
-            # Full correlation is needed for unknown outcomes, not an acknowledged POST.
-            if not self._acknowledges_draft(draft, job):
+            # The SDK validates the creation envelope, source ID and remote_id when
+            # supplied; optional echoes may be omitted in an acknowledged POST.
+            if _corresponds(draft, job, strict=False):
+                self.ledger.finish_sent(movement.id, job.id, status=job.status)
+            else:
                 self.ledger.finish_unknown(movement.id, "invalid_response")
-                return
-            self.ledger.finish_sent(movement.id, job.id, status=job.status)
 
     def _observe(self, movement: MovementRecord, statuses: dict[str, str | None]) -> None:
         if movement.state == "unknown":
             result = self.startrack.find_jobs_by_remote_id(movement.movement_reference)
             # A truncated result cannot establish a unique correlation.
-            if (
-                not result.exhausted
-                or len(result.items) != 1
-                or not self._matches_job(movement, result.items[0])
-            ):
+            if not result.exhausted or len(result.items) != 1:
                 return
             job = result.items[0]
+            if not _corresponds(
+                StartrackTaskDraft.model_validate(movement.payload), job, strict=True
+            ):
+                return
             movement = self.ledger.finish_sent(movement.id, job.id, status=job.status)
         elif movement.state == "sent" and movement.job_id:
             job = self.startrack.get_job(movement.job_id)
@@ -396,15 +379,8 @@ class WorkflowService:
             observed_at=now,
             data={
                 "job_id": job.id,
-                "status": job.status,
                 "workflow_role": statuses.get(job.status),
-                "poi_id": job.poi_id,
-                "remote_id": job.remote_id,
-                "objective": job.objective,
-                "start_date": job.start_date,
-                "changed_date": job.changed_date,
-                "closed_date": job.closed_date,
-                "last_status_change_date": job.last_status_change_date,
+                **job.model_dump(include=OBSERVED_JOB_FIELDS),
             },
             provenance=provenance,
         )
@@ -419,9 +395,8 @@ class WorkflowService:
         if mapping.scheduled_date > today:
             return
         # Reporting is explicitly bounded; old movements retain visible gaps.
-        start = max(mapping.scheduled_date, today - timedelta(days=6))
         visits = self.startrack.list_visits(
-            start_date=start,
+            start_date=max(mapping.scheduled_date, today - timedelta(days=6)),
             end_date=today,
             poi_ids=(mapping.poi_id,),
             vehicle_ids=(movement.tracked_vehicle_id,),
@@ -439,8 +414,7 @@ class WorkflowService:
                 visit.poi_id != mapping.poi_id
                 or visit.vehicle_id != movement.tracked_vehicle_id
                 or event_time is None
-                or event_time < planned
-                or event_time > visits.observed_at
+                or not planned <= event_time <= visits.observed_at
             ):
                 continue
             self.ledger.record_observation(
@@ -462,6 +436,23 @@ class WorkflowService:
                 ),
             )
 
+    def _review(self, states: tuple[str, ...], limit: int, action, warning: str) -> list[str]:
+        """Bounded, fair review queue: older plans are not starved by newer movements."""
+        messages = []
+        for movement in self.ledger.select_for_review("live", states, limit=limit):
+            try:
+                action(movement)
+            except PROVIDER_ERRORS:
+                messages.append(warning)
+            finally:
+                self.ledger.advance_review(movement.id, "live")
+        return messages
+
+    def _revalidate(self, movement: MovementRecord) -> None:
+        self._fresh_plan(movement)
+        if self.settings.auto_queue_transfers and self._send_enabled():
+            self.queue(movement.id)
+
     @_boundary
     def sync(self, mode: DataMode) -> WorkflowOverview:
         self._manage(mode)
@@ -477,54 +468,34 @@ class WorkflowService:
                 ):
                     messages.append("Prisma no respondió; consulta el estado de fuentes.")
                 self.ledger.recover_stale_sending(datetime.now(UTC) - timedelta(minutes=10))
-                # Refresh saved plans via bounded review queue so older plans are not starved
-                # by newer movements and approval/assignment changes are detected.
-                revalidation_candidates = self.ledger.select_for_review(
-                    "live",
+                messages += self._review(
                     ("draft", "blocked"),
-                    limit=self.settings.workflow_revalidation_batch_size,
+                    self.settings.workflow_revalidation_batch_size,
+                    self._revalidate,
+                    "Hay planes que requieren revisar origen o correspondencias.",
                 )
-                for movement in revalidation_candidates:
-                    try:
-                        self._fresh_plan(movement)
-                        if self.settings.auto_queue_transfers and self._send_enabled():
-                            self.queue(movement.id)
-                    except (WorkflowError, NexusReadError, StartrackReadError, LedgerError):
-                        messages.append(
-                            "Hay planes que requieren revisar origen o correspondencias."
-                        )
-                    finally:
-                        self.ledger.advance_review(movement.id, "live")
                 if self._send_enabled():
                     for _ in range(10):
                         movement = self.ledger.claim()
                         if movement is None:
                             break
                         self._dispatch(movement)
-                if self.startrack.configured:
+                if not self.startrack.configured:
+                    messages.append("Faltan credenciales de Startrack; no se consultó seguimiento.")
+                else:
                     try:
                         statuses = {
                             item.id: item.workflow_role
                             for item in self.startrack.list_job_statuses().items
                         }
-                        observation_candidates = self.ledger.select_for_review(
-                            "live",
+                        messages += self._review(
                             ("sent", "unknown"),
-                            limit=self.settings.workflow_observation_batch_size,
+                            self.settings.workflow_observation_batch_size,
+                            lambda movement: self._observe(movement, statuses),
+                            "Seguimiento parcial: hay evidencia pendiente de consultar.",
                         )
-                        for movement in observation_candidates:
-                            try:
-                                self._observe(movement, statuses)
-                            except (WorkflowError, StartrackReadError, LedgerError):
-                                messages.append(
-                                    "Seguimiento parcial: hay evidencia pendiente de consultar."
-                                )
-                            finally:
-                                self.ledger.advance_review(movement.id, "live")
                     except StartrackReadError:
                         messages.append("Startrack no respondió; el registro previo se conserva.")
-                else:
-                    messages.append("Faltan credenciales de Startrack; no se consultó seguimiento.")
             result = self.read(mode)
             if messages:
                 result.message = " ".join(dict.fromkeys(messages))
@@ -534,5 +505,5 @@ class WorkflowService:
 
     def run_cycle(self, mode: DataMode = "live") -> WorkflowOverview:
         """CLI-only entry point; settings still gate all reads and remote writes."""
-        with management_scope(self.settings.allow_local_management):
+        with management_scope(True):
             return self.sync(mode)

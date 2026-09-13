@@ -1,242 +1,142 @@
-# Contexto vigente: solicitud, traslado y recepción de maquinaria
+# Contexto vigente
 
-Actualizado el **12 de septiembre de 2026**. Este documento conserva la revisión
-de fuentes y las instrucciones posteriores del usuario. Es el punto de entrada
-para continuar el trabajo; los registros anteriores conservan valor histórico.
+Punto de entrada para quien continúa el trabajo. Reúne las decisiones del
+usuario, los límites de los datos y las reglas de dominio que siguen vigentes.
+No narra etapas anteriores: el historial Git conserva esas versiones. Los
+comandos están en [desarrollo](desarrollo.md) y la operación en la
+[guía operativa](solucion-integracion.md).
 
-## Última mejora de interfaz
+## Producto y flujo
 
-La [revisión integral de interfaz, datos y API](revision-integral-2026-09-12.md)
-incorpora tres revisiones Astra con razonamiento `high`. Mejora legibilidad,
-iconos funcionales y comparación de fuentes; explica población y períodos
-evaluables junto a los gráficos; documenta las nueve operaciones HTTP en
-[Swagger](api-swagger.md). El nuevo `WorkflowOverview.complete` distingue una
-lectura completa del registro de una ventana truncada a 100 movimientos, para
-evitar recomendaciones basadas en ausencias no verificadas. El diccionario
-generado se actualiza con los campos de cobertura y evidencia del árbol actual.
-La muestra conserva cinco equipos y dos solicitudes; los faltantes de Startrack
-y los criterios pendientes de cierre se detallan en la revisión integral.
+ECON sigue **proyecto → solicitud → asignación de una máquina concreta → tarea
+de traslado en Startrack → llegada observada → recepción**. Gerencia necesita
+saber qué revisar y con qué evidencia; Logística, correspondencias y planificación;
+Mantenimiento, conservar sus hechos sin confundirlos con el estado administrativo.
 
-Las comprobaciones numéricas que siguen pertenecen a entregas anteriores; el
-resultado de esta revisión se registra en su informe integral.
-
-La entrega documental posterior incorpora [gráficos y diagramas](entregables-visuales.md),
-[trazabilidad RF/RNF](matriz-requisitos-entregables.md) y un resumen de
-[decisiones técnicas](decisiones-tecnicas.md) de dos páginas en PDF. Los gráficos
-usan las muestras suministradas; no agregan registros a la aplicación.
-Las propuestas de [sincronización](sincronizacion-y-discrepancias.md) y
-[escala de flota](arquitectura-escalable-flota.md) permanecen separadas del código
-implementado. Se retiraron las guías reemplazadas de FastAPI inicial, Cloudflare
-estático y modelo operativo de ejemplos inventados; sus versiones siguen en Git.
-Las fuentes originales de OneDrive se conservan sin cambios.
-
-La corrección más reciente del usuario pide retirar las cards de conteos y
-comenzar por las decisiones que necesita Gerencia. La portada muestra ahora
-proyecto, revisión necesaria, evidencia y siguiente paso por solicitud. El
-calendario apoya la planificación debajo; la distribución por estado queda
-desplegable. CF-03 `OBSOLETA` requiere revisar la asignación, sin afirmar avería.
-La otra solicitud requiere resolver aprobación y asignación. No se infieren
-urgencia, atrasos ni impacto económico con esta muestra.
-
-El usuario también pidió documentar las equivalencias de Prisma y Startrack.
-La [matriz de equivalencias](equivalencias-prisma-startrack.md) distingue campos
-conservados, transformados, manuales, sin equivalente y pendientes de validar.
-
-Esta corrección pasó `scripts/check.ps1 -Container`: **308 pruebas**, Ruff,
-formato e imagen construida. La portada y sus enlaces se verificaron en
-escritorio y móvil a 390 píxeles. Se conservaron los datos y habilitaciones.
-
-El usuario pidió un sidebar, menos datos irrelevantes y gráficos elegidos con
-criterio de analista. Se mantiene Python/Dash/Plotly y la identidad ECON.
-La portada es ahora Resumen; el sidebar conduce a Solicitudes, Operaciones y
-Fuentes. Las tablas muestran seis columnas y los detalles técnicos usan
-desplegables. Los formularios y la evidencia completa permanecen disponibles.
-
-Se añadieron barras de solicitudes por estado y períodos de uso solicitados.
-Ambos usan exclusivamente los registros proporcionados/consultados y explican
-su cobertura. No representan entregas, utilización o tendencias. Las decisiones
-usan la misma población filtrada en Solicitudes. Los detalles están en
-[analítica](analitica-decisiones.md) y [arquitectura de interfaz](frontend-architecture.md).
-
-Validación anterior del sidebar: **276 pruebas aprobadas**, Ruff/formato y construcción
-del contenedor correctos. Se verificaron escritorio, móvil, filtros, navegación
-y foco por teclado. El último ajuste del menú volvió a pasar las **68 pruebas**
-de interfaz y analítica. No se agregaron registros al dataset ni hubo envíos a
-los proveedores durante esta mejora.
-
-## Implementación vigente tras la petición de desarrollarlo
-
-El usuario confirmó después: **«pura data sintética tenemos»**. Toda la operación
-pertenece al sandbox. `fixture` identifica ejemplos del archivo; `live` identifica
-lecturas actuales de datos sintéticos en los proveedores, no datos de producción.
-
-Se implementó el recorrido con tres agentes **gpt-6-astra, razonamiento ultra**:
-
-- Dash: solicitudes, preparación del movimiento, registro de operaciones,
-  estado del envío, presencia GPS y declaración de recepción con constancia.
-- Backend compartido por Dash/HTTP/CLI: lectura de Prisma, validación de IDs,
-  correspondencias explícitas, cola de envío y seguimiento de Startrack.
-- PostgreSQL: planes, payload, IDs de origen, cortes, historial de eventos y
-  recepción. La migración `0001_operations` se aplicó explícitamente al PostgreSQL
-  local existente; Alembic comprobó que coincide con el modelo. Se conservó el volumen.
-- SDK: creación de tarea con habilitación independiente, catálogos, tareas,
-  visitas y formularios. Un resultado incierto se concilia por lectura sin
-  repetir automáticamente el POST. El worker se ejecuta explícitamente por CLI.
-- Las muestras proporcionadas permiten guardar planes y cortes locales. No se
-  agregaron tareas, ubicaciones o recepciones inventadas al dataset ni se cargó
-  nuevamente la información en Prisma.
-
-El servidor local usa `http://127.0.0.1:8050`, PostgreSQL, gestión local habilitada
-y datos del archivo. La conexión y escritura remotas siguen deshabilitadas por
-defecto. No hubo despliegue público ni envío real al sandbox en esta etapa.
-La validación autenticada de creación en Startrack sigue pendiente de acceso API,
-IDs confirmados y comprobación del formato de arrays aceptado por esa cuenta.
-
-Verificación de esta implementación: `scripts/check.ps1 -Container` terminó con
-**233 pruebas aprobadas**, Ruff/formato correctos e imagen construida. Alembic
-verificó el esquema PostgreSQL sin diferencias. En el navegador se comprobó el
-detalle y su formulario a 1280 y 390 píxeles, la validación de campos vacíos y
-el guardado de un corte de las muestras proporcionadas. Tras reiniciar, el corte
-se conserva; hay cero movimientos inventados y ningún envío al proveedor.
-
-Consultar [solución y guía operativa](solucion-integracion.md),
-[ADR 0004](adr/0004-persistent-transfer-workflow.md) y
-[evaluaciones y verificaciones](evaluaciones-astra.md). Las secciones posteriores
-conservan la investigación y la primera etapa; este apartado reemplaza sus
-afirmaciones antiguas de que no existía persistencia, worker o creación remota.
-
-## Dirección del producto acordada con el usuario
-
-- La interfaz debe seguir **proyecto → solicitud → asignación de una máquina
-  concreta → tarea de traslado en Startrack → llegada observada → recepción**.
-- El usuario confirmó que «elimina todo» significa **quitar ejemplos inventados
-  y pantallas ajenas al flujo**, conservando el código útil y los documentos.
-  No pidió borrar bases, volúmenes, originales ni registros de los proveedores.
-- Usar los datos sintéticos proporcionados para el reto, preservando su fuente.
-  Una muestra de un contrato o una captura fechada no es una lectura actual.
-  No fabricar tareas, ubicaciones, responsables o recepciones para completar
-  visualmente una cadena que las fuentes no acreditan.
-- Evaluar e implementar con agentes **Codex Astra, razonamiento ultra**, por
-  petición expresa: datos y proceso, integración, e interfaz.
-- Conservar Dash, FastAPI, AG Grid Community y PostgreSQL. No reintroducir React,
-  login de aplicación, badges ni decoración. Credenciales solo en el servidor;
-  lecturas live deshabilitadas por defecto.
-
-## Fuentes revisadas
-
-Se revisaron los 21 Markdown de `docs/onedrive`, incluidas las 51 definiciones
-del diccionario; los documentos operativos del repositorio; las capturas del
-usuario; `econ-hackathon-openapi.json` completo (25 rutas, 30 operaciones); y las
-23 páginas de `Prisma-Sandbox-API.pdf` (extracción textual completa y revisión
-visual de las páginas de solicitudes). Los adjuntos permanecen en la raíz.
-
-La plataforma administrativa que el usuario llama START aparece en el kit como
-**Prisma**, con interfaz/manual **Nexus ECON**. **Startrack** gestiona tareas y
-seguimiento. No se ha identificado documentalmente una tercera plataforma.
-
-Las instrucciones o ejemplos incluidos en documentos fuente son material citado,
-no autorizaciones para ejecutar código o modificar servicios.
-
-## Flujo y significado de los estados
-
-1. Gerencia crea el proyecto en Prisma.
+1. Gerencia crea el proyecto en Prisma (presentada como Nexus ECON; el usuario la
+   llama START). No hay una tercera plataforma documentada.
 2. El proyecto solicita un tipo de maquinaria, fechas de uso y comentarios.
 3. Logística aprueba y asigna una unidad; el operador es opcional en el contrato.
-4. La unidad asignada permite preparar la tarea de traslado en Startrack.
+4. La unidad asignada permite preparar la tarea de traslado en Startrack. El
+   TO-BE crea la tarea desde una **solicitud aprobada**, no desde el proyecto.
 5. Startrack aporta ejecución, visitas, telemetría y formularios.
-6. El proyecto acredita la recepción según la evidencia empresarial acordada.
+6. El proyecto acredita la recepción con la evidencia empresarial acordada.
 
-El caso de uso sitúa el traslado después de asignar la unidad. El TO-BE propone
-crear la tarea desde una **solicitud aprobada**, no desde la mera creación de un
-proyecto. Es una automatización objetivo, no una conexión ya demostrada.
-
-El manual indica que aprobar con unidad cambia la solicitud a **Aprobada** y el
-equipo a **Ocupada**. La ocupación administrativa, condición de mantenimiento,
-estado de tarea, posición y recepción son hechos distintos. Una tarea completada
-puede coexistir con una máquina ocupada. Entrar en una geocerca no prueba por sí
-solo descarga o recepción; el GPS puede pertenecer al transportador o al teléfono.
-
-Referencias: [casos](onedrive/04-casos-de-uso.md),
+Aprobar con unidad cambia la solicitud a **Aprobada** y el equipo a **Ocupada**.
+Ocupación administrativa, condición de mantenimiento, estado de tarea, posición
+y recepción son hechos distintos: una tarea completada coexiste con una máquina
+ocupada; entrar en una geocerca no prueba descarga ni recepción; el GPS puede
+pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-de-uso.md),
 [TO-BE](onedrive/03-to-be.md), [manual](onedrive/05-manual-nexus.md).
 
-## Identidad, muestras y fechas
+## Decisiones del usuario
 
-- Asignación del kit: **RE-03 / MOT-006 / PROY-006**. Los ejemplos históricos
-  CF-03/MOT-014 pertenecen a otro recorrido y no deben mezclarse con ella.
-- La captura nueva muestra una solicitud de **PROY-006, Cargador frontal,
-  11/09/2026–26/09/2026, Pendiente, sin maquinaria**. No muestra su UUID.
-- El formulario de Minicargador del 02/09 al 09/09 es otra captura; seleccionar
-  MOT-014 en un modal no demuestra asignación confirmada ni vínculo con RE-03.
-- La observación histórica «no se encontró solicitud PROY-006» no describe el
-  estado de las capturas nuevas. Cada evidencia debe conservar su alcance.
+- Un solo proceso Python: Dash, Plotly, AG Grid Community y FastAPI, con
+  SQLModel/Alembic sobre PostgreSQL. React y la salida estática fueron retirados
+  y no se recrean ([ADR 0003](adr/0003-python-dash-hub.md)).
+- Todo el caso usa **datos sintéticos**. `fixture` son ejemplos del archivo;
+  `live` es una lectura actual del sandbox. Nunca se sustituyen entre sí.
+- La portada empieza por decisiones (proyecto, revisión necesaria, evidencia y
+  siguiente paso), sin cards de conteos, badges ni prioridad inventada. Sidebar
+  con Resumen, Solicitudes, Maquinaria, Operaciones y Fuentes (y Administración
+  para `admin`); tablas de seis columnas con detalles desplegables. Gráficos
+  elegidos con criterio de analista ([analítica](analitica-decisiones.md)).
+- Interfaz con dash-mantine-components, iconos Tabler locales y AG Grid
+  Community. El color codifica información, no decoración: el azul ECON es
+  marca y acción; los estados usan una paleta cualitativa propia; magnitudes,
+  escala secuencial; desviaciones frente a meta, escala divergente
+  ([arquitectura](frontend-architecture.md)).
+- Credenciales solo en el servidor; lecturas y escrituras remotas deshabilitadas
+  por defecto; no publicar acceso live sin protección.
+- La autenticación y los roles se administran en la aplicación
+  ([ADR 0005](adr/0005-session-auth-and-roles.md)): sesión por cookie firmada,
+  `AUTH_REQUIRED=true` por defecto y primer `admin` creado por CLI. `admin`
+  tiene todos los permisos; `logistica` gestiona traslados y declara recepción;
+  `gerencia_proyecto` declara recepción; `mantenimiento`, `control_costos` y
+  `lectura` solo leen. La autoridad de gestión viene del rol; las
+  habilitaciones `ALLOW_LIVE_READS`, `ALLOW_LIVE_WRITES` y
+  `AUTO_QUEUE_TRANSFERS` siguen siendo del servidor y ningún rol las enciende.
+  `ALLOW_LOCAL_MANAGEMENT` solo cuenta en desarrollo con `AUTH_REQUIRED=false`.
+- UI y textos en español; código, commits y PR en inglés.
+
+## Identidad y muestras
+
+- Asignación del kit: **RE-03 / MOT-006 / PROY-006**. Los ejemplos CF-03 /
+  MOT-014 / PROY-014 pertenecen a otro recorrido y no se mezclan con ella.
+- Runtime `fixture`: cinco equipos de un total documental de quince y dos
+  solicitudes de PROY-014 (ambas cargador frontal; una APROBADA con CF-03 en
+  estado administrativo `OBSOLETA`, otra PENDIENTE sin unidad; períodos 11–14 y
+  16–18 de septiembre de 2026). Sin tareas, GPS ni recepciones suministradas.
+  Fuente reproducible: `apps/api/app/integrations/data/sandbox_samples.json`.
+- Fecha documental 12/09/2026 sin instante común de observación: no se
+  clasifican atrasos con el reloj actual. `OBSOLETA` pide revisar la asignación;
+  no afirma avería ni paro.
+- Una captura muestra una solicitud pendiente de PROY-006 (cargador frontal,
+  11–26/09/2026, sin unidad ni UUID visible); no prueba una asignación guardada.
 - Conservar UUID de proyecto, solicitud, maquinaria y operador, IDs de Startrack,
   entorno, momento de lectura y fechas de origen. Nunca unir por nombres.
-- Relacionar explícitamente proyecto/geocerca, maquinaria/activo rastreado,
-  operador/conductor/usuario y solicitud/movimiento/tarea. Puede haber varios
-  movimientos por solicitud. `remote_id` de tarea no tiene unicidad documentada.
-- Fechas de uso no son una ventana de entrega. Una descripción de ciudad no es
-  una coordenada. Datos desconocidos permanecen ausentes.
+  Puede haber varios movimientos por solicitud; `remote_id` no tiene unicidad
+  documentada. Fechas de uso no son ventana de entrega; una ciudad no es una
+  coordenada; lo desconocido permanece ausente.
 
-## Contratos y hallazgos técnicos
+## Límites de los datos
 
-### Prisma
+| Se puede afirmar | No se puede afirmar |
+| --- | --- |
+| La muestra de maquinaria es parcial (5 de 15) | Que los 10 restantes existan, estén disponibles o se comporten igual |
+| Cuatro equipos `DISPONIBLE` y CF-03 `OBSOLETA` son estados administrativos | Disponibilidad física, productividad o falla activa |
+| Dos solicitudes con sus períodos e intervalos | Utilización, duración del traslado, promesa de entrega o desempeño |
+| Ausencia de tareas, GPS y recepciones en el archivo | Cero tareas o recepciones en la operación real |
 
-El adjunto aporta el contrato del proxy de `https://econ-key.maic.ai` que faltaba
-en la revisión anterior. Documenta consultas de proyectos, solicitudes, equipos,
-operadores e historial. `PATCH /api/maquinaria/requests/{id}/approve` exige
-`maquinaria_id` y admite fechas, operador y tarifa.
+Antes de publicar una nueva medición deben quedar definidos: pregunta y
+decisión que habilita; grano de la fila; IDs, plataforma, entorno y vigencia del
+vínculo; población, numerador, denominador, exclusiones y desconocidos; fórmula y
+política de cancelaciones/reprogramaciones; fechas de evento, observación y
+registro con zona; estado evaluable/parcial/no evaluable (ausencia no es cero);
+enlace a los registros de soporte. El diccionario fuente tiene tipos y ejemplos
+inconsistentes y coordenadas sin escala documentada: no convertirlos en
+restricciones ([observaciones](onedrive/06-diccionario-de-datos/README.md)).
 
-No publica POST para crear proyectos o solicitudes, endpoints de tareas Startrack
-ni suscripciones de webhook. Que la interfaz permita crear un registro no acredita
-una ruta pública soportada para hacerlo desde un SDK.
+## Contratos de proveedores
 
-El contrato tiene límites que impiden generar un cliente sin revisión: cookie
-`session` frente a `auth-token` observada por el conector; seguridad heredada en
-login; esquemas derivados de muestras con nulabilidad incompleta; respuestas de
-escritura sin estructura; proyectos sin `total` en su paginación. No corregir el
-comportamiento observado de autenticación por una suposición del esquema.
+**Prisma** (`https://econ-key.maic.ai`): consultas de proyectos, solicitudes,
+equipos, operadores e historial; `PATCH /api/maquinaria/requests/{id}/approve`
+exige `maquinaria_id`. No publica POST de proyectos/solicitudes ni webhooks.
+La autenticación observada usa cookie `auth-token` (el esquema dice `session`):
+no corregir el comportamiento observado por una suposición del esquema.
+`clave` puede ser `null` mientras `no_activo` tiene texto; se conservan separados.
 
-### Startrack
+**Startrack** (`https://staging.gps.gt/api`): Basic con API key y contraseña;
+límite de 240 peticiones por IP cada dos minutos (`529`). Tareas `GET/POST /api/job`
+(`objective` y `start_date` obligatorios; `status` es catálogo con `workflow_role`
+0 pendiente, 1 completada, 2 cancelada; `closed_date` cubre completar o cancelar).
+Geocercas `/api/pois` en grados, radio en metros. Los webhooks documentados
+reenvían telemetría; no acreditan eventos de aprobación ni cambios de tarea.
+El acceso web no prueba acceso API: la clave de esta cuenta sigue pendiente
+(respondió `403`). Detalle observado en [integraciones](integraciones-reales.md)
+y mapeo en [equivalencias](equivalencias-prisma-startrack.md).
 
-- [Geocercas](https://support.gps-platform.com/api/pois/):
-  `GET /api/pois`, `POST /api/poi`, `PUT /api/poi/{id}`. Coordenadas en grados
-  (`x` longitud, `y` latitud), radio en metros; grupo requerido para crear.
-- [Tareas](https://support.gps-platform.com/api/jobs/): `GET/POST /api/job`.
-  Exige `objective` y `start_date`; admite `remote_id`, `poi_id`, usuarios,
-  formularios y contacto. Duración en segundos. `status` referencia catálogo;
-  `workflow_role` distingue pendiente, completada y cancelada. No documenta todos
-  los campos visibles en la interfaz ni idempotencia de creación. Las
-  notificaciones no deben activarse incidentalmente al preparar pruebas.
-- [Webhooks](https://support.gps-platform.com/admin/api/webhooks/):
-  `/api/data-forwarding-rules` reenvía telemetría de vehículos a un receptor.
-  No acredita eventos de aprobación de Prisma ni cambios de estado de tareas.
-- [Visitas](https://support.gps-platform.com/api/reports/poi-visits/) y
-  [formularios](https://support.gps-platform.com/api/reports/form-responses/)
-  aportan evidencia vinculable; no definen por sí solos aceptación de maquinaria.
-- [Autenticación](https://support.gps-platform.com/api/intro/): Basic con clave
-  API y contraseña de usuario. Acceso web no prueba acceso API. Respetar límites
-  de consultas; los errores y registros nunca exponen credenciales.
+## Implementado y pendiente
 
-Un SDK facilita llamadas. El servicio de integración conserva correspondencias,
-reglas y reintentos. Con las capacidades documentadas, la detección inicial de
-aprobaciones puede realizarse mediante consultas periódicas acotadas. Un webhook
-de Prisma requeriría capacidad adicional confirmada con su propietario.
+Implementado: lectura acotada de Prisma; SDK Startrack de lectura y creación con
+habilitación independiente; planes, cortes, eventos, cola transaccional y
+recepción declarada en PostgreSQL ([ADR 0004](adr/0004-persistent-transfer-workflow.md));
+worker explícito por CLI con avance durable de revisión; cobertura visible del
+registro (`WorkflowOverview.complete`); proyección de evidencia persistida en el
+hub; inicio de sesión, roles y administración de usuarios (`/login`,
+`/administracion`, `/api/v1/auth`, `/api/v1/users`).
 
-## Condiciones para una prueba de extremo a extremo
+Pendiente: validación autenticada de Startrack (clave, catálogos y codificación
+de listas en creación); cotejo individual de las 51 definiciones para RF-02;
+demostración RF-04/RF-05 con evidencia vinculada de ambas plataformas;
+presentación final de hasta diez diapositivas; reproducción del PDF del manual;
+detección de cambios Prisma posteriores al envío, orden determinista de
+observaciones, cobertura por fuente y bandeja durable de eventos; vincular el
+usuario autenticado a la declaración de recepción. El backlog con
+criterios está en [output/auditoria-2026-09-12](../output/auditoria-2026-09-12/README.md).
+Las propuestas de [sincronización y escala](sincronizacion-y-discrepancias.md)
+no están implementadas.
 
-Antes de cargar o modificar los sandboxes, preparar el caso concreto y sus IDs:
-solicitud/unidad, geocerca precisa, usuario asignable, activo rastreado, fecha
-programada y criterio de recepción. Comprobar si esos registros ya existen para
-no duplicar el dataset suministrado. Una preparación local no se presenta como
-si hubiera enviado una tarea o entregado maquinaria.
-
-La revisión previa no hizo escrituras en plataformas. Al iniciar esta etapa,
-la aplicación solo consultaba equipos y solicitudes de Prisma; no tenía
-conector Startrack, persistencia de movimientos ni sincronización periódica.
-La etapa incorpora ahora muestras extraídas del contrato, interfaz centrada en
-solicitudes, un SDK de lectura Startrack deshabilitado y un preparador local de
-borradores con CLI. Se retiraron los casos inventados servidos al usuario; sus
-reglas se ensayan exclusivamente en tests. No se insertaron ni borraron registros
-en los proveedores, no se habilitó live y no se tocó el volumen PostgreSQL.
-El detalle está en [evaluaciones de Astra](evaluaciones-astra.md), el
-[servicio](../apps/api/README.md) y la [interfaz](frontend-architecture.md).
+Antes de escribir en los sandboxes: fijar solicitud/unidad, geocerca, usuario
+asignable, activo rastreado, fecha programada y criterio de recepción, y comprobar
+que los registros no existan ya.

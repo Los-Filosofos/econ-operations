@@ -69,10 +69,10 @@ WORKFLOW_CONFLICT = {
             "application/json": {
                 "examples": {
                     "local_only": {
-                        "summary": "Gestión local no autorizada por el servidor",
+                        "summary": "Sesión sin permiso para gestionar",
                         "value": {
                             "detail": (
-                                "La gestión está habilitada únicamente desde el servidor local."
+                                "La gestión requiere una sesión con permiso para esta operación."
                             )
                         },
                     },

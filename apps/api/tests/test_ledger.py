@@ -122,6 +122,7 @@ def test_migration_explicitly_creates_matching_schema_and_reverses(tmp_path, mon
         "operation_movements",
         "operation_events",
         "operation_snapshots",
+        "users",
     }
     command.downgrade(config, "base")
     assert inspect(engine).get_table_names() == ["alembic_version"]
@@ -431,8 +432,6 @@ def test_snapshots_preserve_partial_coverage_and_never_cross_modes(ledger):
     assert snapshot.content["equipment"][0]["provenance"]["evidence_kind"] == "provided_sample"
     assert ledger.last_snapshot("fixture").id == snapshot.id
     assert ledger.last_snapshot("live") is None
-    with pytest.raises(MovementNotFound):
-        ledger.get_snapshot(snapshot.id, "live")
     hub.mode = "live"
     with pytest.raises(EvidenceMismatch):
         ledger.record_snapshot(hub)

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,8 +13,12 @@ class Settings(BaseSettings):
 
     app_name: str = "ECON Integration API"
     database_url: str = Field(repr=False)
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
-    # There is no application login. Enabling live reads exposes them to API callers.
+    # Session login is required by default; AUTH_REQUIRED=false is a local development mode.
+    auth_required: bool = True
+    session_secret: SecretStr | None = Field(default=None, repr=False)
+    # Secure cookie by default; SESSION_HTTPS_ONLY=false only for local development over HTTP.
+    session_https_only: bool = True
+    session_max_age_seconds: int = Field(default=8 * 60 * 60, ge=60, le=30 * 24 * 60 * 60)
     allow_live_reads: bool = False
     allow_local_management: bool = False
     allow_live_writes: bool = False
@@ -33,3 +37,15 @@ class Settings(BaseSettings):
     nexus_max_pages: int = Field(default=2, ge=1, le=5)
     nexus_timeout_seconds: float = Field(default=5, gt=0, le=15)
     nexus_budget_seconds: float = Field(default=20, gt=0, le=60)
+
+    @model_validator(mode="after")
+    def _session_secret_required(self) -> "Settings":
+        if self.auth_required and not (
+            self.session_secret and self.session_secret.get_secret_value()
+        ):
+            raise ValueError(
+                "SESSION_SECRET es obligatorio cuando AUTH_REQUIRED=true; genera uno con "
+                'python -c "import secrets; print(secrets.token_urlsafe(48))" o usa '
+                "AUTH_REQUIRED=false solo para desarrollo local."
+            )
+        return self

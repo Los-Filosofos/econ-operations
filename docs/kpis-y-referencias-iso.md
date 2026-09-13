@@ -104,7 +104,7 @@ acreditadas de ECON.
 
 Esas aplicaciones son interpretaciones de diseño, no una lista literal de
 requisitos. Una evaluación formal debe confirmar la edición, enmiendas y alcance
-con el responsable de calidad. Ninguna referencia autoriza añadir login al hub,
+con el responsable de calidad. Ninguna referencia autoriza
 evaluar conductores con evidencia incompleta ni atribuir a ISO una meta de 95 %,
 98 % u otra cifra. La política actual mantiene credenciales en el servidor y
 acceso remoto deshabilitado por defecto.
