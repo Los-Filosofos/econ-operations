@@ -25,6 +25,10 @@ main:focus { outline: none; }
 .scope-line { margin-top: 12px; }
 .notice { margin: 12px 0; }
 .nav-utility { margin-top: 12px; }
+/* Header read status: plain text, a state dot that never carries the meaning alone. */
+.read-status .mantine-Button-label { font-weight: 400; }
+.refresh-indicator { font-size: 12px; color: var(--mantine-color-dimmed); white-space: nowrap; }
+.refresh-indicator:empty { display: none; }
 @media (max-width: 47.99em) { .mantine-AppShell-navbar { display: none; } }
 .ui-icon { display: inline-block; flex: none; background-color: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
 .state-dot { display: inline-block; flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; }

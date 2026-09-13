@@ -14,6 +14,7 @@ from app.api.health import router as health_router
 from app.api.hub import router as hub_router
 from app.api.indicators import router as indicators_router
 from app.api.integration import router as integration_router
+from app.api.status import router as status_router
 from app.api.suggestions import router as suggestions_router
 from app.api.users import router as users_router
 from app.api.workflow import router as workflow_router
@@ -24,7 +25,7 @@ from app.core.database import build_engine
 from app.dashboard.application import create_dashboard
 from app.integrations.nexus import NexusConnector
 from app.integrations.startrack import StartrackClient, StartrackReadConfig
-from app.services.workflow import WorkflowError, WorkflowService
+from app.services.workflow import SyncScheduler, WorkflowError, WorkflowService
 
 NO_STORE_PATHS = ("/_dash-update-component", "/_dash-layout", "/api/v1/")
 SECURITY_HEADERS = {
@@ -53,6 +54,14 @@ AUTH_TAGS = [
         ),
     },
     {"name": "Usuarios", "description": "Administración de usuarios y roles (solo admin)."},
+    {
+        "name": "Estado",
+        "description": (
+            "Versión del registro y estado de la sincronización automática. La interfaz lo "
+            "sondea y vuelve a leer datos solo cuando registry_version cambia; no consulta "
+            "proveedores."
+        ),
+    },
 ]
 
 
@@ -78,9 +87,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             application.state.nexus,
             application.state.startrack,
         )
+        # In-process live scheduler (ADR 0006): only with SYNC_INTERVAL_SECONDS > 0 and live
+        # reads allowed; fixture has no provider to consult, so it is never scheduled.
+        application.state.scheduler = None
+        if settings.sync_enabled:
+            application.state.scheduler = SyncScheduler(
+                application.state.workflow, settings.sync_interval_seconds
+            )
+            application.state.scheduler.start()
         try:
             yield
         finally:
+            if application.state.scheduler is not None:
+                await application.state.scheduler.stop()
             await run_in_threadpool(application.state.nexus.close)
             await run_in_threadpool(application.state.startrack.close)
             await run_in_threadpool(application.state.engine.dispose)
@@ -140,6 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         https_only=settings.session_https_only,
     )
     application.include_router(health_router)
+    application.include_router(status_router)
     application.include_router(auth_router)
     application.include_router(users_router)
     application.include_router(hub_router)

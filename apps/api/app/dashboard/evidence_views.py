@@ -182,7 +182,13 @@ def source_comparison(
     context: QueryContext,
     hub: HubResponse | None = None,
 ):
-    from app.dashboard.workflow_views import arrival_label, receipt_label, state_label, task_status
+    from app.dashboard.workflow_views import (
+        arrival_label,
+        declared_by_label,
+        receipt_label,
+        state_label,
+        task_status,
+    )
 
     prisma = [
         dmc.Text(source_date(item.provenance), size="xs", c="dimmed"),
@@ -325,6 +331,11 @@ def source_comparison(
                         ("Recibió", movement.receipt.receiver),
                         ("Constancia", movement.receipt.reference),
                         ("Registrada", instant(movement.receipt.recorded_at)),
+                        *(
+                            [("Declarada por", declared)]
+                            if (declared := declared_by_label(movement.receipt))
+                            else []
+                        ),
                     ]
                     if movement.receipt
                     else []
@@ -379,7 +390,7 @@ def equipment_movements(hub: HubResponse, item: EquipmentRecord, workflow: Workf
 def request_timeline(
     request: RequestRecord, movements: list[MovementRecord], context: QueryContext
 ):
-    from app.dashboard.workflow_views import EVENTS
+    from app.dashboard.workflow_views import EVENTS, actor_label
 
     rows = [
         [label, "Prisma / Nexus", instant(value), "Fecha de origen"]
@@ -395,7 +406,8 @@ def request_timeline(
             EVENTS.get(event.kind, event.kind),
             link(movement.movement_reference, context.movement_href(movement.id)),
             instant(event.event_time),
-            f"Observado: {instant(event.observed_at)} · registrado: {instant(event.recorded_at)}",
+            f"Observado: {instant(event.observed_at)} · registrado: "
+            f"{instant(event.recorded_at)} · {actor_label(event, movement)}",
         ]
         for movement in movements
         for event in sorted(movement.events, key=lambda item: item.recorded_at)
@@ -403,9 +415,9 @@ def request_timeline(
     return disclosure(
         "Cronología documentada de la solicitud",
         hint(
-            "Las fechas de origen, observación y registro se conservan por separado. "
-            "Los eventos de cada movimiento siguen el orden de registro; este "
-            "historial puede ser parcial."
+            "Las fechas de origen, observación y registro se conservan por separado, junto "
+            "con quién registró o declaró cada hecho. Los eventos de cada movimiento siguen "
+            "el orden de registro; este historial puede ser parcial."
         ),
         simple_table(
             ["Hecho", "Origen / movimiento", "Fecha del hecho", "Lectura y registro"],

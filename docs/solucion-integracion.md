@@ -49,7 +49,9 @@ flowchart LR
   `/api/v1/operations` permite consultar movimientos y, con una sesión cuyo rol
   tenga `manage_transfers` (recepción: `declare_reception`), guardar planes,
   ponerlos en cola, sincronizar y registrar recepción. `/api/v1/auth` y
-  `/api/v1/users` gestionan sesión y usuarios ([ADR 0005](adr/0005-session-auth-and-roles.md)).
+  `/api/v1/users` gestionan sesión y usuarios ([ADR 0005](adr/0005-session-auth-and-roles.md));
+  `/api/v1/status` publica la versión del registro y el estado de la
+  sincronización automática para que la interfaz recargue sin botón.
 - `app/services/transfers.py`: valida solicitud aprobada, unidad y correspondencias
   antes de producir un borrador. No llama al proveedor.
 - `app/services/workflow.py`: aplica habilitaciones, consulta vigencia y catálogos,
@@ -251,7 +253,8 @@ capas: un `Lock` de proceso (un ciclo a la vez por servidor) y, en PostgreSQL, e
 candado de sesión `pg_try_advisory_lock(hashtext(clave))` de
 `app/core/database.py::cycle_lock`, que se toma sin esperar y se libera con la
 sesión; un segundo proceso sobre la misma base recibe un rechazo explícito en
-lugar de ejecutar el ciclo en paralelo. SQLite no ofrece este candado y no
+lugar de ejecutar el ciclo en paralelo (el ciclo automático del proceso web lo
+registra como `skipped` y no espera). SQLite no ofrece este candado y no
 acredita el comportamiento concurrente. Detalle en
 [ADR 0006](adr/0006-postgresql-unica-infraestructura-de-estado.md).
 
@@ -270,8 +273,14 @@ Sin `--dry-run` elimina los cortes del modo cuya última lectura sea anterior a
 ## SDK, sincronización y límites de cobertura
 
 El SDK valida y ejecuta llamadas HTTP. La sincronización decide cuándo consultar,
-qué movimiento corresponde y qué conservar. El servidor web no inicia un
-trabajador periódico de forma automática: la CLI con `--watch` ejecuta ciclos.
+qué movimiento corresponde y qué conservar. Por defecto el servidor web no
+inicia ciclos; con `SYNC_INTERVAL_SECONDS` > 0 y lecturas live habilitadas,
+`SyncScheduler` (`app/services/workflow.py`) ejecuta un ciclo acotado por
+intervalo en el propio proceso y deja `ok`, `skipped` o `error: …` en
+`GET /api/v1/status`; la CLI con `--watch` sigue disponible como proceso
+separado. En ambos casos rige un solo worker por IP, y la interfaz nunca
+dispara ciclos: solo sondea el estado y recarga cuando la versión del registro
+cambia.
 
 La detección de cambios de aprobación y la actualización de tareas usan consultas
 periódicas acotadas. No se ha documentado un webhook de aprobaciones de Prisma ni
@@ -320,6 +329,7 @@ comprobar la conexión y la migración antes de guardar o sincronizar.
 | `ALLOW_LIVE_READS` | `false` | Permite las consultas reales del sandbox; requiere las credenciales correspondientes. |
 | `ALLOW_LIVE_WRITES` | `false` | Permite enviar tareas Startrack tras las comprobaciones del flujo. |
 | `AUTO_QUEUE_TRANSFERS` | `false` | Permite poner en cola planes guardados que se validen durante un ciclo. |
+| `SYNC_INTERVAL_SECONDS` | `0` | Sincronización automática dentro del proceso web: con `30`–`3600` y lecturas live habilitadas ejecuta un ciclo acotado por intervalo (mismo `run_cycle`, actor `cli_worker` y candado que la CLI); nunca en `fixture`. `0` la apaga; el worker CLI sigue disponible. |
 
 Prisma utiliza `NEXUS_EMAIL` y `NEXUS_PASSWORD`. Startrack utiliza
 `STARTRACK_API_KEY` y `STARTRACK_PASSWORD`. No introducir secretos en formularios,
@@ -369,8 +379,10 @@ Para mantener consultas periódicas:
 uv run --directory apps/api python -m app.cli.sync_operations --mode live --watch --interval 120
 ```
 
-El intervalo admite 60–3600 segundos. `Ctrl+C` termina el proceso. Las banderas del
-servidor siguen aplicándose en cada ciclo. Con escrituras deshabilitadas se
+El intervalo admite 60–3600 segundos. `Ctrl+C` termina el proceso. La
+alternativa sin proceso separado es `SYNC_INTERVAL_SECONDS` en el servidor
+([despliegue](despliegue-backend.md#worker-disponible-para-operación-autorizada)).
+Las banderas del servidor siguen aplicándose en cada ciclo. Con escrituras deshabilitadas se
 consulta y conserva evidencia sin despachar la cola. Habilitar escrituras permite
 al siguiente ciclo procesar los movimientos ya puestos en cola; activar además
 la cola automática permite evaluar y encolar planes guardados válidos. No crea

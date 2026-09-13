@@ -99,6 +99,7 @@ sesión pero sin el permiso de la operación, la respuesta es `403`. Con
 | --- | --- |
 | `GET /health/live` | Responde `{"status":"ok"}` si el proceso atiende. No consulta SQL ni proveedores. |
 | `GET /health/ready` | Ejecuta `SELECT 1`. Un 200 no acredita tablas migradas ni acceso a proveedores. |
+| `GET /api/v1/status` | Con `mode`: `registry_version` (hash corto y determinista del registro del modo: cantidad y última modificación de movimientos, fecha y huella del último corte), `registry_last_read_at`, `hub_data_as_of` y `sync` (`enabled`, `interval_seconds`, `last_cycle_at`, `last_cycle_result` `ok`/`skipped`/`error: …`, `in_progress`). Dos consultas SQL, sin proveedores; la interfaz lo sondea cada 15 s y recarga solo cuando cambia la versión. `503` «Registro no disponible» si SQL no responde. |
 | `POST /api/v1/auth/login` | Crea la cookie de sesión. `401` con credenciales inválidas o usuario inactivo, sin revelar si el email existe; `429` tras diez fallos por IP en quince minutos. |
 | `POST /api/v1/auth/logout` | Elimina la cookie; `204` aunque no hubiera sesión. |
 | `GET /api/v1/auth/me` | Usuario activo de la cookie y sus permisos efectivos. |
@@ -183,6 +184,14 @@ migrada se obtiene:
   lista en `missing` la ubicación física, los operadores, la tarifa y el
   registro sin consultar como «no verificable». Con la APROBADA
   (`46d2573e…`) responde `applicable: false`; con un ID inexistente, `404`.
+
+- `GET /api/v1/status?mode=fixture`: `registry_version` de doce caracteres
+  hexadecimales; `registry_last_read_at` y `hub_data_as_of` quedan `null` hasta
+  que `POST /api/v1/operations/sync` con `{"mode":"fixture"}` guarde un corte
+  (entonces cambia la versión y la interfaz recarga); `sync.enabled=false`,
+  `interval_seconds=0`, `last_cycle_at=null`: la sincronización automática
+  nunca corre en fixture y en live exige `SYNC_INTERVAL_SECONDS` ≥ 30 y
+  `ALLOW_LIVE_READS=true`.
 
 `PlanInput` admite `tracked_vehicle_kind` (`machine_device` o `transporter`,
 opcional, requiere `tracked_vehicle_id`): lo declara el operador y ninguna
@@ -292,7 +301,7 @@ principal en 8050 conserva su configuración y PostgreSQL.
 | `409` | Rechazo del flujo: gestión/live deshabilitados, dependencia no disponible, identidad/estado incompatible, registro no encontrado, evidencia inválida, email repetido o cambio que dejaría sin administrador. El contrato actual usa 409 también para estas causas. |
 | `422` | Validación estructural: modo inválido, campo requerido ausente, longitud excesiva, fecha mal formada o campos adicionales en cuerpos estrictos. |
 | `429` | Demasiados intentos de login desde la misma IP; esperar quince minutos. |
-| `503` | `/health/ready` no pudo consultar SQL. No devuelve detalles de conexión. |
+| `503` | `/health/ready` o `/api/v1/status` no pudieron consultar SQL. No devuelven detalles de conexión. |
 
 Ejemplo real de rechazo con configuración predeterminada:
 

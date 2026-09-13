@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html import escape
 
+from dash import dcc
+
 from app.dashboard.analytics import operations_for, readable
 from app.dashboard.context import QueryContext
 from app.dashboard.theme import figure, state_color
@@ -129,6 +131,17 @@ def usage_timeline(requests: list[RequestRecord]) -> UsageTimeline:
 def short_date(day: date, *, year: bool = False) -> str:
     value = f"{day.day} {MONTHS[day.month - 1]}"
     return f"{value} {day.year}" if year else value
+
+
+def graph(identifier: str, chart):
+    """Plotly figure on the `econ` template; the height travels with the figure."""
+    return dcc.Graph(
+        id=identifier,
+        figure=chart,
+        responsive=True,
+        config={"displayModeBar": False, "responsive": True, "locale": "es"},
+        style={"height": f"{chart.layout.height}px"},
+    )
 
 
 def request_axis_label(request: RequestRecord) -> str:

@@ -1,18 +1,26 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generator": "scripts/docs/exportar_matrices.py",
   "reproduce": "uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py",
   "check": "uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py --check",
   "generated_on": "2026-09-13",
-  "source": {
-    "path": "docs/equivalencias-prisma-startrack.md",
-    "sha256": "028001dcdf54b4951172a8297617c95433065315710b18bb4af8a1cff533d306",
-    "revision": "12 de septiembre de 2026; el glosario de sinónimos y las inconsistencias internas se añadieron el 13 de septiembre de 2026",
-    "note": "Las tablas Markdown son el origen editable; CSV y XLSX son copias derivadas sin datos añadidos. Formato quitado: énfasis, código y destinos de enlaces."
-  },
+  "sources": [
+    {
+      "path": "docs/equivalencias-prisma-startrack.md",
+      "sha256": "028001dcdf54b4951172a8297617c95433065315710b18bb4af8a1cff533d306",
+      "revision": "12 de septiembre de 2026; el glosario de sinónimos y las inconsistencias internas se añadieron el 13 de septiembre de 2026"
+    },
+    {
+      "path": "docs/matriz-requisitos-entregables.md",
+      "sha256": "87c78899199de31ee701729ec77c460addcebd9fd99e8d71e3fb82db8ecffd22",
+      "revision": "13 de septiembre de 2026"
+    }
+  ],
+  "note": "Las tablas Markdown son el origen editable; CSV y XLSX son copias derivadas sin datos añadidos. Formato quitado: énfasis, código y destinos de enlaces.",
   "tables": [
     {
       "slug": "clasificaciones",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Cómo leer las matrices",
       "requirement": "RF-02: leyenda de las clasificaciones usadas en el mapeo",
       "csv": "output/matrices/clasificaciones.csv",
@@ -26,6 +34,7 @@
     },
     {
       "slug": "identidad-cardinalidad",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Identidad y cardinalidad",
       "requirement": "RF-02: relaciones entre objetos y cardinalidad explícita",
       "csv": "output/matrices/identidad-cardinalidad.csv",
@@ -40,6 +49,7 @@
     },
     {
       "slug": "glosario-sinonimos",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Glosario de sinónimos entre plataformas",
       "requirement": "RF-01/RF-02: nombre exacto de cada concepto en Prisma, Startrack y ECON",
       "csv": "output/matrices/glosario-sinonimos.csv",
@@ -56,6 +66,7 @@
     },
     {
       "slug": "inconsistencias-internas",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Inconsistencias internas que ya conoce el kit",
       "requirement": "RF-02: anomalías de cada plataforma que obligan a comparar por ID",
       "csv": "output/matrices/inconsistencias-internas.csv",
@@ -70,6 +81,7 @@
     },
     {
       "slug": "formulario-identificacion",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Identificación, contenido y estado",
       "requirement": "RF-02: formulario de tarea, identificación, contenido y estado",
       "csv": "output/matrices/formulario-identificacion.csv",
@@ -86,6 +98,7 @@
     },
     {
       "slug": "formulario-programacion",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Programación y ubicación",
       "requirement": "RF-02: formulario de tarea, programación y ubicación",
       "csv": "output/matrices/formulario-programacion.csv",
@@ -102,6 +115,7 @@
     },
     {
       "slug": "formulario-asignacion",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Asignación y formularios",
       "requirement": "RF-02: formulario de tarea, asignación y formularios",
       "csv": "output/matrices/formulario-asignacion.csv",
@@ -118,6 +132,7 @@
     },
     {
       "slug": "formulario-articulos",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Artículos y valores económicos",
       "requirement": "RF-02: formulario de tarea, artículos y valores económicos",
       "csv": "output/matrices/formulario-articulos.csv",
@@ -134,6 +149,7 @@
     },
     {
       "slug": "formulario-contacto",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Contacto y notificaciones",
       "requirement": "RF-02: formulario de tarea, contacto y notificaciones",
       "csv": "output/matrices/formulario-contacto.csv",
@@ -150,6 +166,7 @@
     },
     {
       "slug": "formulario-tarea-completo",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Matriz completa del formulario de tarea suministrado",
       "requirement": "RF-02: las cinco secciones del formulario de tarea en una sola matriz",
       "csv": "output/matrices/formulario-tarea-completo.csv",
@@ -167,6 +184,7 @@
     },
     {
       "slug": "otros-campos-api-tarea",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Otros campos API de tarea que no deben perder su significado",
       "requirement": "RF-02: campos del Job sin control editable en el formulario",
       "csv": "output/matrices/otros-campos-api-tarea.csv",
@@ -181,6 +199,7 @@
     },
     {
       "slug": "inventario-prisma",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Inventario Prisma que se conserva y que no viaja a la tarea",
       "requirement": "RF-01/RF-02: campos Prisma conservados y su relación real con Startrack",
       "csv": "output/matrices/inventario-prisma.csv",
@@ -195,6 +214,7 @@
     },
     {
       "slug": "fechas-y-unidades",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Fechas, unidades y estados separados",
       "requirement": "RF-02: tratamiento de fechas, unidades y coordenadas",
       "csv": "output/matrices/fechas-y-unidades.csv",
@@ -208,6 +228,7 @@
     },
     {
       "slug": "estados-separados",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Fechas, unidades y estados separados",
       "requirement": "RF-05: estados por objeto y regla de interpretación",
       "csv": "output/matrices/estados-separados.csv",
@@ -222,6 +243,7 @@
     },
     {
       "slug": "evidencia-retorno",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Evidencia de retorno y cobertura",
       "requirement": "RF-04: qué evidencia de Startrack está implementada y su límite",
       "csv": "output/matrices/evidencia-retorno.csv",
@@ -236,6 +258,7 @@
     },
     {
       "slug": "raci-propuesta",
+      "source": "docs/equivalencias-prisma-startrack.md",
       "heading": "Responsabilidades propuestas para confirmar",
       "requirement": "RF-03: matriz RACI propuesta, pendiente de validación empresarial",
       "csv": "output/matrices/raci-propuesta.csv",
@@ -249,11 +272,29 @@
       ],
       "rows": 9,
       "sha256": "0408151d367807eec86c5f32d065c4a463b27c251bf8140991048d55b2fedc65"
+    },
+    {
+      "slug": "trazabilidad-requisitos",
+      "source": "docs/matriz-requisitos-entregables.md",
+      "heading": "Matriz de trazabilidad",
+      "requirement": "RNF-04: RF-01 a RF-06, RNF-01 a RNF-04 y entregables de §6/§9 con evidencia, dónde lo ve el jurado, estado y brecha",
+      "csv": "output/matrices/trazabilidad-requisitos.csv",
+      "sheet": "Trazabilidad requisitos",
+      "columns": [
+        "Requisito",
+        "Qué exige el brief",
+        "Evidencia en el repo (archivo o ruta exacta)",
+        "Dónde lo ve el jurado (URL de la app o documento)",
+        "Estado",
+        "Brecha y acción"
+      ],
+      "rows": 19,
+      "sha256": "1740e52ec23f1cbd88e5401dc1385f8d8dafb6d70d4c2b1c41bdd985c908d442"
     }
   ],
   "workbook": {
     "path": "output/matrices/matrices-econ.xlsx",
-    "sha256": "a2841cc88468f70cbaa5aeee75f76a0d98acc636f9c5e0bc48e852bcc0bcffe3",
+    "sha256": "870c65b21e3b880886475edce03a114b097ef3bcb1b5dbb02e53680289e51bb9",
     "openpyxl": "3.1.5",
     "sheets": [
       "Clasificaciones",
@@ -271,12 +312,14 @@
       "Fechas y unidades",
       "Estados separados",
       "Evidencia de retorno",
-      "RACI propuesta"
+      "RACI propuesta",
+      "Trazabilidad requisitos"
     ]
   },
   "scope_notes": [
-    "Solo se exportan tablas ya escritas en la matriz; no se inventan filas ni IDs.",
+    "Solo se exportan tablas ya escritas en los documentos; no se inventan filas ni IDs.",
     "La RACI es una propuesta pendiente de validación empresarial (RF-03).",
-    "Una correspondencia documentada no acredita identidad de registros entre plataformas."
+    "Una correspondencia documentada no acredita identidad de registros entre plataformas.",
+    "El estado de la trazabilidad (cumple, parcial, pendiente) describe evidencia en el repositorio, no una calificación del jurado."
   ]
 }

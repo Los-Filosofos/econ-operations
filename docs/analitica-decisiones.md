@@ -1,10 +1,14 @@
 # Analítica para decidir sobre la operación
 
 La portada muestra el recorrido proyecto → unidad asignada → traslado →
-recepción como un grafo operativo. No convierte conteos ni ausencias en KPI y
-mantiene el detalle documental bajo interacción. Las definiciones siguientes
+recepción como un grafo operativo. La página `/decisiones` («Qué requiere
+atención») presenta un asunto por solicitud con su evidencia y siguiente paso,
+el calendario de períodos de uso solicitado y la distribución por estado; la
+página `/indicadores` presenta las fichas de `GET /api/v1/indicators` por fila.
+Ninguna convierte conteos ni ausencias en KPI. Las definiciones siguientes
 corresponden a la implementación vigente; el contexto de negocio está en
-[contexto vigente](contexto-vigente.md).
+[contexto vigente](contexto-vigente.md) y las fórmulas de los indicadores, en
+[indicadores calculables](indicadores-calculables.md), su única fuente.
 
 ## Población y evidencia
 
@@ -25,15 +29,16 @@ conserva fecha documental, pero no un instante común de observación: no permit
 clasificar atrasos con el reloj actual. `generated_at` es el momento de armar la
 respuesta, no una fecha de actualización de las fuentes.
 
-Los límites de la muestra y la evidencia necesaria para otras mediciones están
-en [contexto vigente](contexto-vigente.md#límites-de-los-datos). El indicador
-discreto del lienzo declara modo, cobertura, corte o fecha documental y momento
-de consulta. El detalle de cada nodo conserva procedencia y antigüedad.
+Los límites de la muestra y los requisitos previos a cualquier medición nueva
+están en [contexto vigente](contexto-vigente.md#límites-de-los-datos). El
+indicador discreto del lienzo declara modo, cobertura, corte o fecha documental
+y momento de consulta. El detalle de cada nodo conserva procedencia y antigüedad.
 
-La búsqueda y los filtros usan la misma población en Resumen y Solicitudes.
-Una consulta sin registros, una cobertura parcial y una fuente indisponible son
-resultados distintos. No encontrar una tarea en una lectura incompleta no prueba
-que no exista; tampoco una ausencia de alertas demuestra ausencia de riesgo.
+La búsqueda y los filtros usan la misma población en Resumen, Solicitudes y
+Decisiones. Una consulta sin registros, una cobertura parcial y una fuente
+indisponible son resultados distintos. No encontrar una tarea en una lectura
+incompleta no prueba que no exista; tampoco una ausencia de alertas demuestra
+ausencia de riesgo.
 
 ## Presentación del grafo
 
@@ -60,9 +65,10 @@ enlaces operativos exigen correspondencia de solicitud, asignación, procedencia
 y período con el registro persistido.
 
 La disponibilidad del registro no equivale a completitud: `complete=false`
-también cubre lecturas truncadas a 100 movimientos. La ausencia de una tarea y
-el cierre del conjunto de movimientos no se deducen de esa ventana parcial.
-Los conteos que dependen de esa ausencia permanecen desconocidos.
+también cubre lecturas truncadas a la página leída (100 movimientos por
+defecto; Operaciones pagina el resto). La ausencia de una tarea y el cierre del
+conjunto de movimientos no se deducen de esa ventana parcial. Los conteos que
+dependen de esa ausencia permanecen desconocidos.
 
 Estado administrativo, mantenimiento, envío, tarea, presencia GPS y recepción
 describen hechos distintos. Una tarea completada o una visita de geocerca no
@@ -80,38 +86,45 @@ convierten a `America/El_Salvador`; `generated_at` sólo fecha la consulta. Los
 períodos ausentes, ambiguos, inválidos o invertidos no se completan ni se usan
 para inferir relaciones.
 
+## Página de decisiones
+
+`/decisiones` reutiliza la lectura del hub y el registro del navegador; no
+consulta proveedores por su cuenta y respeta `mode`, `q` y `filter` de la URL.
+
+| Bloque | Qué muestra | Regla y límite |
+| --- | --- | --- |
+| Asuntos por revisar (`decision_priorities.py`) | Una tarjeta por solicitud de la población filtrada: proyecto, tipo, período, estado, título del asunto, evidencia y enlace a la acción (detalle de la solicitud u operaciones) | Un asunto por solicitud, elegido por prioridad explícita: primero las incidencias de envío del registro (`unknown`, `failed`, `blocked`), después aprobada sin unidad, unidad con condición, traslado sin evidencia y pendiente; sin puntajes de urgencia ni reloj («no indican atraso» porque la muestra no tiene corte). Sin asuntos se dice «No se identificaron asuntos por revisar con la evidencia de esta consulta» |
+| Lo que dicen los indicadores (`indicator_views.indicator_insights`) | Las tres lecturas más accionables de las ocho fichas de `compute_indicators`, con estado y una frase derivada de las filas, y el enlace «Ver los 8 indicadores y sus SLA propuestos» a `/indicadores` | Ninguna frase recalcula una regla ni compara con el reloj; en fixture se declara que las muestras no tienen corte de observación y, sin filas evaluables, se remite a la página de indicadores con el motivo de cada ficha |
+| Nota de cobertura | Modo, «Datos sintéticos», solicitudes en la vista y devueltas, total informado por el origen, corte de lectura o fecha documental, registro disponible o parcial | `data_as_of` nulo en fixture: se muestra la fecha documental sin instante común; un registro no disponible o parcial se declara antes de concluir que un traslado no está preparado |
+| Período de uso solicitado (`decision_analytics.usage_timeline`, `usage_figure`) | Una franja por solicitud entre `starts_on` y `ends_on`, días inclusivos, leyenda por texto y tabla «Ver datos de períodos» | No es duración del traslado, ventana de entrega ni utilización. Las solicitudes con fechas incompletas, ambiguas o invertidas se listan aparte con su motivo; las fechas con hora se representan por su día en El Salvador |
+| Distribución por estado (`request_states`, `states_figure`) | Conteo por `status` original de las solicitudes devueltas y filtradas, con tabla «Ver datos de estados» | Describe la vista, no el desempeño integrado ni la flota; `PENDIENTE` y `APROBADA` se muestran como vienen |
+
+Los gráficos usan `figure()` de `dashboard/theme.py` (sin zoom, ejes fijos,
+paleta cualitativa de estados) y siempre tienen tabla alternativa; el azul ECON
+no codifica estado.
+
 ## Responsabilidad del código y futuras mediciones
 
 `app/dashboard/operations_graph.py` transforma `HubResponse` y
-`WorkflowOverview` en nodos, aristas y detalle sin consultar proveedores.
-`views.py` presenta esa proyección y el asset local `operations-graph.js` sólo
-gestiona zoom, pan y selección. Las reglas del contrato y de la evidencia
-permanecen en `app/services/hub.py` y `app/services/evidence.py`. Los módulos
-analíticos anteriores se conservan para otras vistas o evolución posterior,
-pero la portada ya no muestra cards, gráficos ni tablas. Los cambios deben
-mantener alineados los modelos Pydantic y sus consumidores Dash; ver
+`WorkflowOverview` en nodos, aristas y detalle sin consultar proveedores;
+`views.py` presenta esa proyección, la página de decisiones (`decisions`) y el
+resto de listas; `indicator_views.py` presenta `/indicadores` y las tres
+lecturas de `/decisiones`, y el asset local `operations-graph.js` sólo gestiona
+zoom, pan y selección. Las reglas del contrato y de la evidencia permanecen en
+`app/services/hub.py` y `app/services/evidence.py`; las fichas de indicadores,
+en `app/services/indicators.py`. Los cambios deben mantener alineados los
+modelos Pydantic y sus consumidores Dash; ver
 [arquitectura de interfaz](frontend-architecture.md).
-
-Antes de añadir una medición, documentar población, unidad, fórmula, fuente,
-cobertura, fecha y acción que permite. La persistencia de planes, cortes y eventos
-existe, pero por sí sola no acredita una serie histórica completa o comparable.
 
 El indicador RF-06 (tiempo fuera de geocerca sin justificación) se define una
 sola vez en [entregables visuales](entregables-visuales.md#rf-06-indicador-definido-sin-valor-inventado);
 este documento no repite su fórmula. Los indicadores que sí se calculan hoy, por
-fila y sin promedios, están en [indicadores calculables](indicadores-calculables.md)
-(`GET /api/v1/indicators`); el grafo tipado de la misma lectura, en
-`GET /api/v1/graph`, y las candidatas para una solicitud pendiente, en
-`GET /api/v1/requests/{id}/suggestions`. Ninguna de esas lecturas tiene página
-Dash propia ni añade gráficos.
-
-| Medición propuesta | Evidencia necesaria antes de publicarla |
-| --- | --- |
-| Evolución de solicitudes | Eventos o cortes comparables, población conocida y frecuencia de captura |
-| Tiempo de aprobación o asignación | Fechas validadas, cambios de decisión y tratamiento de pendientes. Hoy `approval_time` publica `approved_at − created_at` por solicitud (una fila evaluable en fixture), sin mediana ni p90 |
-| Puntualidad de recepción | Compromiso de entrega, recepción aceptada y reglas de reprogramación/cancelación |
-| Utilización o tiempo fuera de operación | Horas de uso, inicio/fin de paros y calendario operativo acordado |
-| Comparación entre proyectos | IDs estables, cobertura comparable y denominadores pertinentes |
+fila y sin promedios, sus SLA propuestos, lo que impide agregar y las lecturas
+que habilitarían más mediciones están únicamente en
+[indicadores calculables](indicadores-calculables.md). El grafo tipado de la
+misma lectura está en `GET /api/v1/graph` y las candidatas para una solicitud
+pendiente, en `GET /api/v1/requests/{id}/suggestions` y en el detalle de la
+solicitud.
 
 No se publican resultados de productividad, ahorro, cumplimiento ISO o variaciones
 mensuales con estas muestras. Las ampliaciones de

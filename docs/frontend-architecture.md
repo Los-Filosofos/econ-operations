@@ -16,11 +16,13 @@ decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
 | `/login` | Formulario de inicio de sesión; `?next=` devuelve a la ruta pedida | Pública |
 | `/` y `/resumen` | Grafo operativo a pantalla completa de identidades y relaciones verificadas | `read` |
 | `/solicitudes` | Proyecto/solicitud, maquinaria, período, estado, traslado y recepción | `read` |
-| `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento | `read`; guardar plan exige `manage_transfers` |
+| `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento; para una solicitud pendiente sin unidad, las unidades candidatas de `GET /api/v1/requests/{id}/suggestions` (elegible, por revisar o excluida, con motivo y faltantes «no verificable») | `read`; guardar plan exige `manage_transfers` |
 | `/maquinaria` | Inventario consultado, incluidos equipos sin solicitud, con filtros y acceso por ID | `read` |
 | `/maquinaria/{id}` | Comparación de evidencia por fuente, interpretación de estados y ubicación fechada | `read` |
 | `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción | `read`; cola y sincronización exigen `manage_transfers`, recepción `declare_reception` |
 | `/integracion` | Traza de una solicitud: datos leídos de Prisma, transformación de ECON, payload preparado para Startrack, respuesta del proveedor y tiempos del traslado | `read` |
+| `/indicadores` («Indicadores y SLA») | Las ocho fichas de `GET /api/v1/indicators` agrupadas por el área que decide (Mantenimiento, Logística, Proyectos, Información): una lectura en lenguaje llano por ficha, conteo de filas evaluables, parciales y no evaluables con su motivo, fechas de origen y cobertura, una barra por fila evaluable cuando hay horas (sin promedios), tabla AG Grid de filas y, al lado, el SLA propuesto con umbral «a validar con ECON»; enlace al JSON del contrato | `read` |
+| `/decisiones` | Qué requiere atención: un asunto por solicitud con evidencia y siguiente paso, «Lo que dicen los indicadores» (las tres lecturas más accionables, con enlace a `/indicadores`), período de uso solicitado y distribución por estado, cada gráfico con tabla alternativa ([analítica](analitica-decisiones.md#página-de-decisiones)) | `read` |
 | `/fuentes` | Procedencia, alcance y estado de las consultas | `read` |
 | `/administracion` | Alta, rol, activación y contraseña de usuarios | `manage_users` (solo `admin`) |
 
@@ -112,9 +114,10 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `dashboard/theme.py` | Paleta, tema Mantine, tema AG Grid y template Plotly `econ`; `state_family`/`state_color` |
 | `dashboard/components.py` | Bloques reutilizables: `icon`, `heading`, `section`, `notice`, `state_text`, `facts`, `rows_table`, `accordion`, `provenance`, `grid` (AG Grid con locale en español) |
 | `dashboard/context.py` | Parámetros URL validados y enlaces con IDs codificados |
-| `dashboard/views.py` | `PAGES`, navegación, línea de alcance, pestañas de filtro, resumen, solicitudes, maquinaria, fuentes y `render_page` |
-| `dashboard/analytics.py`, `dashboard/decision_analytics.py` | Relación solicitud/unidad, población filtrada, calendario y distribución por estado |
-| `dashboard/decision_priorities.py` | Un asunto con evidencia y siguiente paso por solicitud |
+| `dashboard/views.py` | `PAGES`, navegación, línea de alcance, pestañas de filtro, resumen (grafo), `decisions` (`/decisiones`), solicitudes, maquinaria, fuentes y `render_page` |
+| `dashboard/analytics.py`, `dashboard/decision_analytics.py` | Relación solicitud/unidad, población filtrada, calendario y distribución por estado; `graph()` envuelve una figura Plotly del template `econ` |
+| `dashboard/decision_priorities.py` | Un asunto con evidencia y siguiente paso por solicitud, sin puntajes de urgencia ni reloj |
+| `dashboard/indicator_views.py` | Página `/indicadores`: lectura en lenguaje llano por ficha derivada de las filas de `compute_indicators` (nunca recalcula reglas), tarjetas de SLA propuestos copiadas de `docs/indicadores-calculables.md`, gráfico de horas por fila, tabla AG Grid y bloque de cobertura; `indicator_insights` alimenta «Lo que dicen los indicadores» en `/decisiones` |
 | `dashboard/evidence_views.py` | Comparación de hechos por origen, interpretación y cronología por solicitud |
 | `dashboard/operations_graph.py` | Proyección visual de proyectos, maquinaria, aristas respaldadas y detalle contextual; no consulta proveedores ni duplica reglas |
 | `dashboard/workflow_forms.py`, `dashboard/workflow_views.py`, `dashboard/workflow_actions.py` | Preparación, registro de movimientos, recepción y ejecución de acciones con permiso |
@@ -122,7 +125,8 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `core/auth.py`, `api/auth.py`, `api/users.py` | Roles, permisos, sesión, login/logout/me y administración de usuarios |
 | `services/hub.py` | Proyección de lectura `HubResponse`, compartida con HTTP |
 | `services/evidence.py` | Proyección de evidencia persistida mediante identidades y períodos compatibles |
-| `services/workflow.py`, `services/ledger.py` | Reglas operativas, permiso por acción, persistencia, cortes, eventos y cola transaccional; `resolve` cierra un `unknown` como `failed` con actor |
+| `services/workflow.py`, `services/ledger.py` | Reglas operativas, permiso por acción, persistencia, cortes, eventos y cola transaccional; `resolve` cierra un `unknown` como `failed` con actor; `registry_state` calcula la versión determinista del registro de un modo y `SyncScheduler` ejecuta un ciclo live acotado por intervalo dentro del proceso (`SYNC_INTERVAL_SECONDS`) |
+| `api/status.py` | `GET /api/v1/status`: `registry_version`, última lectura guardada del registro, `hub_data_as_of` y estado de la sincronización automática (`enabled`, `interval_seconds`, `last_cycle_at`, `last_cycle_result`, `in_progress`); dos consultas SQL, sin proveedores; lo sondea la interfaz |
 | `services/intervals.py` | Intervalos por día (período de uso, asignación vigente, programación, observación) y comparación inclusiva; fecha ausente, parcial o sin zona → «no verificable», nunca «sin conflicto». Lo usan hub, transfers y suggestions |
 | `services/graph.py`, `api/graph.py` | `GraphProjection` de `GET /api/v1/graph`: nodos tipados, aristas con evidencia y alcance, conflictos, tensiones y faltantes «no verificable»; la presencia cuelga del movimiento, no de la máquina; sin geometría ni ETA |
 | `services/indicators.py`, `api/indicators.py` | `IndicatorsReport` de `GET /api/v1/indicators`: ocho fichas por fila, sin promedios; la ausencia no es cero; fixture sin corte |
@@ -132,14 +136,18 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `dashboard/assets` | Estilos, Inter, Roboto Mono (OFL), siluetas SVG del grafo, iconos Tabler locales y logotipos ECON |
 
 Se retiraron `icons.py`, `decision_views.py`, `equipment_views.py`, los SVG
-locales y el menú clientside: Mantine y los recursos locales cubren esas funciones.
-La proyección `GET /api/v1/graph`, los indicadores y las sugerencias se consultan
-por HTTP y Swagger; el grafo de la portada (`operations_graph.py`) dibuja en el
+locales, el menú clientside y el botón Actualizar: Mantine, los recursos locales
+y el sondeo de `GET /api/v1/status` cubren esas funciones. La proyección
+`GET /api/v1/graph` se consulta por HTTP y Swagger; los indicadores tienen la
+página `/indicadores`, las sugerencias aparecen en el detalle de la solicitud
+pendiente y el grafo de la portada (`operations_graph.py`) dibuja en el
 navegador la lectura del hub ya cargada.
 
 `assets/operations-graph.js` implementa únicamente interacción visual local
-(zoom, pan, selección, cierre y reencuadre responsive). No inicia consultas: el
-botón Actualizar activa el callback acotado ya existente. Se eligió HTML/CSS más
+(zoom, pan, selección, cierre y reencuadre responsive). No inicia consultas: la
+relectura la disparan los callbacks acotados del shell (cambio de origen o
+búsqueda, resultado de una acción del flujo o cambio de `registry_version` en
+`GET /api/v1/status`). Se eligió HTML/CSS más
 SVG locales en lugar de otra dependencia porque preserva nodos como botones
 accesibles y reutiliza el estado Dash sin un segundo modelo de grafo.
 
@@ -153,10 +161,11 @@ responsable, instante con zona y referencia de constancia.
 
 La URL conserva `mode`, `q` y `filter`. El **origen de datos (`mode`) se
 conserva en la URL en todas las páginas**, incluidos los detalles, `/fuentes`,
-`/integracion` y `/administracion`. El **buscador (`q`) solo se muestra en
-Resumen, Solicitudes, Maquinaria y Operaciones**, que son las páginas con una
-población filtrable; las páginas de detalle, `/integracion`, `/fuentes` y
-`/administracion` no lo presentan, porque ahí no filtraba nada. Se rechazan
+`/integracion`, `/indicadores`, `/decisiones` y `/administracion`. El
+**buscador (`q`) solo se muestra en las páginas con una población filtrable**
+(Resumen, Solicitudes, Maquinaria, Operaciones y Decisiones); las páginas de
+detalle, `/integracion`, `/indicadores`, `/fuentes` y `/administracion` no lo
+presentan, porque ahí no filtraría nada. Se rechazan
 modos desconocidos, parámetros duplicados, filtros inválidos y búsquedas
 mayores de 100 caracteres.
 Aplicar (o Enter en Buscar) y las pestañas de filtro actualizan la URL;
@@ -165,15 +174,38 @@ conserva el modo pero no limita el registro por la búsqueda.
 
 Cada navegador guarda `HubResponse` en `dcc.Store(storage_type="memory")` con
 clave `[modo, búsqueda]`. Cambiar página o filtro reutiliza esa lectura;
-Actualizar vuelve a consultarla. Un store separado conserva `WorkflowOverview`
-por modo. Planes, cortes, eventos y recepciones persisten en PostgreSQL: el
-store del navegador es una proyección, no el registro durable.
+cambiar origen o búsqueda, o terminar una acción del flujo, vuelve a
+consultarla. Un store separado conserva `WorkflowOverview` por modo. Planes,
+cortes, eventos y recepciones persisten en PostgreSQL: el store del navegador
+es una proyección, no el registro durable.
+
+**Refresco sin botón.** No existe un botón Actualizar: el `dcc.Interval`
+`status-poll` sondea `GET /api/v1/status?mode=…` cada 15 segundos
+(`STATUS_POLL_SECONDS`; dos consultas SQL, sin proveedores; se pausa con la
+pestaña oculta y vuelve a sondear al mostrarla) y solo cuando
+`registry_version` difiere de la versión que llevan los stores —planes,
+eventos, recepciones o un corte nuevo, lo haya guardado una acción del
+navegador, el worker CLI o el ciclo automático del servidor— se recargan
+`HubResponse` y `WorkflowOverview`; lo que está en pantalla permanece hasta que
+llega la nueva lectura. Una relectura sin cambios conserva la versión y no
+recarga nada. La cabecera muestra cuándo se leyó lo que se ve («hace X min»,
+`role="status"`) y un menú «Estado de la lectura de datos» con las líneas de
+registro, sincronización y sondeo más el respaldo accesible **«Volver a leer
+ahora»** (`#refresh`, relectura forzada; el control propio del grafo lo
+reutiliza). El ritmo de la sincronización con los proveedores no lo fija el
+navegador: `SYNC_INTERVAL_SECONDS` (servidor; `0` apagado, mínimo 30) ejecuta
+un ciclo live acotado por intervalo dentro del proceso, bajo el candado de ciclo
+de PostgreSQL, y nunca en `fixture` ([despliegue](despliegue-backend.md)).
 
 `WorkflowOverview.available` indica si se pudo leer el registro y `complete`
-si todos los movimientos de ese modo/solicitud caben en la primera página
-(100 movimientos; HTTP admite `page` y `page_size` hasta 500). Un resultado
-parcial conserva lo observado, pero no acredita la ausencia de otros
-movimientos. Esto es independiente de `HubResponse.scope`.
+si todos los movimientos de ese modo/solicitud caben en la página leída (100
+movimientos por defecto; HTTP admite `page` y `page_size` hasta 500). La tabla
+de Operaciones (AG Grid, `components.grid`) pagina en el navegador esa lectura
+en páginas de 15, 30 o 50 filas, filtra por la búsqueda `q` (referencia, IDs de
+solicitud, máquina y proyecto, nombre del proyecto) y, cuando la lectura es
+parcial, muestra `coverage.note` antes de la tabla. Un resultado parcial
+conserva lo observado, pero no acredita la ausencia de otros movimientos. Esto
+es independiente de `HubResponse.scope`.
 
 Pydantic valida las proyecciones antes de presentarlas. Una respuesta de otro
 modo o búsqueda se oculta; un fallo de lectura no sirve el resultado anterior
@@ -212,7 +244,9 @@ historia completa cuando la cobertura es parcial.
   `burger` (`aria-controls`, `aria-expanded`), atrapa el foco, cierra con
   Escape, fondo o navegación y devuelve el foco al control.
 - Todos los controles tienen etiqueta visible; pestañas de filtro con
-  `aria-label`; mensajes de acción en una región `aria-live="polite"`.
+  `aria-label`; mensajes de acción y el indicador de lectura de la cabecera en
+  regiones `aria-live="polite"`; el menú «Estado de la lectura de datos» ofrece
+  «Volver a leer ahora» por teclado como respaldo del refresco automático.
 - AG Grid con teclado, locale en español y desplazamiento horizontal; las
   tablas no ocultan columnas de negocio en móvil (390 px).
 - Los nodos del grafo son botones con nombre accesible y tooltip asociado; Enter

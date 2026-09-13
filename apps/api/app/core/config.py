@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # Durable pause before a draft/blocked plan is revalidated again; sent/unknown movements
     # keep their next_review_at at the cycle time so that observation is never delayed.
     workflow_review_delay_seconds: int = Field(default=300, ge=0, le=3600)
+    # In-process live synchronization (ADR 0006: PostgreSQL locks, no Redis). 0 keeps it off;
+    # when on, the server runs one bounded live cycle per interval and never in fixture.
+    sync_interval_seconds: int = Field(default=0, ge=0, le=3600)
     startrack_api_key: SecretStr | None = Field(default=None, repr=False)
     startrack_password: SecretStr | None = Field(default=None, repr=False)
     startrack_page_size: int = Field(default=25, ge=1, le=100)
@@ -40,6 +43,20 @@ class Settings(BaseSettings):
     nexus_max_pages: int = Field(default=2, ge=1, le=5)
     nexus_timeout_seconds: float = Field(default=5, gt=0, le=15)
     nexus_budget_seconds: float = Field(default=20, gt=0, le=60)
+
+    @property
+    def sync_enabled(self) -> bool:
+        """The in-process scheduler exists only for live reads that are explicitly allowed."""
+        return self.sync_interval_seconds > 0 and self.allow_live_reads
+
+    @model_validator(mode="after")
+    def _sync_interval_bounds(self) -> "Settings":
+        if 0 < self.sync_interval_seconds < 30:
+            raise ValueError(
+                "SYNC_INTERVAL_SECONDS debe ser 0 (desactivado) o al menos 30 segundos: el "
+                "presupuesto de los proveedores es compartido por IP."
+            )
+        return self
 
     @model_validator(mode="after")
     def _session_secret_required(self) -> "Settings":

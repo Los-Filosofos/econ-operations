@@ -5,15 +5,19 @@ the loopback developer without a login (`local_dev`) or the CLI worker (`cli_wor
 No user is ever invented; when nothing is known the actor is None.
 """
 
+import asyncio
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import UTC, datetime, time, timedelta
 from functools import wraps
+from hashlib import sha256
 from threading import Lock
 
 from dash.exceptions import AppNotFoundError
-from pydantic import ValidationError
-from sqlalchemy import Engine
+from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import Engine, func
 from sqlalchemy.exc import SQLAlchemyError
+from sqlmodel import Session, select
 
 from app.core.access import management_allowed, management_scope
 from app.core.auth import Permission, actor_from_user, can, session_user
@@ -30,7 +34,7 @@ from app.integrations.startrack import (
     StartrackWriteUnknown,
 )
 from app.models.hub import DataMode, EquipmentRecord, Provenance, RequestRecord
-from app.models.operations import Actor, MovementRecord
+from app.models.operations import Actor, Movement, MovementRecord
 from app.models.workflow import MappingCatalogs, OperationsCoverage, WorkflowOverview
 from app.services.hub import BUSINESS_TIMEZONE, map_live, read_hub
 from app.services.ledger import (
@@ -76,6 +80,12 @@ ARRIVAL_LABELS = {
     ),
 }
 CLI_WORKER = Actor(kind="cli_worker")
+FORMAT_ERROR = "El registro de operación requiere revisar su formato."
+REGISTRY_ERROR = "El registro de operaciones no está disponible. Revisa la conexión y la migración."
+INTERNAL_ERROR = "El ciclo se interrumpió por un error interno del servidor."
+# Recorded outcomes of a cycle; anything else is "error: " plus a public message.
+CYCLE_OK = "ok"
+CYCLE_SKIPPED = "skipped"
 
 
 class WorkflowError(Exception):
@@ -89,21 +99,79 @@ class SyncInProgress(WorkflowError):
 PROVIDER_ERRORS = (WorkflowError, NexusReadError, StartrackReadError, LedgerError)
 
 
+def public_message(error: BaseException) -> str:
+    """The message a failure may show; provider bodies and SQL details never leave here."""
+    if isinstance(error, PROVIDER_ERRORS):
+        return str(error)
+    if isinstance(error, ValidationError):
+        return FORMAT_ERROR
+    if isinstance(error, SQLAlchemyError):
+        return REGISTRY_ERROR
+    return INTERNAL_ERROR
+
+
 def _boundary(method):
     @wraps(method)
     def wrapped(*args, **kwargs):
         try:
             return method(*args, **kwargs)
-        except (LedgerError, NexusReadError, StartrackReadError) as error:
-            raise WorkflowError(str(error)) from None
-        except ValidationError:
-            raise WorkflowError("El registro de operación requiere revisar su formato.") from None
-        except SQLAlchemyError:
-            raise WorkflowError(
-                "El registro de operaciones no está disponible. Revisa la conexión y la migración."
-            ) from None
+        except (
+            LedgerError,
+            NexusReadError,
+            StartrackReadError,
+            ValidationError,
+            SQLAlchemyError,
+        ) as error:
+            raise WorkflowError(public_message(error)) from None
 
     return wrapped
+
+
+class RegistryState(BaseModel):
+    """What the browser compares to learn that the stored registry of a mode changed."""
+
+    mode: DataMode
+    version: str = Field(
+        description=(
+            "Hash corto y determinista del registro del modo (cantidad y última modificación "
+            "de movimientos, fecha y huella estable del último corte). Cambia solo cuando "
+            "cambió lo guardado; una relectura sin cambios no lo altera."
+        )
+    )
+    last_read_at: datetime | None = Field(
+        default=None,
+        description="Última lectura del origen guardada para el modo (corte o confirmación).",
+    )
+    data_as_of: datetime | None = Field(
+        default=None, description="Corte del origen del último corte guardado; null sin corte."
+    )
+
+
+class SyncStatus(BaseModel):
+    """Automatic synchronization of this server process (never for fixture)."""
+
+    enabled: bool
+    interval_seconds: int = Field(description="0 cuando la sincronización automática está apagada.")
+    last_cycle_at: datetime | None = None
+    last_cycle_result: str | None = Field(
+        default=None,
+        description=(
+            "ok, skipped (otro proceso tenía el ciclo) o error: seguido del motivo público."
+        ),
+    )
+    in_progress: bool
+
+
+class CycleOutcome(BaseModel):
+    at: datetime
+    result: str
+
+
+def _stamp(value: object) -> str:
+    if isinstance(value, datetime):
+        value = value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+        return value.isoformat()
+    return "" if value is None else str(value)
 
 
 def _instant(value: str | None) -> datetime | None:
@@ -146,6 +214,8 @@ class WorkflowService:
         self.startrack = startrack
         self.ledger = OperationsLedger(engine)
         self._sync_lock = Lock()
+        # Outcome of the latest automatic cycle of this process, per mode (see SyncScheduler).
+        self._cycles: dict[str, CycleOutcome] = {}
 
     def _mode(self, mode: str) -> None:
         if mode not in {"fixture", "live"}:
@@ -268,6 +338,48 @@ class WorkflowService:
             coverage=coverage,
             **coverage.model_dump(include={"total", "page", "page_size", "total_pages"}),
         )
+
+    def registry_state(self, mode: DataMode) -> RegistryState:
+        """Short, deterministic version of the stored registry of one mode; no provider call.
+
+        The hash covers what changes when the registry changes: how many movements the mode
+        has and when one was last modified, plus the record time and stable content hash of
+        the latest cut. The confirmation time of an unchanged re-read (`last_confirmed_at`,
+        ADR 0006) is left out on purpose: a cycle that found nothing new keeps the version
+        and only moves `last_read_at`, so browsers do not reload identical data.
+        """
+        if mode not in {"fixture", "live"}:
+            raise WorkflowError("Origen de datos inválido.")
+        with Session(self.ledger.engine) as session:
+            count, latest = session.exec(
+                select(func.count(Movement.id), func.max(Movement.updated_at)).where(
+                    Movement.mode == mode
+                )
+            ).one()
+        snapshot = self.ledger.last_snapshot(mode)
+        cut = [snapshot.content_hash, _stamp(snapshot.recorded_at)] if snapshot else ["", ""]
+        digest = sha256("|".join([mode, str(count), _stamp(latest), *cut]).encode())
+        return RegistryState(
+            mode=mode,
+            version=digest.hexdigest()[:12],
+            last_read_at=last_read_at(snapshot) if snapshot else None,
+            data_as_of=snapshot.data_as_of if snapshot else None,
+        )
+
+    def sync_status(self, mode: DataMode) -> SyncStatus:
+        """Automatic synchronization as seen from this process; fixture is never scheduled."""
+        scheduled = mode == "live" and self.settings.sync_enabled
+        outcome = self._cycles.get(mode)
+        return SyncStatus(
+            enabled=scheduled,
+            interval_seconds=self.settings.sync_interval_seconds if scheduled else 0,
+            last_cycle_at=outcome.at if outcome else None,
+            last_cycle_result=outcome.result if outcome else None,
+            in_progress=self._sync_lock.locked(),
+        )
+
+    def record_cycle(self, mode: DataMode, result: str) -> None:
+        self._cycles[mode] = CycleOutcome(at=datetime.now(UTC), result=result)
 
     def _source_records(
         self, mode: DataMode, request_source_id: str
@@ -681,9 +793,56 @@ class WorkflowService:
             self._sync_lock.release()
 
     def run_cycle(self, mode: DataMode = "live") -> WorkflowOverview:
-        """CLI-only entry point; settings still gate all reads and remote writes.
-
-        The worker acts as `cli_worker`: an actor without user, email or role.
-        """
+        """Worker entry point (CLI or in-process scheduler); settings still gate all reads
+        and remote writes. The worker acts as `cli_worker`: no user, email or role."""
         with management_scope(True):
             return self.sync(mode, actor=CLI_WORKER)
+
+
+class SyncScheduler:
+    """One bounded live cycle per interval inside the server process (ADR 0006: no Redis).
+
+    Each cycle goes through `WorkflowService.run_cycle`: the `cli_worker` actor, the
+    per-process lock and the PostgreSQL advisory lock. When another process owns the cycle
+    it is skipped and recorded, never awaited; provider or registry failures are recorded
+    with their public message and the loop goes on. `stop` cancels the task and waits for it.
+    """
+
+    def __init__(self, workflow: WorkflowService, interval_seconds: float):
+        self.workflow = workflow
+        self.interval_seconds = interval_seconds
+        self._task: asyncio.Task | None = None
+
+    @property
+    def running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.get_running_loop().create_task(self._loop(), name="econ-sync")
+
+    async def stop(self) -> None:
+        task, self._task = self._task, None
+        if task is None:
+            return
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+    async def _loop(self) -> None:
+        while True:
+            await asyncio.sleep(self.interval_seconds)
+            await self.run_once()
+
+    async def run_once(self) -> str:
+        """Run one cycle in a worker thread; the event loop keeps serving requests."""
+        try:
+            await asyncio.to_thread(self.workflow.run_cycle, "live")
+        except SyncInProgress:
+            result = CYCLE_SKIPPED
+        except Exception as error:  # noqa: BLE001 - the loop must survive any failure
+            result = f"error: {public_message(error)}"
+        else:
+            result = CYCLE_OK
+        self.workflow.record_cycle("live", result)
+        return result
