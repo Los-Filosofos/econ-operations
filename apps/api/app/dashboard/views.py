@@ -6,6 +6,8 @@ from urllib.parse import unquote
 import dash_mantine_components as dmc
 from dash import dcc
 
+from app.core.auth import Permission, can
+from app.dashboard.admin_views import admin_page
 from app.dashboard.analytics import (
     day,
     equipment_label,
@@ -14,6 +16,7 @@ from app.dashboard.analytics import (
     readable,
     request_operation,
 )
+from app.dashboard.auth_views import current_user
 from app.dashboard.components import (
     accordion,
     back_link,
@@ -105,6 +108,16 @@ def current_section(path: str) -> str | None:
     )
 
 
+def visible_pages():
+    """Pages the acting role may open; a page without `permission` is open to every role."""
+    user = current_user()
+    return [
+        page
+        for page in PAGES
+        if not page.get("permission") or (user is not None and can(user.role, page["permission"]))
+    ]
+
+
 def navigation(path: str, context: QueryContext):
     """Navigation links for the sidebar and the mobile drawer; one section is current."""
     selected = current_section(path)
@@ -117,7 +130,7 @@ def navigation(path: str, context: QueryContext):
             className="nav-link" + (" nav-utility" if page.get("secondary") else ""),
             **({"aria-current": "page"} if selected == page["path"] else {}),
         )
-        for page in PAGES
+        for page in visible_pages()
     ]
 
 
@@ -997,6 +1010,14 @@ PAGES = [
         "icon": "database",
         "render": sources,
         "secondary": True,
+    },
+    {
+        "path": "/administracion",
+        "label": "Administración",
+        "icon": "users",
+        "render": admin_page,
+        "secondary": True,
+        "permission": Permission.manage_users,
     },
 ]
 

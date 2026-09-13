@@ -6,7 +6,9 @@ from urllib.parse import unquote
 import dash_mantine_components as dmc
 from pydantic import ValidationError
 
+from app.core.auth import Permission
 from app.dashboard.analytics import instant
+from app.dashboard.auth_views import denied, permitted
 from app.dashboard.components import (
     accordion,
     back_link,
@@ -165,7 +167,8 @@ def workflow_table(movements: list[MovementRecord], context: QueryContext):
 def request_workflow(workflow, context: QueryContext, request: RequestRecord, equipment):
     movements = matching_movements(workflow, request)
     available = workflow is not None and workflow.available
-    enabled = available and workflow.management_enabled
+    allowed = permitted(Permission.manage_transfers)
+    enabled = available and workflow.management_enabled and allowed
     has_identity = bool(
         request.provenance.source_id
         and request.project_id
@@ -182,7 +185,7 @@ def request_workflow(workflow, context: QueryContext, request: RequestRecord, eq
         None
         if available
         else (workflow.message if workflow else "Consultando el registro de movimientos…"),
-        READ_ONLY if available and not enabled else None,
+        READ_ONLY if available and allowed and not enabled else None,
         "Falta una unidad asignada o un identificador de origen. Completa la asignación en "
         "Prisma para preparar el movimiento."
         if not has_identity
@@ -212,7 +215,9 @@ def request_workflow(workflow, context: QueryContext, request: RequestRecord, eq
                     machinery_source_id=equipment.provenance.source_id or "" if equipment else "",
                     project_source_id=request.project_id or "",
                     enabled=enabled and has_identity,
-                ),
+                )
+                if allowed
+                else denied(),
             ),
             mt="md",
         ),
@@ -228,6 +233,7 @@ def operations(workflow: "WorkflowOverview | None", context: QueryContext):
     ]
     if workflow is None:
         return [*content, empty("Consultando movimientos…", "Cargando el registro del origen.")]
+    allowed = permitted(Permission.manage_transfers)
     content.append(
         dmc.Group(
             [
@@ -236,7 +242,9 @@ def operations(workflow: "WorkflowOverview | None", context: QueryContext):
                     "Sincronizar operación" if context.mode == "live" else "Guardar corte local",
                     enabled=workflow.available and workflow.management_enabled,
                     icon_name="refresh",
-                ),
+                )
+                if allowed
+                else denied(),
                 dmc.Text(
                     f"Última sincronización: {instant(workflow.last_sync_at)}"
                     if workflow.last_sync_at
@@ -250,7 +258,7 @@ def operations(workflow: "WorkflowOverview | None", context: QueryContext):
         )
     )
     content.append(hint(workflow.message))
-    if workflow.available and not workflow.management_enabled:
+    if workflow.available and allowed and not workflow.management_enabled:
         content.append(hint(READ_ONLY))
     if not workflow.available:
         return [*content, empty("Registro no disponible", workflow.message)]
@@ -338,7 +346,8 @@ def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, 
                 else "Comprueba el origen seleccionado y el identificador del movimiento.",
             ),
         ]
-    enabled = workflow.available and workflow.management_enabled
+    allowed = permitted(Permission.manage_transfers)
+    enabled = workflow.available and workflow.management_enabled and allowed
     receipt = movement.receipt
     mapping = movement.mapping
     references = {
@@ -481,6 +490,8 @@ def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, 
                     ),
                 ]
             )
+            if movement.mode == "live" and allowed
+            else denied()
             if movement.mode == "live"
             else None,
         ),
@@ -506,7 +517,15 @@ def movement_detail(workflow: "WorkflowOverview | None", context: QueryContext, 
                 "Una entrada a geocerca o una tarea completada no acredita recepción. "
                 "La constancia se registra con responsable, fecha y referencia explícitos."
             ),
-            receipt_form(movement.id, enabled=enabled) if can_receive else None,
+            (
+                receipt_form(
+                    movement.id, enabled=workflow.available and workflow.management_enabled
+                )
+                if permitted(Permission.declare_reception)
+                else denied()
+            )
+            if can_receive
+            else None,
         ),
         section(
             "Historial y evidencia del movimiento",

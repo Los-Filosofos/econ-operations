@@ -11,6 +11,15 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
+from app.dashboard.admin_views import admin_layout, admin_page, register_admin_callbacks
+from app.dashboard.auth_views import (
+    current_user,
+    header_user,
+    login_page,
+    login_target,
+    redirect,
+    register_auth_callbacks,
+)
 from app.dashboard.components import icon, link, loading, notice
 from app.dashboard.context import QueryContext, parse_context
 from app.dashboard.theme import BRAND, MANTINE_THEME
@@ -93,6 +102,18 @@ def brand(height=34):
 
 
 def layout():
+    """Root shell: the route callback fills it with the login page or the application."""
+    return dmc.MantineProvider(
+        [
+            dcc.Location(id="url", refresh="callback-nav"),
+            dcc.Store(id="view", storage_type="memory"),
+            html.Div(id="root"),
+        ],
+        theme=MANTINE_THEME,
+    )
+
+
+def app_shell(auth_required: bool):
     header = dmc.AppShellHeader(
         dmc.Group(
             [
@@ -114,19 +135,20 @@ def layout():
                 dmc.Text("Control de maquinaria", size="sm", c="dimmed", visibleFrom="xs"),
                 dmc.Group(
                     [
-                        # Slot for the current user and sign-out once authentication lands.
-                        html.Div(id="header-user"),
+                        html.Div(header_user(current_user(), auth_required), id="header-user"),
                         dmc.Button(
-                            "Actualizar",
+                            dmc.Text("Actualizar", span=True, size="sm", visibleFrom="xs"),
                             id="refresh",
                             n_clicks=0,
                             variant="default",
                             size="sm",
                             leftSection=icon("refresh", 16),
+                            **{"aria-label": "Actualizar"},
                         ),
                     ],
-                    gap="sm",
+                    gap="xs",
                     ml="auto",
+                    wrap="nowrap",
                 ),
             ],
             h="100%",
@@ -166,9 +188,8 @@ def layout():
             px=0,
         )
     )
-    return dmc.MantineProvider(
+    return html.Div(
         [
-            dcc.Location(id="url", refresh="callback-nav"),
             html.A("Saltar al contenido", href="#content", className="skip-link"),
             dmc.AppShell(
                 [header, navbar, main],
@@ -185,8 +206,7 @@ def layout():
                 padding="md",
                 closeButtonProps={"aria-label": "Cerrar navegación"},
             ),
-        ],
-        theme=MANTINE_THEME,
+        ]
     )
 
 
@@ -199,6 +219,8 @@ def validation_controls():
             action_button("queue", "Poner en cola"),
             action_button("sync", "Sincronizar"),
             filter_tabs(QueryContext(), REQUEST_FILTERS, "Filtros"),
+            # The signed-in header only exists inside a request; declare its IDs here.
+            dmc.MenuItem("Cerrar sesión", id="logout", n_clicks=0),
         ]
     )
 
@@ -232,8 +254,41 @@ def create_dashboard(server: FastAPI) -> Dash:
         suppress_callback_exceptions=False,
         meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
     )
+    settings = server.state.settings
     dashboard.layout = layout
-    dashboard.validation_layout = html.Div([layout(), validation_controls()])
+    dashboard.validation_layout = html.Div(
+        [
+            layout(),
+            app_shell(settings.auth_required),
+            login_page(None),
+            redirect("/"),
+            *admin_layout(),
+            validation_controls(),
+        ]
+    )
+    register_auth_callbacks(dashboard)
+    register_admin_callbacks(dashboard, server)
+
+    def anonymous() -> bool:
+        return settings.auth_required and current_user() is None
+
+    @dashboard.callback(
+        Output("root", "children"),
+        Output("view", "data"),
+        Input("url", "pathname"),
+        State("url", "search"),
+        State("view", "data"),
+    )
+    def route(path, search, current):
+        path = (path or "/").rstrip("/") or "/"
+        user = current_user()
+        if path == "/login":
+            return (redirect("/"), "redirect") if user else (login_page(search), "login")
+        if user is None and settings.auth_required:
+            return redirect(login_target(path, search)), "redirect"
+        if current == "app":
+            return no_update, no_update
+        return app_shell(settings.auth_required), "app"
 
     @dashboard.callback(
         Output("mobile-navigation", "opened"),
@@ -272,7 +327,10 @@ def create_dashboard(server: FastAPI) -> Dash:
         State("url", "search"),
         prevent_initial_call=True,
     )
-    def apply_query(_clicks, _submit, tabs, mode, query, search):
+    def apply_query(clicks, submit, tabs, mode, query, search):
+        # Wildcard callbacks re-run when the shell mounts; only a real click or Enter applies.
+        if not isinstance(ctx.triggered_id, dict) and not (clicks or submit):
+            return no_update
         # The read callback validates these values again before accessing the service.
         try:
             current = parse_context(search)
@@ -298,6 +356,8 @@ def create_dashboard(server: FastAPI) -> Dash:
         State("snapshot", "data"),
     )
     async def load_snapshot(search, _refresh, path, action, previous):
+        if anonymous():
+            return no_update
         if ctx.triggered_id == "workflow-action-result" and (
             not isinstance(action, dict) or not action.get("ok")
         ):
@@ -336,6 +396,8 @@ def create_dashboard(server: FastAPI) -> Dash:
         Input("workflow-action-result", "data"),
     )
     async def load_workflow(search, _refresh, action):
+        if anonymous():
+            return no_update
         if (
             ctx.triggered_id == "workflow-action-result"
             and isinstance(action, dict)
@@ -368,7 +430,7 @@ def create_dashboard(server: FastAPI) -> Dash:
     )
     async def act_on_workflow(clicks, values, identifiers, search, path):
         trigger = ctx.triggered_id
-        if not isinstance(trigger, dict) or not any(clicks):
+        if anonymous() or not isinstance(trigger, dict) or not any(clicks):
             return no_update
         result = {"token": str(uuid4()), "path": path, "search": search}
         try:
@@ -431,12 +493,16 @@ def create_dashboard(server: FastAPI) -> Dash:
     )
     def render(path, search, snapshot, workflow_snapshot):
         path = (path or "/").rstrip("/") or "/"
+        if anonymous():
+            return redirect(login_target(path, search)), None, None, None
         try:
             context = parse_context(search)
         except ValueError as error:
             nav = navigation(path, QueryContext())
             return notice("Consulta inválida", str(error), error=True), nav, nav, None
         nav = navigation(path, context)
+        if path == "/administracion":
+            return admin_page(), nav, nav, None
         workflow = workflow_from(workflow_snapshot, context.mode)
         # Persisted evidence stays readable when the current provider read is unavailable.
         if path == "/operaciones" or path.startswith("/operaciones/"):
