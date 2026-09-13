@@ -60,6 +60,7 @@ from app.dashboard.evidence_views import (
 from app.dashboard.indicator_views import indicator_insights, indicators_page
 from app.dashboard.integration_views import integration_page
 from app.dashboard.operations_graph import graph_status, operations_graph_view
+from app.dashboard.suggestion_views import conflicts_section, suggestions_section
 from app.dashboard.workflow_views import (
     STATES,
     matching_movements,
@@ -795,6 +796,8 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
                 )
             ),
         ),
+        suggestions_section(hub, request, workflow, context),
+        conflicts_section(hub, request, workflow, context),
         interpretation_section(item, current_movements) if item else None,
         accordion(disclosure(unit_title, *(machine_evidence(item) if item else [unit_missing]))),
         *request_workflow(workflow, context, request, item),
@@ -889,6 +892,7 @@ def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str, w
         back,
         heading(f"{equipment_label(item)} · {item.name}", "Evidencia de la maquinaria consultada."),
         interpretation_section(item, movements),
+        conflicts_section(hub, item, workflow, context),
         *source_comparison(item, movements, workflow, context, hub),
         section(
             "Solicitudes con esta unidad asignada",
