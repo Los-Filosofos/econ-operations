@@ -18,7 +18,7 @@ caso son sintéticos. Empezar por el [contexto vigente](contexto-vigente.md).
 | [Indicadores y referencias ISO](kpis-y-referencias-iso.md) | Fórmulas y requisitos de evidencia; sin resultados ni certificación |
 
 PDFs en [`output/pdf`](../output/pdf). Backlog con criterios de aceptación en
-[`output/auditoria-2026-09-12`](../output/auditoria-2026-09-12/README.md).
+[los issues del repositorio](https://github.com/Los-Filosofos/econ-operations/issues).
 
 ## Implementación y operación
 

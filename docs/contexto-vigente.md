@@ -145,7 +145,7 @@ presentación final de hasta diez diapositivas; reproducción del PDF del manual
 detección de cambios Prisma posteriores al envío, orden determinista de
 observaciones, cobertura por fuente y bandeja durable de eventos; vincular el
 usuario autenticado a la declaración de recepción. El backlog con
-criterios está en [output/auditoria-2026-09-12](../output/auditoria-2026-09-12/README.md).
+criterios está en [los issues del repositorio](https://github.com/Los-Filosofos/econ-operations/issues).
 Las propuestas de [sincronización y escala](sincronizacion-y-discrepancias.md)
 no están implementadas.
 

@@ -116,7 +116,7 @@ sirve interfaz y API juntas.
 [Analítica](docs/analitica-decisiones.md) ·
 [Mapeo y responsabilidades](docs/equivalencias-prisma-startrack.md) ·
 [Gráficos y diagramas](docs/entregables-visuales.md) ·
-[Backlog](output/auditoria-2026-09-12/README.md) ·
+[Backlog](https://github.com/Los-Filosofos/econ-operations/issues) ·
 [OneDrive](docs/onedrive/README.md).
 
 Los originales con accesos permanecen en `.context-work/`, excluida de Git.

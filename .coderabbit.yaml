@@ -1,7 +1,0 @@
-# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
-language: es
-reviews:
-  profile: chill
-  auto_review:
-    enabled: true
-    drafts: false
