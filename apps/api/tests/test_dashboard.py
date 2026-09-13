@@ -14,6 +14,7 @@ from app.dashboard.context import QueryContext, parse_context
 from app.dashboard.views import NAVIGATION, filter_links, navigation, render_page, scope
 from app.main import create_app
 from app.models.hub import HubResponse, TransferRecord
+from app.models.workflow import WorkflowOverview
 
 
 @pytest.fixture
@@ -25,7 +26,9 @@ def client(tmp_path):
         yield client
 
 
-def snapshot(client, search="?mode=fixture", *, previous=None, changed="url.search"):
+def snapshot(
+    client, search="?mode=fixture", *, previous=None, changed="url.search", path="/", action=None
+):
     return client.post(
         "/_dash-update-component",
         json={
@@ -34,6 +37,8 @@ def snapshot(client, search="?mode=fixture", *, previous=None, changed="url.sear
             "inputs": [
                 {"id": "url", "property": "search", "value": search},
                 {"id": "refresh", "property": "n_clicks", "value": 1},
+                {"id": "url", "property": "pathname", "value": path},
+                {"id": "workflow-action-result", "property": "data", "value": action},
             ],
             "state": [{"id": "snapshot", "property": "data", "value": previous}],
             "changedPropIds": [changed],
@@ -149,7 +154,12 @@ def test_every_page_and_details_serialize_and_keep_semantic_evidence(client):
         serialized = json.dumps(content, cls=PlotlyJSONEncoder, ensure_ascii=False)
         assert serialized
     detail = json.dumps(
-        render_page(context.request_href(hub.requests[0].id).split("?", 1)[0], hub, context),
+        render_page(
+            context.request_href(hub.requests[0].id).split("?", 1)[0],
+            hub,
+            context,
+            WorkflowOverview(available=True, complete=True, message="Registro local consultado"),
+        ),
         cls=PlotlyJSONEncoder,
         ensure_ascii=False,
     )
@@ -203,7 +213,8 @@ def components(value):
         ("/resumen", "/"),
         ("/solicitudes", "/solicitudes"),
         ("/solicitudes/source-id", "/solicitudes"),
-        ("/maquinaria/unit-id", "/solicitudes"),
+        ("/maquinaria/unit-id", "/maquinaria"),
+        ("/maquinaria", "/maquinaria"),
         ("/operaciones/movement-id", "/operaciones"),
         ("/fuentes", "/fuentes"),
     ],
@@ -240,7 +251,7 @@ def test_request_table_focuses_on_six_operational_columns_and_preserves_detail_l
     for row, request in zip(table.rowData, hub.requests, strict=True):
         assert QueryContext().request_href(request.id) in row["project"]
         assert request.status == row["status"]
-        assert "Sin constancia" in row["receipt"]
+        assert row["receipt"] == "Operaciones por consultar"
 
 
 def test_scope_reports_selected_requests_without_changing_source_coverage(client):
@@ -291,7 +302,12 @@ def test_missing_assigned_record_is_not_replaced_by_matching_project_or_name(cli
     assert operation.transfers == ()
     assert "Registro de la unidad asignada" in operation.missing
     detail = json.dumps(
-        render_page(f"/solicitudes/{request.id}", hub, QueryContext()),
+        render_page(
+            f"/solicitudes/{request.id}",
+            hub,
+            QueryContext(),
+            WorkflowOverview(available=True, complete=True, message="Registro local consultado"),
+        ),
         cls=PlotlyJSONEncoder,
         ensure_ascii=False,
     )
@@ -325,7 +341,12 @@ def test_transfer_needs_exact_request_and_completion_never_creates_receipt(clien
     assert "Evidencia de llegada" in operation.missing
     assert "Recepción física" in operation.missing
     detail = json.dumps(
-        render_page(f"/solicitudes/{request.id}", hub, QueryContext()),
+        render_page(
+            f"/solicitudes/{request.id}",
+            hub,
+            QueryContext(),
+            WorkflowOverview(available=True, complete=True, message="Registro local consultado"),
+        ),
         cls=PlotlyJSONEncoder,
         ensure_ascii=False,
     )

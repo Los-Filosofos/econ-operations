@@ -1,7 +1,7 @@
 # Diccionario del modelo vigente de ECON
 
 Inventario generado del código local para **RF-01**, con revisión semántica del flujo.
-Cubre **25 modelos y 242 campos declarados** (incluidos campos heredados de entradas).
+Cubre **27 modelos y 274 campos declarados** (incluidos campos heredados de entradas).
 No representa las 51 definiciones del diccionario de proveedores ni acredita un mapeo completo.
 
 Las tablas usan JSONPath relativo a cada modelo (`$` es su raíz). Los objetos anidados
@@ -41,12 +41,12 @@ archivo coincida con las declaraciones y anotaciones del generador.
 
 | Fuente del código | SHA-256 |
 | --- | --- |
-| [apps/api/app/api/workflow.py](../apps/api/app/api/workflow.py) | `cb07fb0690f1e659ad383449722976bdf4aa35f58dff21f92db4c422050a46b1` |
+| [apps/api/app/api/workflow.py](../apps/api/app/api/workflow.py) | `9f279670868d542078978c890e367915ae95b1590d0e96178fcd42917d77a1ac` |
 | [apps/api/app/integrations/startrack.py](../apps/api/app/integrations/startrack.py) | `3d88590c47543169e4ed0a4d4539ab13a569e1df7e47e0c0dbd1694243a3b9a2` |
-| [apps/api/app/models/hub.py](../apps/api/app/models/hub.py) | `440780b3b5958697bac55dcefc3cfa96dfbf70bf9dc59d3d71b03e6f4df96f2d` |
-| [apps/api/app/models/operations.py](../apps/api/app/models/operations.py) | `b8c2909722e1de943dcfb5c5391441957b029822d9347cf2181fa0e73f188ec0` |
-| [apps/api/app/models/workflow.py](../apps/api/app/models/workflow.py) | `90ede9546a5c8c7721a4cdd89b538fac4b9bf5604e44b3445bf44d6882102f75` |
-| [apps/api/app/services/transfers.py](../apps/api/app/services/transfers.py) | `ac5a31f08c06b2b3d3b2c5298271f7de70db27fad430ea1f78886dcedd54837c` |
+| [apps/api/app/models/hub.py](../apps/api/app/models/hub.py) | `7b13cc312cb95bf0e3d1dc5cefaad43235972b66e2cc2bb4cfa2577c8e4e6e38` |
+| [apps/api/app/models/operations.py](../apps/api/app/models/operations.py) | `e0f7038d28376442e8ab46885e480e3d8bb8452ed9d35cddc2c101c4398d1117` |
+| [apps/api/app/models/workflow.py](../apps/api/app/models/workflow.py) | `6964fb17bdbe0b64ad4e7edc62eb5c59f2207819cd2cb2b1aabda40fdcc1379d` |
+| [apps/api/app/services/transfers.py](../apps/api/app/services/transfers.py) | `319d871c9b9a8a6a478f55987ac84d65a822bc514d542209a00b103b43b2a3f2` |
 
 ## Inventario estructurado
 
@@ -73,15 +73,17 @@ Procedencia: ECON: disponibilidad y cobertura del conector. [Código](../apps/ap
 | --- | --- | --- | --- | --- | --- |
 | `$.id` | enum(nexus, startrack) | Sí | `"nexus"` — ejemplo técnico de catálogo, no observación | Identidad lógica nexus/startrack del proveedor. | Derivación o metadato ECON |
 | `$.label` | texto | Sí | `"<label-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Etiqueta de presentación de la fuente o ubicación; no clave de unión. | Derivación o metadato ECON |
-| `$.status` | enum(fixture, connected, partial, not_configured, disabled, error) | Sí | `"fixture"` — ejemplo técnico de catálogo, no observación | Estado técnico de fuente, distinto del estado de maquinaria o traslado. | Derivación o metadato ECON |
+| `$.status` | enum(fixture, connected, partial, not_configured, not_queried, disabled, error) | Sí | `"fixture"` — ejemplo técnico de catálogo, no observación | Estado técnico de fuente, distinto del estado de maquinaria o traslado. | Derivación o metadato ECON |
 | `$.environment` | enum(local, sandbox) | Sí | `"local"` — ejemplo técnico de catálogo, no observación | Entorno de la evidencia o movimiento; no acredita datos de producción. | Derivación o metadato ECON |
 | `$.observed_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante de observación/lectura conocido; no sustituye la fecha del evento. | Derivación o metadato ECON |
 | `$.observed_on` | date / null | No | `null` — valor por defecto del modelo | Día documentado sin inventar una hora de observación. | Derivación o metadato ECON |
+| `$.configured` | booleano / null | No | `null` — valor por defecto del modelo | Configuración de acceso disponible en el servidor; no demuestra conexión ni consulta exitosa. | Derivación o metadato ECON |
+| `$.last_evidence_at` | date-time / null | No | `null` — valor por defecto del modelo | Observación más reciente de evidencia local del proveedor; no renueva sus hechos al consultar el panel. | Derivación o metadato ECON |
 | `$.message` | texto | Sí | `"<message-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Explicación legible de disponibilidad/cobertura, sin cuerpos privados ni secretos. | Derivación o metadato ECON |
 
 ### TransferRecord
 
-Procedencia: Proyección prevista de traslado; sin muestra proporcionada. [Código](../apps/api/app/models/hub.py).
+Procedencia: Proyección de evidencia persistida del traslado; sin tareas en la muestra proporcionada. [Código](../apps/api/app/models/hub.py).
 
 | Campo / JSONPath | Tipo JSON | Obligatorio | Ejemplo y clase de evidencia | Significado | Procedencia |
 | --- | --- | --- | --- | --- | --- |
@@ -92,6 +94,13 @@ Procedencia: Proyección prevista de traslado; sin muestra proporcionada. [Códi
 | `$.destination_project_id` | texto / null | No | `null` — valor por defecto del modelo | Referencia de proyecto destino; no prueba presencia ni recepción. | Proyección de Startrack prevista; sin muestra |
 | `$.destination_project_name` | texto / null | No | `null` — valor por defecto del modelo | Nombre descriptivo del destino; no resuelve su identidad. | Proyección de Startrack prevista; sin muestra |
 | `$.driver` | texto / null | No | `null` — valor por defecto del modelo | Etiqueta de motorista, sin equivalencia automática a usuario o conductor Startrack. | Proyección de Startrack prevista; sin muestra |
+| `$.movement_id` | texto / null | No | `null` — valor por defecto del modelo | ID local del movimiento al que pertenece el evento. | Proyección de Startrack prevista; sin muestra |
+| `$.workflow_role` | texto / null | No | `null` — valor por defecto del modelo | Rol remoto del catálogo de estado de tarea; no es rol de usuario. | Proyección de Startrack prevista; sin muestra |
+| `$.event_time` | date-time / null | No | `null` — valor por defecto del modelo | Instante del hecho informado por el origen, si puede interpretarse con zona. | Proyección de Startrack prevista; sin muestra |
+| `$.recorded_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante en que ECON almacena la evidencia o declaración. | Proyección de Startrack prevista; sin muestra |
+| `$.evidence_current_assignment` | booleano | No | `true` — valor por defecto del modelo | El movimiento corresponde a la asignación y período vigentes de la solicitud; false conserva evidencia histórica. | Proyección de Startrack prevista; sin muestra |
+| `$.evidence_origin` | enum(task_observation, creation_acknowledgment) | No | `"task_observation"` — valor por defecto del modelo | Observación de tarea o acuse de creación: un acuse no demuestra consulta posterior del estado. | Proyección de Startrack prevista; sin muestra |
+| `$.source_data` | objeto JSON | No | `{}` — ejemplo técnico de objeto; ver significado y modelo anidado | Campos conservados de la observación de tarea; vacío si solo existe acuse de creación. | Proyección de Startrack prevista; sin muestra |
 | `$.provenance` | Provenance | Sí | `{}` — estructura técnica; campos en la tabla del modelo referenciado | Procedencia del objeto o evento; ver Provenance. | Proyección de Startrack prevista; sin muestra |
 
 ### LocationObservation
@@ -152,6 +161,7 @@ Procedencia: Prisma → normalización ECON; fixtures.py / hub.py. [Código](../
 | `$.created_at` | date-time / null | No | `"2026-09-12T00:59:19.326175Z"` — muestra normalizada | Creación en Prisma para equipo/solicitud; creación local para movimiento. | Prisma: created_at |
 | `$.updated_at` | date-time / null | No | `"2026-09-12T01:00:01.535958Z"` — muestra normalizada | Actualización en Prisma para equipo/solicitud; última actualización local del movimiento. | Prisma: updated_at |
 | `$.approved_at` | date-time / null | No | `"2026-09-12T01:00:01.535958Z"` — muestra normalizada | Instante de aprobación informado por Prisma; no salida, llegada o recepción. | Prisma: approved_at |
+| `$.approved_by_user_id` | texto / null | No | `"98bf9d4d-fb00-4680-9883-6a72cf0bae0e"` — muestra normalizada | ID original del usuario que aprobó en Prisma, cuando la fuente lo aporta. | Prisma: approved_by_user_id |
 | `$.provenance` | Provenance | Sí | `{}` — ver Provenance; muestra normalizada | Procedencia del objeto o evento; ver Provenance. | Derivación o metadato ECON |
 
 ### AlertRecord
@@ -182,7 +192,7 @@ Procedencia: ECON: límites de lectura y filtrado local. [Código](../apps/api/a
 | `$.requests_total` | entero / null | No | `2` — derivado de muestra / alcance | Total de solicitudes informado por el origen antes del filtro local. | Derivación o metadato ECON |
 | `$.equipment_returned` | entero | No | `5` — derivado de muestra / alcance | Equipos incluidos tras aplicar la búsqueda local. | Derivación o metadato ECON |
 | `$.requests_returned` | entero | No | `2` — derivado de muestra / alcance | Solicitudes incluidas tras aplicar la búsqueda local. | Derivación o metadato ECON |
-| `$.complete` | booleano | Sí | `false` — derivado de muestra / alcance | Completitud del ámbito integrado/catálogos, no simple éxito de una llamada. | Derivación o metadato ECON |
+| `$.complete` | booleano | Sí | `false` — derivado de muestra / alcance | Completitud del ámbito consultado según el modelo, no simple éxito de una llamada. | Derivación o metadato ECON |
 | `$.description` | texto | Sí | `"<description-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Explicación de la población y límites de cobertura de la consulta. | Derivación o metadato ECON |
 
 ### HubSummary
@@ -198,6 +208,18 @@ Procedencia: ECON: conteos sobre registros devueltos. [Código](../apps/api/app/
 | `$.unlinked_equipment` | entero / null | No | `5` — derivado de muestra / alcance | Equipos devueltos cuya relación no es confirmed; incluye candidatos. | Derivación o metadato ECON |
 | `$.alerts_count` | entero / null | No | `null` — valor por defecto del modelo | Alertas sobre los datos evaluados; cero no certifica ausencia global de riesgo. | Derivación o metadato ECON |
 
+### OperationEvidenceStatus
+
+Procedencia: ECON: cobertura del registro local consultado por services/evidence.py. [Código](../apps/api/app/models/hub.py).
+
+| Campo / JSONPath | Tipo JSON | Obligatorio | Ejemplo y clase de evidencia | Significado | Procedencia |
+| --- | --- | --- | --- | --- | --- |
+| `$.status` | enum(not_queried, available, partial, disabled, error) | No | `"not_queried"` — valor por defecto del modelo | Estado del objeto del modelo; ver separación semántica de estados. | Derivación o metadato ECON |
+| `$.checked_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante de consulta del registro local; no fecha de actualización de sus evidencias. | Derivación o metadato ECON |
+| `$.movements_returned` | entero / null | No | `null` — valor por defecto del modelo | Cantidad de movimientos locales en la ventana consultada; null si no se pudo evaluar. | Derivación o metadato ECON |
+| `$.complete` | booleano | No | `false` — valor por defecto del modelo | Completitud del ámbito consultado según el modelo, no simple éxito de una llamada. | Derivación o metadato ECON |
+| `$.message` | texto | No | `"El registro de movimientos no se ha consultado."` — valor por defecto del modelo | Explicación legible de disponibilidad/cobertura, sin cuerpos privados ni secretos. | Derivación o metadato ECON |
+
 ### HubResponse
 
 Procedencia: ECON: ensamblaje del contrato de consulta. [Código](../apps/api/app/models/hub.py).
@@ -211,6 +233,7 @@ Procedencia: ECON: ensamblaje del contrato de consulta. [Código](../apps/api/ap
 | `$.sources` | lista<SourceStatus> | Sí | `[]` — ejemplo técnico de lista; no conteo operativo | Estados técnicos y cobertura de las fuentes. | Derivación o metadato ECON |
 | `$.scope` | HubScope | Sí | `{}` — estructura técnica; campos en la tabla del modelo referenciado | Población, filtros y límites de la respuesta; ver HubScope. | Derivación o metadato ECON |
 | `$.summary` | HubSummary | Sí | `{}` — estructura técnica; campos en la tabla del modelo referenciado | Conteos sobre la población devuelta; ver HubSummary. | Derivación o metadato ECON |
+| `$.operation_evidence` | OperationEvidenceStatus | No | `{}` — estructura técnica; campos en la tabla del modelo referenciado | Disponibilidad y cobertura de movimientos usados por la proyección; ver OperationEvidenceStatus. | Derivación o metadato ECON |
 | `$.equipment` | lista<EquipmentRecord> | Sí | `[]` — ejemplo técnico de lista; no conteo operativo | Equipos de la proyección de lectura; ver EquipmentRecord. | Derivación o metadato ECON |
 | `$.requests` | lista<RequestRecord> | Sí | `[]` — ejemplo técnico de lista; no conteo operativo | Solicitudes de la proyección de lectura; ver RequestRecord. | Derivación o metadato ECON |
 | `$.alerts` | lista<AlertRecord> | Sí | `[]` — ejemplo técnico de lista; no conteo operativo | Señales derivadas de hechos disponibles; ver AlertRecord. | Derivación o metadato ECON |
@@ -244,6 +267,7 @@ Procedencia: ECON: registro SQLModel de plan/envío/evidencia. [Código](../apps
 | `$.reason_code` | texto / null | No | `null` — valor por defecto del modelo | Código local de motivo/bloqueo/fallo; detalle en eventos y preparación. | Registro local ECON; significado según campo |
 | `$.created_at` | date-time | Sí | `"2000-01-01T00:00:00Z"` — instante técnico ilustrativo, no evento del sandbox | Creación en Prisma para equipo/solicitud; creación local para movimiento. | Registro local ECON; significado según campo |
 | `$.updated_at` | date-time | Sí | `"2000-01-01T00:00:00Z"` — instante técnico ilustrativo, no evento del sandbox | Actualización en Prisma para equipo/solicitud; última actualización local del movimiento. | Registro local ECON; significado según campo |
+| `$.next_review_at` | date-time | Sí | `"2000-01-01T00:00:00Z"` — instante técnico ilustrativo, no evento del sandbox | Marca durable para ordenar revisiones del worker; no modifica la fecha de observación del proveedor. | Registro local ECON; significado según campo |
 | `$.queued_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante local de ingreso en cola, si ocurrió. | Registro local ECON; significado según campo |
 | `$.sending_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante local de reclamación/inicio de envío, si ocurrió. | Registro local ECON; significado según campo |
 | `$.sent_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante local en que se confirmó asociación de tarea; no ejecución ni llegada. | Registro local ECON; significado según campo |
@@ -338,6 +362,7 @@ Procedencia: Proyección de Movement y su historial local. [Código](../apps/api
 | `$.reason_code` | texto / null | No | `null` — valor por defecto del modelo | Código local de motivo/bloqueo/fallo; detalle en eventos y preparación. | Registro local ECON; significado según campo |
 | `$.created_at` | date-time | Sí | `"2000-01-01T00:00:00Z"` — instante técnico ilustrativo, no evento del sandbox | Creación en Prisma para equipo/solicitud; creación local para movimiento. | Registro local ECON; significado según campo |
 | `$.updated_at` | date-time | Sí | `"2000-01-01T00:00:00Z"` — instante técnico ilustrativo, no evento del sandbox | Actualización en Prisma para equipo/solicitud; última actualización local del movimiento. | Registro local ECON; significado según campo |
+| `$.next_review_at` | date-time / null | No | `null` — valor por defecto del modelo | Marca durable para ordenar revisiones del worker; no modifica la fecha de observación del proveedor. | Registro local ECON; significado según campo |
 | `$.queued_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante local de ingreso en cola, si ocurrió. | Registro local ECON; significado según campo |
 | `$.sending_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante local de reclamación/inicio de envío, si ocurrió. | Registro local ECON; significado según campo |
 | `$.sent_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante local en que se confirmó asociación de tarea; no ejecución ni llegada. | Registro local ECON; significado según campo |
@@ -358,6 +383,21 @@ Procedencia: Proyección de SourceSnapshot. [Código](../apps/api/app/models/ope
 | `$.content_hash` | texto | Sí | `"0000000000000000000000000000000000000000000000000000000000000000"` — estructura técnica SHA-256, no huella calculada | SHA-256 del HubResponse completo, incluidos tiempos/cobertura; no huella exclusiva de hechos de negocio. | Registro local ECON; significado según campo |
 | `$.content` | objeto JSON | Sí | `{}` — ejemplo técnico de objeto; ver significado y modelo anidado | Respuesta del hub serializada que se conserva como corte. | Registro local ECON; significado según campo |
 
+### OperationsCoverage
+
+Procedencia: ECON: población y cobertura de la página de operaciones. [Código](../apps/api/app/models/workflow.py).
+
+| Campo / JSONPath | Tipo JSON | Obligatorio | Ejemplo y clase de evidencia | Significado | Procedencia |
+| --- | --- | --- | --- | --- | --- |
+| `$.total` | entero | No | `0` — valor por defecto del modelo | Total de movimientos locales del modo y filtro, antes de paginar; evaluar available antes de interpretarlo. | Derivación o metadato ECON |
+| `$.displayed` | entero | No | `0` — valor por defecto del modelo | Número de movimientos devueltos en esta página. | Derivación o metadato ECON |
+| `$.page` | entero | No | `1` — valor por defecto del modelo | Página solicitada del registro local, comenzando en 1. | Derivación o metadato ECON |
+| `$.page_size` | entero | No | `100` — valor por defecto del modelo | Máximo de movimientos por página; 100 por defecto y hasta 500. | Derivación o metadato ECON |
+| `$.total_pages` | entero | No | `1` — valor por defecto del modelo | Número de páginas de la población filtrada, con mínimo 1 incluso vacía. | Derivación o metadato ECON |
+| `$.has_more` | booleano | No | `false` — valor por defecto del modelo | Existen páginas posteriores; false no significa que esta página contenga toda la población. | Derivación o metadato ECON |
+| `$.is_complete` | booleano | No | `true` — valor por defecto del modelo | La primera página contiene todos los movimientos del modo y filtro; coincide con WorkflowOverview.complete. | Derivación o metadato ECON |
+| `$.note` | texto | No | `""` — valor por defecto del modelo | Texto de cobertura de la página: filas devueltas, total y página; no describe recepción. | Derivación o metadato ECON |
+
 ### WorkflowOverview
 
 Procedencia: ECON: resumen de operaciones consultadas. [Código](../apps/api/app/models/workflow.py).
@@ -366,10 +406,16 @@ Procedencia: ECON: resumen de operaciones consultadas. [Código](../apps/api/app
 | --- | --- | --- | --- | --- | --- |
 | `$.available` | booleano | Sí | `false` — ejemplo técnico de tipo, no observación | Disponibilidad de consulta del registro local de operaciones. | Derivación o metadato ECON |
 | `$.message` | texto | Sí | `"<message-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Explicación legible de disponibilidad/cobertura, sin cuerpos privados ni secretos. | Derivación o metadato ECON |
+| `$.complete` | booleano | No | `false` — valor por defecto del modelo | La primera página contiene todos los movimientos locales del modo/solicitud; coincide con coverage.is_complete. False ante lectura parcial, fallo o cobertura desconocida. No certifica cobertura de proveedores. | Derivación o metadato ECON |
 | `$.management_enabled` | booleano | No | `false` — valor por defecto del modelo | Capacidad de gestión habilitada por servidor y contexto local; no autorización desde navegador. | Derivación o metadato ECON |
 | `$.sending_enabled` | booleano | No | `false` — valor por defecto del modelo | Habilitación de envío evaluada por servidor; no demuestra conectividad ni permisos remotos. | Derivación o metadato ECON |
-| `$.movements` | lista<MovementRecord> | No | `[]` — ejemplo técnico de lista; no conteo operativo | Movimientos locales de la consulta; cero solo es interpretable con available=true. | Derivación o metadato ECON |
+| `$.movements` | lista<MovementRecord> | No | `[]` — ejemplo técnico de lista; no conteo operativo | Movimientos locales de la ventana consultada; ausencia solo evaluable con available=true y complete=true. | Derivación o metadato ECON |
 | `$.last_sync_at` | date-time / null | No | `null` — valor por defecto del modelo | recorded_at del último SourceSnapshot por modo; no acredita sincronización exitosa de todas las fuentes. | Derivación o metadato ECON |
+| `$.total` | entero | No | `0` — valor por defecto del modelo | Total de movimientos locales del modo y filtro, antes de paginar; evaluar available antes de interpretarlo. | Derivación o metadato ECON |
+| `$.page` | entero | No | `1` — valor por defecto del modelo | Página solicitada del registro local, comenzando en 1. | Derivación o metadato ECON |
+| `$.page_size` | entero | No | `100` — valor por defecto del modelo | Máximo de movimientos por página; 100 por defecto y hasta 500. | Derivación o metadato ECON |
+| `$.total_pages` | entero | No | `1` — valor por defecto del modelo | Número de páginas de la población filtrada, con mínimo 1 incluso vacía. | Derivación o metadato ECON |
+| `$.coverage` | OperationsCoverage / null | No | `null` — valor por defecto del modelo | Cobertura de la página local; null cuando no se pudo consultar el registro. | Derivación o metadato ECON |
 
 ### MappingCatalogs
 
@@ -378,7 +424,7 @@ Procedencia: Startrack SDK → catálogos acotados de ECON. [Código](../apps/ap
 | Campo / JSONPath | Tipo JSON | Obligatorio | Ejemplo y clase de evidencia | Significado | Procedencia |
 | --- | --- | --- | --- | --- | --- |
 | `$.observed_at` | date-time | Sí | `"2000-01-01T00:00:00Z"` — instante técnico ilustrativo, no evento del sandbox | Instante de observación/lectura conocido; no sustituye la fecha del evento. | Startrack SDK; metadatos de consulta ECON |
-| `$.complete` | booleano | No | `false` — valor por defecto del modelo | Completitud del ámbito integrado/catálogos, no simple éxito de una llamada. | Startrack SDK; metadatos de consulta ECON |
+| `$.complete` | booleano | No | `false` — valor por defecto del modelo | Completitud del ámbito consultado según el modelo, no simple éxito de una llamada. | Startrack SDK; metadatos de consulta ECON |
 | `$.message` | texto | No | `"Catálogos acotados; vincula por ID y confirma el destino y responsable."` — valor por defecto del modelo | Explicación legible de disponibilidad/cobertura, sin cuerpos privados ni secretos. | Startrack SDK; metadatos de consulta ECON |
 | `$.pois` | lista<objeto JSON> | Sí | `[]` — ejemplo técnico de lista; no conteo operativo | Catálogo acotado de geocercas para elegir IDs; no maestro de equivalencias aprobado. | Startrack SDK; metadatos de consulta ECON |
 | `$.users` | lista<objeto JSON> | Sí | `[]` — ejemplo técnico de lista; no conteo operativo | Catálogo acotado de usuarios Startrack asignables; separado de operadores Prisma. | Startrack SDK; metadatos de consulta ECON |

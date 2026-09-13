@@ -147,7 +147,7 @@ def test_live_cannot_be_enabled_by_caller_and_does_not_return_fixtures(client):
     read.assert_not_called()
     assert data["mode"] == "live"
     assert data["sources"][0]["status"] == "disabled"
-    assert data["sources"][1]["status"] == "not_configured"
+    assert data["sources"][1]["status"] == "disabled"
     assert data["equipment"] == data["requests"] == data["alerts"] == []
     assert all(value is None for value in data["summary"].values())
     assert data["scope"]["complete"] is False

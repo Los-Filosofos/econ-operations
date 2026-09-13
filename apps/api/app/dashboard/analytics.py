@@ -27,7 +27,7 @@ def readable(hub: HubResponse) -> bool:
 
 
 def equipment_label(item: EquipmentRecord) -> str:
-    return item.code or item.asset_number or item.name
+    return item.asset_number or item.code or item.name
 
 
 def instant(value: datetime | None) -> str:

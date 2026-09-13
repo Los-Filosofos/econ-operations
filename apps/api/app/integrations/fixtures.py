@@ -50,6 +50,7 @@ def fixture_records() -> tuple[list[EquipmentRecord], list[RequestRecord]]:
             created_at=item["created_at"],
             updated_at=item["updated_at"],
             approved_at=item["approved_at"],
+            approved_by_user_id=item.get("approved_by_user_id"),
             provenance=provenance("requests", index, item["id"]),
         )
         for index, item in enumerate(supplied["requests"]["items"])

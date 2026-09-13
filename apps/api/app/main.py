@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
+from app.api.documentation import API_DESCRIPTION, OPENAPI_TAGS
 from app.api.health import router as health_router
 from app.api.hub import router as hub_router
 from app.api.workflow import router as workflow_router
@@ -52,11 +53,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=settings.app_name,
-        description=(
-            "Seguimiento de solicitudes. Separa muestras proporcionadas, lecturas del sandbox, "
-            "estados originales y evidencia. Gestión local y envío a Startrack habilitados "
-            "de forma explícita en el servidor."
-        ),
+        description=API_DESCRIPTION,
+        openapi_tags=OPENAPI_TAGS,
+        swagger_ui_parameters={
+            "displayRequestDuration": True,
+            "filter": True,
+            "defaultModelsExpandDepth": -1,
+            "persistAuthorization": False,
+        },
         version="0.2.0",
         lifespan=lifespan,
     )

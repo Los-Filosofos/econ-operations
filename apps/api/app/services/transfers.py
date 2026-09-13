@@ -139,7 +139,7 @@ def prepare_transfer(
 
     draft = None
     if not blockers and not missing and equipment is not None and mapping is not None:
-        equipment_label = equipment.code or equipment.asset_number or equipment.name
+        equipment_label = equipment.asset_number or equipment.code or equipment.name
         project_label = request.project_name or request.project_id
         draft = StartrackTaskDraft(
             objective=f"Traslado de {equipment_label} a {project_label}"[:255],

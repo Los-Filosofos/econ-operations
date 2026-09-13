@@ -12,6 +12,7 @@ from app.dashboard.context import QueryContext
 from app.models.hub import HubResponse, RequestRecord
 from app.models.operations import MovementRecord
 from app.models.workflow import WorkflowOverview
+from app.services.evidence import matching_current_movements as current_movements
 from app.services.hub import BUSINESS_TIMEZONE
 
 DAY_MS = 86_400_000
@@ -52,50 +53,10 @@ class UsageTimeline:
 def matching_current_movements(
     hub: HubResponse, request: RequestRecord, workflow: WorkflowOverview | None
 ) -> list[MovementRecord]:
-    """Match the current source request and assignment; historical movements remain in detail."""
-    evidence = request.provenance
-    if (
-        workflow is None
-        or not workflow.available
-        or evidence.source != "nexus"
-        or not evidence.source_id
-        or not request.project_id
-        or not request.machinery_id
-    ):
+    """Use the same source identity rules as the HTTP and equipment projections."""
+    if workflow is None or not workflow.available:
         return []
-    matches: list[MovementRecord] = []
-    current_request = request.model_dump(mode="json")
-    for movement in workflow.movements:
-        stored_request = movement.source_request
-        stored_equipment = movement.source_equipment or {}
-        stored_evidence = stored_request.get("provenance") or {}
-        machine_evidence = stored_equipment.get("provenance") or {}
-        if not isinstance(stored_evidence, dict) or not isinstance(machine_evidence, dict):
-            continue
-        if (
-            movement.mode == hub.mode
-            and movement.environment == evidence.environment
-            and movement.request_source_id == evidence.source_id
-            and movement.project_source_id == request.project_id
-            and stored_request.get("id") == request.id
-            and stored_request.get("machinery_id") == request.machinery_id
-            and all(
-                stored_request.get(field) == current_request.get(field)
-                for field in ("starts_on", "ends_on", "approved_at")
-            )
-            and stored_equipment.get("id") == request.machinery_id
-            and movement.machinery_source_id == machine_evidence.get("source_id")
-            and all(
-                source.get("source") == evidence.source
-                and source.get("environment") == evidence.environment
-                and source.get("evidence_kind") == evidence.evidence_kind
-                and source.get("is_synthetic") == evidence.is_synthetic
-                for source in (stored_evidence, machine_evidence)
-            )
-            and stored_evidence.get("source_id") == evidence.source_id
-        ):
-            matches.append(movement)
-    return matches
+    return current_movements(hub, request, workflow.movements)
 
 
 def has_confirmed_task(
@@ -134,7 +95,7 @@ def request_counts(
         unassigned=sum(not request.machinery_id for request in requests),
         without_confirmed_task=(
             sum(not has_confirmed_task(hub, request, workflow) for request in requests)
-            if workflow is not None and workflow.available
+            if workflow is not None and workflow.available and workflow.complete
             else None
         ),
     )
@@ -228,18 +189,28 @@ def states_figure(states: list[tuple[str, int]]) -> go.Figure:
     if not states:
         return figure
     labels = [escape(state) if state.strip() else "Sin estado informado" for state, _ in states]
+    # Categories are source values, even when their display labels coincide.
+    identifiers = [f"state-{index}" for index in range(len(states))]
     figure.add_bar(
         x=[count for _, count in states],
-        y=labels,
+        y=identifiers,
+        customdata=labels,
         orientation="h",
         width=0.42,
         marker_color=BLUE,
         text=[str(count) for _, count in states],
         textposition="outside",
         cliponaxis=False,
-        hovertemplate="%{y}<br>%{x} solicitud(es)<extra></extra>",
+        hovertemplate="%{customdata}<br>%{x} solicitud(es)<extra></extra>",
     )
-    figure.update_yaxes(autorange="reversed", categoryorder="array", categoryarray=labels)
+    figure.update_yaxes(
+        autorange="reversed",
+        categoryorder="array",
+        categoryarray=identifiers,
+        tickmode="array",
+        tickvals=identifiers,
+        ticktext=labels,
+    )
     figure.update_xaxes(
         title_text="Solicitudes",
         dtick=1,

@@ -37,9 +37,9 @@ def field(
                         autoComplete="off",
                         placeholder=placeholder,
                     ),
+                    html.Small(hint) if hint else None,
                 ]
             ),
-            html.Small(hint) if hint else None,
         ],
         className="workflow-field",
     )

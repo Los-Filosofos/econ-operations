@@ -25,6 +25,12 @@ conserva fecha documental, pero no un instante común de observación: no permit
 clasificar atrasos con el reloj actual. `generated_at` es el momento de armar la
 respuesta, no una fecha de actualización de las fuentes.
 
+La [revisión de datos](revision-datos-2026-09-12.md) detalla los hallazgos de esta
+etapa y la evidencia necesaria para habilitar otras mediciones. Junto a los
+gráficos se muestran solicitudes de la vista, filas devueltas, total informado
+por el origen antes de búsqueda, procedencia y corte conocido. El calendario
+declara cuántos períodos son representables sobre las solicitudes de la vista.
+
 La búsqueda y los filtros usan la misma población en Resumen y Solicitudes.
 Una consulta sin registros, una cobertura parcial y una fuente indisponible son
 resultados distintos. No encontrar una tarea en una lectura incompleta no prueba
@@ -43,6 +49,11 @@ incierto requiere conciliación; una consulta del registro indisponible no se
 convierte en cero movimientos ni en recomendación de duplicar el envío. Los
 enlaces operativos exigen correspondencia de solicitud, asignación, procedencia
 y período con el registro persistido.
+
+La disponibilidad del registro no equivale a completitud: `complete=false`
+también cubre lecturas truncadas a 100 movimientos. La ausencia de una tarea y
+el cierre del conjunto de movimientos no se deducen de esa ventana parcial.
+Los conteos que dependen de esa ausencia permanecen desconocidos.
 
 Estado administrativo, mantenimiento, envío, tarea, presencia GPS y recepción
 describen hechos distintos. Una tarea completada o una visita de geocerca no

@@ -6,6 +6,20 @@ para continuar el trabajo; los registros anteriores conservan valor histórico.
 
 ## Última mejora de interfaz
 
+La [revisión integral de interfaz, datos y API](revision-integral-2026-09-12.md)
+incorpora tres revisiones Astra con razonamiento `high`. Mejora legibilidad,
+iconos funcionales y comparación de fuentes; explica población y períodos
+evaluables junto a los gráficos; documenta las nueve operaciones HTTP en
+[Swagger](api-swagger.md). El nuevo `WorkflowOverview.complete` distingue una
+lectura completa del registro de una ventana truncada a 100 movimientos, para
+evitar recomendaciones basadas en ausencias no verificadas. El diccionario
+generado se actualiza con los campos de cobertura y evidencia del árbol actual.
+La muestra conserva cinco equipos y dos solicitudes; los faltantes de Startrack
+y los criterios pendientes de cierre se detallan en la revisión integral.
+
+Las comprobaciones numéricas que siguen pertenecen a entregas anteriores; el
+resultado de esta revisión se registra en su informe integral.
+
 La entrega documental posterior incorpora [gráficos y diagramas](entregables-visuales.md),
 [trazabilidad RF/RNF](matriz-requisitos-entregables.md) y un resumen de
 [decisiones técnicas](decisiones-tecnicas.md) de dos páginas en PDF. Los gráficos

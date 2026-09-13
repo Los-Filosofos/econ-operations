@@ -6,26 +6,67 @@ from datetime import date, datetime, time
 from app.services.hub import BUSINESS_TIMEZONE
 from app.services.transfers import TransferMapping
 
+FIELD_LABELS = {
+    "request_source_id": "ID original de solicitud",
+    "machinery_source_id": "ID original de maquinaria",
+    "project_source_id": "ID original de proyecto",
+    "poi_id": "ID de geocerca de destino en Startrack",
+    "assigned_user_ids": "IDs de usuarios asignables en Startrack",
+    "movement_reference": "Referencia del movimiento",
+    "scheduled_date": "Fecha programada de traslado",
+    "scheduled_time": "Hora programada",
+    "tracked_vehicle_id": "ID del activo GPS",
+    "receiver": "Persona que recibió la maquinaria",
+    "received_date": "Fecha de recepción",
+    "received_time": "Hora de recepción",
+    "reference": "Referencia de la constancia",
+    "note": "Observaciones",
+}
+
+
+class WorkflowInputError(ValueError):
+    """Safe operator guidance composed only from known labels and fixed messages."""
+
 
 def text_field(fields: dict, name: str, *, optional=False) -> str | None:
     value = fields.get(name)
-    if optional and (value is None or value == ""):
+    if optional and (value is None or isinstance(value, str) and not value.strip()):
         return None
     if not isinstance(value, str) or not value.strip():
-        raise ValueError("Campo obligatorio ausente.")
+        label = FIELD_LABELS.get(name, "Campo obligatorio")
+        raise WorkflowInputError(f"Completa el campo «{label}».")
     return value.strip()
 
 
 def explicit_date(value: str) -> date:
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-        raise ValueError("Fecha no válida.")
-    return date.fromisoformat(value)
+    try:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            raise ValueError
+        return date.fromisoformat(value)
+    except ValueError:
+        raise WorkflowInputError(
+            "Fecha no válida. Usa una fecha existente con formato AAAA-MM-DD."
+        ) from None
 
 
 def explicit_time(value: str) -> time:
-    if not re.fullmatch(r"\d{2}:\d{2}(?::\d{2})?", value):
-        raise ValueError("Hora no válida.")
-    return time.fromisoformat(value)
+    try:
+        if not re.fullmatch(r"\d{2}:\d{2}(?::\d{2})?", value):
+            raise ValueError
+        return time.fromisoformat(value)
+    except ValueError:
+        raise WorkflowInputError("Hora no válida. Usa el formato HH:MM de 24 horas.") from None
+
+
+def assigned_users(fields: dict) -> tuple[str, ...]:
+    users = tuple(value.strip() for value in text_field(fields, "assigned_user_ids").split(","))
+    if any(not user or re.search(r"\s", user) for user in users):
+        raise WorkflowInputError(
+            "Revisa los IDs de usuarios: sepáralos con comas, sin nombres ni entradas vacías."
+        )
+    if len(users) != len(set(users)):
+        raise WorkflowInputError("Los IDs de usuarios asignados no deben repetirse.")
+    return users
 
 
 def execute_action(service, action: str, mode: str, fields: dict, movement: str):
@@ -37,9 +78,7 @@ def execute_action(service, action: str, mode: str, fields: dict, movement: str)
             machinery_source_id=text_field(fields, "machinery_source_id"),
             project_source_id=text_field(fields, "project_source_id"),
             poi_id=text_field(fields, "poi_id"),
-            assigned_user_ids=tuple(
-                value.strip() for value in text_field(fields, "assigned_user_ids").split(",")
-            ),
+            assigned_user_ids=assigned_users(fields),
             movement_reference=text_field(fields, "movement_reference"),
             scheduled_date=explicit_date(text_field(fields, "scheduled_date")),
             scheduled_time=explicit_time(scheduled_time).isoformat() if scheduled_time else None,

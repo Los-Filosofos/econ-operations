@@ -2,7 +2,7 @@
 
 from dash import dcc, html
 
-from app.dashboard.analytics import readable
+from app.dashboard.analytics import instant, readable
 from app.dashboard.context import QueryContext
 from app.dashboard.decision_analytics import (
     request_states,
@@ -159,6 +159,15 @@ def overview(hub: HubResponse, context: QueryContext, workflow: WorkflowOverview
                 role="status",
             )
         )
+    elif not workflow.complete:
+        content.append(
+            html.P(
+                "Registro de movimientos parcial. Una tarea sin confirmar en esta vista puede "
+                "tener evidencia fuera de la ventana consultada.",
+                className="decision-chart-note",
+                role="status",
+            )
+        )
     content.append(
         html.Div(
             [
@@ -170,13 +179,36 @@ def overview(hub: HubResponse, context: QueryContext, workflow: WorkflowOverview
     )
     states = request_states(requests)
     timeline = usage_timeline(requests)
+    source = next(source for source in hub.sources if source.id == "nexus")
+    origin = "Muestras del archivo" if hub.mode == "fixture" else "Lectura del sandbox"
+    cutoff = (
+        f"Corte de lectura: {instant(hub.data_as_of)} (El Salvador)."
+        if hub.data_as_of is not None
+        else f"Fecha documental: {source.observed_on:%d/%m/%Y}; sin instante común de observación."
+        if source.observed_on is not None
+        else "Sin instante común de observación."
+    )
+    total = (
+        f"Total de solicitudes informado por el origen: {hub.scope.requests_total}, "
+        "antes de la búsqueda local."
+        if hub.scope.requests_total is not None
+        else "El origen no informa un total de solicitudes."
+    )
+    content.append(
+        html.P(
+            f"{origin} · Datos sintéticos. Solicitudes en esta vista: {len(requests)}; "
+            f"devueltas por la consulta: {len(hub.requests)}. {total} {cutoff} "
+            + ("Cobertura integrada parcial." if not hub.scope.complete else ""),
+            className="analysis-scope",
+        )
+    )
     states_section = html.Section(
         [
             html.Div(
                 [
                     html.H2("Estado de las solicitudes"),
                     html.P(
-                        "Cantidad de solicitudes por estado administrativo.",
+                        f"Solicitudes de esta vista por estado administrativo: {len(requests)}.",
                         className="decision-chart-note",
                     ),
                 ],
@@ -199,7 +231,10 @@ def overview(hub: HubResponse, context: QueryContext, workflow: WorkflowOverview
         **{"aria-label": "Estado administrativo de solicitudes"},
     )
 
-    period_note = "Inicio y fin incluidos; no son plazos de entrega."
+    period_note = (
+        f"Solicitudes con período representable: {len(timeline.periods)} de {len(requests)}. "
+        "Inicio y fin incluidos; no son plazos de entrega."
+    )
     if timeline.periods:
         start = min(period.starts_on for period in timeline.periods)
         end = max(period.ends_on for period in timeline.periods)

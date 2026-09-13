@@ -191,6 +191,7 @@ def test_operations_pagination_total_and_coverage(tmp_path):
     assert len(overview_p1.movements) == 100
     assert overview_p1.coverage is not None
     assert overview_p1.coverage.is_complete is False
+    assert overview_p1.complete is False
     assert overview_p1.coverage.has_more is True
     assert overview_p1.coverage.displayed == 100
     assert "Mostrando 100 de 120" in overview_p1.coverage.note
@@ -204,13 +205,29 @@ def test_operations_pagination_total_and_coverage(tmp_path):
     assert overview_p2.coverage is not None
     assert overview_p2.coverage.has_more is False
     assert overview_p2.coverage.displayed == 20
+    assert overview_p2.complete is overview_p2.coverage.is_complete is False
+    assert "100 movimientos más recientes" not in overview_p2.message
+    assert "Mostrando 20 de 120" in overview_p2.message
 
     # Test complete population note when total <= limit
     overview_all = service.read("live", page=1, page_size=200)
     assert overview_all.total == 120
     assert len(overview_all.movements) == 120
     assert overview_all.coverage.is_complete is True
+    assert overview_all.complete is True
     assert "Población completa: 120" in overview_all.coverage.note
+
+    filtered = service.read("live", request_source_id="req-1", page_size=1)
+    assert filtered.total == 1
+    assert filtered.complete is filtered.coverage.is_complete is True
+    assert filtered.movements[0].request_source_id == "req-1"
+
+    empty = service.read("live", request_source_id="missing")
+    assert empty.total == 0
+    assert empty.complete is empty.coverage.is_complete is True
+    beyond = service.read("live", request_source_id="missing", page=2)
+    assert beyond.complete is beyond.coverage.is_complete is False
+    assert "Población completa" not in beyond.coverage.note
 
     # Test via FastAPI HTTP endpoint
     app = create_app(settings)
@@ -225,7 +242,11 @@ def test_operations_pagination_total_and_coverage(tmp_path):
             assert data["total_pages"] == 3
             assert len(data["movements"]) == 50
             assert data["coverage"]["is_complete"] is False
+            assert data["complete"] is False
             assert data["coverage"]["has_more"] is True
+
+            for query in ("page=0", "page_size=0", "page_size=501"):
+                assert client.get(f"/api/v1/operations?{query}").status_code == 422
 
     engine.dispose()
 

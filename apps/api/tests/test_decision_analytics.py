@@ -58,7 +58,9 @@ def hub():
 
 
 def registry(*movements, available=True):
-    return WorkflowOverview(available=available, message="Test registry", movements=list(movements))
+    return WorkflowOverview(
+        available=available, complete=available, message="Test registry", movements=list(movements)
+    )
 
 
 def confirmed_movement(hub):

@@ -15,6 +15,13 @@ La [migración 0001_operations](../apps/api/migrations/versions/0001_operations.
 crea las tres tablas definidas en
 [los modelos de operaciones](../apps/api/app/models/operations.py):
 
+La [migración 0002_review_schedule](../apps/api/migrations/versions/0002_movement_review_schedule.py)
+agrega `next_review_at` y el índice de selección por modo, estado y revisión.
+Antes de ejecutar esta versión sobre una base existente, aplicar explícitamente
+`uv run --directory apps/api alembic upgrade head`. El worker conserva el avance
+de revisión entre ciclos y reinicios, con presupuestos independientes de
+revalidación y observación (25 por defecto). El arranque no migra la base.
+
 | Tabla | Contenido y límites |
 | --- | --- |
 | `operation_movements` | Plan, correspondencias, IDs de solicitud/maquinaria/proyecto, fuentes y huellas, payload, estado de envío, tarea confirmada y recepción declarada |

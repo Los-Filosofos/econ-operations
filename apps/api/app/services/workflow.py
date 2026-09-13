@@ -133,7 +133,7 @@ class WorkflowService:
         note = (
             f"Mostrando {len(movements)} de {total} movimientos registrados "
             f"(página {bounded_page} de {total_pages})."
-            if total > len(movements)
+            if not is_complete
             else f"Población completa: {total} movimientos registrados."
         )
         coverage = OperationsCoverage(
@@ -148,8 +148,11 @@ class WorkflowService:
         )
         return WorkflowOverview(
             available=True,
+            complete=is_complete,
             message=(
-                "Planes locales sobre las muestras proporcionadas. No se envían a Startrack."
+                f"Registro parcial: {note} Puede existir evidencia fuera de esta ventana."
+                if not is_complete
+                else "Planes locales sobre las muestras proporcionadas. No se envían a Startrack."
                 if mode == "fixture"
                 else "Movimientos del sandbox: tarea, presencia GPS y recepción separadas."
             ),
