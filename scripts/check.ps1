@@ -29,6 +29,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # RNF-02: CSV/XLSX exports must match the Markdown matrices (stdlib + pinned openpyxl).
 uv run --no-project --with openpyxl==3.1.5 python (Join-Path $rootPath 'scripts\docs\exportar_matrices.py') --check
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# RNF-02: the ENTREGABLES spreadsheets must match each deliverable's Markdown table.
+uv run --no-project --with openpyxl==3.1.5 python (Join-Path $rootPath 'scripts\docs\exportar_entregables.py') --check
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($Container) {
     docker build -t econ-hub:check $projectPath
     exit $LASTEXITCODE

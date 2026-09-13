@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "generator": "scripts/docs/exportar_entregables.py",
+  "reproduce": "uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_entregables.py",
+  "check": "uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_entregables.py --check",
+  "generated_on": "2026-09-13",
+  "csv_format": {
+    "encoding": "utf-8-sig",
+    "newline": "\\r\\n",
+    "delimiter": ",",
+    "note": "BOM y CRLF para que Excel muestre los acentos al abrir el archivo con doble clic. El separador es la coma de RFC 4180: el CSV es para ingesta automatizada y el XLSX es el archivo para abrir en Excel."
+  },
+  "sources": [
+    {
+      "path": "docs/equivalencias-prisma-startrack.md",
+      "sha256": "028001dcdf54b4951172a8297617c95433065315710b18bb4af8a1cff533d306"
+    },
+    {
+      "path": "docs/matriz-requisitos-entregables.md",
+      "sha256": "87c78899199de31ee701729ec77c460addcebd9fd99e8d71e3fb82db8ecffd22"
+    },
+    {
+      "path": "ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.md",
+      "sha256": "9adc5f7742cdf7a45cac59243367dd1f62a1dee69ce6bb5df80ec84463197f92"
+    },
+    {
+      "path": "ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.md",
+      "sha256": "cd67575b5d53d1a32576fce0572374dd982bf9193084264c8ce322ee89cbd48b"
+    }
+  ],
+  "files": [
+    {
+      "file": "ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.csv",
+      "kind": "csv",
+      "source": "ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.md",
+      "heading": "1. Mapeo Consolidado de Correspondencia",
+      "columns": [
+        "Campo Prisma (Origen)",
+        "Modelo ECON (Normalizado)",
+        "Campo Startrack (Destino)",
+        "Tratamiento",
+        "Equivalencia / Justificación Técnica"
+      ],
+      "rows": 14,
+      "sha256": "bcce3a624ad039d4f9929a7c81142e79e8ad395cbeea384a62935e00a765df2d"
+    },
+    {
+      "file": "ENTREGABLES/1-Matriz-de-Mapeo-de-Campos-Detalle-Formulario.csv",
+      "kind": "csv",
+      "source": "docs/equivalencias-prisma-startrack.md",
+      "heading": "Matriz completa del formulario de tarea suministrado",
+      "columns": [
+        "Sección",
+        "Campo del formulario",
+        "Prisma: campo exacto o ausencia",
+        "Modelo normalizado / regla de ECON",
+        "Campo API de Startrack",
+        "Clasificación y alcance"
+      ],
+      "rows": 37,
+      "sha256": "307d9b244d7cb9f2fce27614272c06df2b2775bed88796a656a7382b37e2454c"
+    },
+    {
+      "file": "ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.xlsx",
+      "kind": "xlsx",
+      "source": "ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.md",
+      "heading": "Entregable 1 · Matriz de Mapeo de Campos",
+      "sheets": [
+        "Mapeo consolidado",
+        "Clasificaciones",
+        "Identidad y cardinalidad",
+        "Glosario de sinónimos",
+        "Inconsistencias internas",
+        "Formulario 1 Identificación",
+        "Formulario 2 Programación",
+        "Formulario 3 Asignación",
+        "Formulario 4 Artículos",
+        "Formulario 5 Contacto",
+        "Formulario de tarea completo",
+        "Otros campos API de tarea",
+        "Inventario Prisma",
+        "Fechas y unidades",
+        "Estados separados",
+        "Evidencia de retorno",
+        "RACI propuesta",
+        "Trazabilidad requisitos"
+      ],
+      "rows": 231,
+      "sha256": "e49387e69a707b8320623553dd2b3ee7a10cfd54b48ea6c5fd1d0258c410d1c1"
+    },
+    {
+      "file": "ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.csv",
+      "kind": "csv",
+      "source": "ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.md",
+      "heading": "1. Tabla Estructurada RACI",
+      "columns": [
+        "Decisión o Evento Operativo",
+        "Gerencia Técnica de Proyectos",
+        "Gerencia de Logística y Equipos",
+        "Gerencia de Mantenimiento",
+        "Control de Costos / Finanzas"
+      ],
+      "rows": 9,
+      "sha256": "78bbfcdf7ceddc62714c5f3d25eb403a8f902c7687767e44267591202093c882"
+    },
+    {
+      "file": "ENTREGABLES/2-Matriz-de-Responsabilidades-RACI-Detalle.csv",
+      "kind": "csv",
+      "source": "docs/equivalencias-prisma-startrack.md",
+      "heading": "Responsabilidades propuestas para confirmar",
+      "columns": [
+        "Decisión o dato",
+        "R",
+        "A",
+        "C",
+        "I"
+      ],
+      "rows": 9,
+      "sha256": "126fa3b3b61290332dbecb04de3cc23d3b52304769599b2b7683614486f9a25f"
+    },
+    {
+      "file": "ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.xlsx",
+      "kind": "xlsx",
+      "source": "ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.md",
+      "heading": "Entregable 2 · Matriz de Responsabilidades (RACI)",
+      "sheets": [
+        "RACI por gerencia",
+        "RACI propuesta"
+      ],
+      "rows": 18,
+      "sha256": "626a7afb3cde7b6e025958b12842430a206c7dba897026cf3a53754f7faa77f6"
+    }
+  ],
+  "scope_notes": [
+    "El Markdown de cada entregable es el origen editable; CSV y XLSX son copias.",
+    "Cada archivo contiene la misma matriz que el entregable cuyo nombre lleva.",
+    "Las hojas de detalle proceden de docs/ y coinciden con output/matrices.",
+    "La RACI es una propuesta pendiente de validación empresarial (RF-03).",
+    "Una correspondencia documentada no acredita identidad de registros entre plataformas."
+  ]
+}

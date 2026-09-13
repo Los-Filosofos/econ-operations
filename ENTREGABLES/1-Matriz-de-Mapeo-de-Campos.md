@@ -27,6 +27,11 @@ Este documento establece la correspondencia estructurada entre los campos de **P
 ---
 
 ## 2. Archivos Relacionados
-- **Libro Excel con 17 tablas estructuradas**: `1-Matriz-de-Mapeo-de-Campos.xlsx`
-- **CSV para ingesta automatizada**: `1-Matriz-de-Mapeo-de-Campos.csv`
+- **CSV de esta misma matriz**: `1-Matriz-de-Mapeo-de-Campos.csv` (UTF-8 con BOM, separador
+  coma). Contiene exactamente las 14 filas de la tabla anterior.
+- **Libro Excel**: `1-Matriz-de-Mapeo-de-Campos.xlsx`. Primera hoja *Mapeo consolidado* con
+  esta tabla; a continuación las 17 tablas de detalle del repositorio.
+- **CSV de detalle**: `1-Matriz-de-Mapeo-de-Campos-Detalle-Formulario.csv`, las 37 filas del
+  formulario de tarea completo (las cinco secciones con su columna de sección).
 - **Diccionario de datos completo**: `docs/diccionario-modelo-econ.md`
+- **Procedencia y SHA-256**: `MANIFEST-TABLAS.md`

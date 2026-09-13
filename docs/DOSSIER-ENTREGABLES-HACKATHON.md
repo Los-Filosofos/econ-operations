@@ -48,9 +48,9 @@ Conexión técnica entre el modelo de lectura de Prisma (`/api/maquinaria/*`) y 
 | *(No provisto en Prisma)* | `TransferMapping.comments` | `job.form_ids` / `required_form_ids` | **Sin equivalente** | Formularios dinámicos en app móvil de Startrack; opcionales en el prototipo. |
 
 > **Archivos entregables disponibles en el repositorio**:
-> - Hoja de cálculo completa: [`output/matrices/matrices-econ.xlsx`](file:///home/chelo/antigravity/ECON/econ-operations/output/matrices/matrices-econ.xlsx) (Pestaña: *formulario-tarea-completo*).
-> - Archivo estructurado CSV: [`output/matrices/formulario-tarea-completo.csv`](file:///home/chelo/antigravity/ECON/econ-operations/output/matrices/formulario-tarea-completo.csv).
-> - Diccionario técnico de datos: [`docs/diccionario-modelo-econ.md`](file:///home/chelo/antigravity/ECON/econ-operations/docs/diccionario-modelo-econ.md).
+> - Hoja de cálculo completa: [`output/matrices/matrices-econ.xlsx`](../output/matrices/matrices-econ.xlsx) (Pestaña: *formulario-tarea-completo*).
+> - Archivo estructurado CSV: [`output/matrices/formulario-tarea-completo.csv`](../output/matrices/formulario-tarea-completo.csv).
+> - Diccionario técnico de datos: [`docs/diccionario-modelo-econ.md`](diccionario-modelo-econ.md).
 
 ---
 
@@ -73,8 +73,8 @@ Estructurada conforme a los estándares de gobernanza para las tres gerencias cl
 *Leyenda*: **R** = Responsable de ejecutar la acción | **A** = Quien Aprueba y responde por el resultado | **C** = Consultado previamente | **I** = Informado del resultado.
 
 > **Archivos entregables disponibles en el repositorio**:
-> - Archivo estructurado CSV: [`output/matrices/raci-propuesta.csv`](file:///home/chelo/antigravity/ECON/econ-operations/output/matrices/raci-propuesta.csv).
-> - Manifiesto y tabla integrada en: [`output/matrices/matrices-econ.xlsx`](file:///home/chelo/antigravity/ECON/econ-operations/output/matrices/matrices-econ.xlsx).
+> - Archivo estructurado CSV: [`output/matrices/raci-propuesta.csv`](../output/matrices/raci-propuesta.csv).
+> - Manifiesto y tabla integrada en: [`output/matrices/matrices-econ.xlsx`](../output/matrices/matrices-econ.xlsx).
 
 ---
 
@@ -192,7 +192,7 @@ stateDiagram-v2
 
 ## 5. Documento de Decisiones Técnicas (Resumen Ejecutivo)
 
-*Documento formal de 2 páginas exportado a PDF en [`output/pdf/ECON-decisiones-tecnicas.pdf`](file:///home/chelo/antigravity/ECON/econ-operations/output/pdf/ECON-decisiones-tecnicas.pdf).*
+*Documento formal de 2 páginas exportado a PDF en [`output/pdf/ECON-decisiones-tecnicas.pdf`](../output/pdf/ECON-decisiones-tecnicas.pdf).*
 
 ### Principales Definiciones Técnicas:
 1. **Identidad Estricta por Fuente**: Preservación de UUIDs de Prisma e IDs numéricos de Startrack. Queda prohibido unificar registros por coincidencia aproximada de nombres o matrículas no validadas.
@@ -210,7 +210,7 @@ stateDiagram-v2
 
 | Documento | Ubicación en el Repositorio | Páginas | Descripción |
 | :--- | :--- | :---: | :--- |
-| **Decisiones Técnicas** | [`output/pdf/ECON-decisiones-tecnicas.pdf`](file:///home/chelo/antigravity/ECON/econ-operations/output/pdf/ECON-decisiones-tecnicas.pdf) | 2 | Alcance, mapeo selectivo, justificación de exclusiones y arquitectura de resiliencia. |
-| **Dossier Visual y Diagramas** | [`output/pdf/ECON-entregables-visuales.pdf`](file:///home/chelo/antigravity/ECON/econ-operations/output/pdf/ECON-entregables-visuales.pdf) | 16 | Diagramas de proceso, flujos de sincronización, estados del equipo y gráficas de cobertura. |
-| **Manual de Mapeo y Diccionario** | [`output/pdf/ECON-diccionario-mapeo-y-manual-integracion.pdf`](file:///home/chelo/antigravity/ECON/econ-operations/output/pdf/ECON-diccionario-mapeo-y-manual-integracion.pdf) | 34 | Diccionario completo de datos, inventario de entidades y manual de procedimientos. |
-| **Libro de Matrices en Excel** | [`output/matrices/matrices-econ.xlsx`](file:///home/chelo/antigravity/ECON/econ-operations/output/matrices/matrices-econ.xlsx) | 17 Hojas | Mapeo exhaustivo campo por campo, matriz RACI, glosario de términos y trazabilidad. |
+| **Decisiones Técnicas** | [`output/pdf/ECON-decisiones-tecnicas.pdf`](../output/pdf/ECON-decisiones-tecnicas.pdf) | 2 | Alcance, mapeo selectivo, justificación de exclusiones y arquitectura de resiliencia. |
+| **Dossier Visual y Diagramas** | [`output/pdf/ECON-entregables-visuales.pdf`](../output/pdf/ECON-entregables-visuales.pdf) | 16 | Diagramas de proceso, flujos de sincronización, estados del equipo y gráficas de cobertura. |
+| **Manual de Mapeo y Diccionario** | [`output/pdf/ECON-diccionario-mapeo-y-manual-integracion.pdf`](../output/pdf/ECON-diccionario-mapeo-y-manual-integracion.pdf) | 34 | Diccionario completo de datos, inventario de entidades y manual de procedimientos. |
+| **Libro de Matrices en Excel** | [`output/matrices/matrices-econ.xlsx`](../output/matrices/matrices-econ.xlsx) | 17 Hojas | Mapeo exhaustivo campo por campo, matriz RACI, glosario de términos y trazabilidad. |

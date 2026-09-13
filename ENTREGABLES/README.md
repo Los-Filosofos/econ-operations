@@ -5,6 +5,9 @@
 
 Esta carpeta reúne de manera centralizada y explícita todos los entregables obligatorios solicitados en el reto, en sus formatos de reporte oficial **PDF**, hojas de cálculo estructuradas (**Excel/CSV**) y documentación técnica (**Markdown**).
 
+> **Formato de las tablas.** Cada `.csv` y cada `.xlsx` contiene la misma matriz que el entregable cuyo nombre lleva. Los CSV son **UTF-8 con BOM**, fin de línea **CRLF** y separador **coma** (RFC 4180): el BOM hace que Excel muestre los acentos al abrir el archivo con doble clic, y la coma mantiene el archivo apto para ingesta automatizada. Para revisar las matrices en Excel, el archivo indicado es el `.xlsx`: lleva cabecera fija y filtrable, ancho de columna calculado y ajuste de texto.
+> Los CSV y los libros se generan desde el Markdown de cada entregable con `scripts/docs/exportar_entregables.py`; `scripts/check.sh` verifica que no se desfasen. La procedencia y el SHA-256 de cada archivo están en [`MANIFEST-TABLAS.md`](./MANIFEST-TABLAS.md).
+
 ---
 
 ## 📑 Índice Rápido de Entregables
@@ -12,8 +15,9 @@ Esta carpeta reúne de manera centralizada y explícita todos los entregables ob
 ### [1. Matriz de Mapeo de Campos](./1-Matriz-de-Mapeo-de-Campos.pdf)
 Conecta los campos de Prisma y Startrack, identificando de manera explícita aquellos que no tienen un equivalente directo.
 - 📕 [Reporte Oficial en PDF](./1-Matriz-de-Mapeo-de-Campos.pdf)
-- 📊 [Libro Excel con 17 Tablas](./1-Matriz-de-Mapeo-de-Campos.xlsx)
-- 📄 [Archivo Estructurado CSV](./1-Matriz-de-Mapeo-de-Campos.csv)
+- 📊 [Libro Excel](./1-Matriz-de-Mapeo-de-Campos.xlsx): hoja *Mapeo consolidado* con la matriz de este entregable, seguida de las 17 tablas de detalle del repositorio (18 hojas)
+- 📄 [CSV de la matriz consolidada](./1-Matriz-de-Mapeo-de-Campos.csv) (14 filas × 5 columnas)
+- 📄 [CSV de detalle: formulario de tarea completo](./1-Matriz-de-Mapeo-de-Campos-Detalle-Formulario.csv) (37 filas × 6 columnas)
 - 📝 [Versión Markdown](./1-Matriz-de-Mapeo-de-Campos.md)
 
 ---
@@ -21,7 +25,9 @@ Conecta los campos de Prisma y Startrack, identificando de manera explícita aqu
 ### [2. Matriz de Responsabilidades (RACI)](./2-Matriz-de-Responsabilidades-RACI.pdf)
 Tabla estructurada en formato RACI que define quién es Responsable, quién Aprueba, a quién se Consulta y a quién se Informa sobre el estado de un equipo, cubriendo Mantenimiento, Logística y Equipos, Técnica de Proyectos y Control de Costos.
 - 📕 [Reporte Oficial en PDF](./2-Matriz-de-Responsabilidades-RACI.pdf)
-- 📄 [Archivo Estructurado CSV](./2-Matriz-de-Responsabilidades-RACI.csv)
+- 📊 [Libro Excel](./2-Matriz-de-Responsabilidades-RACI.xlsx): hoja *RACI por gerencia* y hoja *RACI propuesta* con el desglose por decisión
+- 📄 [CSV de la RACI por gerencia](./2-Matriz-de-Responsabilidades-RACI.csv) (9 filas × 5 columnas)
+- 📄 [CSV de detalle: RACI propuesta por decisión](./2-Matriz-de-Responsabilidades-RACI-Detalle.csv) (9 filas × 5 columnas)
 - 📝 [Versión Markdown](./2-Matriz-de-Responsabilidades-RACI.md)
 
 ---

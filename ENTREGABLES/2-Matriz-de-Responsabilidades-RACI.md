@@ -30,5 +30,10 @@ Matriz estructurada que define quién es **Responsable (R)**, quién **Aprueba (
 ---
 
 ## 3. Archivos Relacionados
-- **Archivo CSV**: `2-Matriz-de-Responsabilidades-RACI.csv`
-- **Libro Excel**: `1-Matriz-de-Mapeo-de-Campos.xlsx` (Pestaña *raci-propuesta*)
+- **CSV de esta misma matriz**: `2-Matriz-de-Responsabilidades-RACI.csv` (UTF-8 con BOM,
+  separador coma). Contiene exactamente las 9 filas de la tabla anterior.
+- **Libro Excel**: `2-Matriz-de-Responsabilidades-RACI.xlsx`. Hoja *RACI por gerencia* con
+  esta tabla y hoja *RACI propuesta* con el desglose por decisión (R, A, C, I).
+- **CSV de detalle**: `2-Matriz-de-Responsabilidades-RACI-Detalle.csv`, la RACI propuesta por
+  decisión tal como está en `docs/equivalencias-prisma-startrack.md`.
+- **Procedencia y SHA-256**: `MANIFEST-TABLAS.md`

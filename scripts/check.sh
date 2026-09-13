@@ -14,6 +14,8 @@ DATABASE_URL='sqlite://' ALLOW_LIVE_READS='false' uv run --directory "$project" 
 uv run --project "$project" python "$root/scripts/docs/generar_diccionario.py" --check
 # RNF-02: CSV/XLSX exports must match the Markdown matrices (stdlib + pinned openpyxl).
 uv run --no-project --with openpyxl==3.1.5 python "$root/scripts/docs/exportar_matrices.py" --check
+# RNF-02: the ENTREGABLES spreadsheets must match each deliverable's Markdown table.
+uv run --no-project --with openpyxl==3.1.5 python "$root/scripts/docs/exportar_entregables.py" --check
 if [ "${1:-}" = "--container" ]; then
     docker build -t econ-hub:check "$project"
 fi

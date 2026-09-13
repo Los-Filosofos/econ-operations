@@ -3,7 +3,7 @@
 > ### 🏆 ENTREGABLES OFICIALES · HACKATHON GRUPO ECON (DOMINGO 10:00 AM)
 > Todos los entregables obligatorios solicitados en el reto están organizados en la carpeta **[`ENTREGABLES/`](./ENTREGABLES/)**:
 > 1. 📊 **Matriz de Mapeo de Campos**: [`ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.pdf`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.pdf) (Excel: [`1-Matriz-de-Mapeo-de-Campos.xlsx`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.xlsx) | CSV: [`1-Matriz-de-Mapeo-de-Campos.csv`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.csv))
-> 2. 📋 **Matriz de Responsabilidades (RACI)**: [`ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.pdf`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.pdf) (CSV: [`2-Matriz-de-Responsabilidades-RACI.csv`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.csv))
+> 2. 📋 **Matriz de Responsabilidades (RACI)**: [`ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.pdf`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.pdf) (Excel: [`2-Matriz-de-Responsabilidades-RACI.xlsx`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.xlsx) | CSV: [`2-Matriz-de-Responsabilidades-RACI.csv`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.csv))
 > 3. 🌐 **Prototipo Navegable & Guía de Demo**: [`ENTREGABLES/3-Prototipo-Navegable-y-Guia-de-Demo.pdf`](./ENTREGABLES/3-Prototipo-Navegable-y-Guia-de-Demo.pdf) (Web en vivo: `http://localhost:5173/` y `http://localhost:8050/docs`)
 > 4. 🖼️ **Diagramas de Arquitectura & Estados**: [`ENTREGABLES/4-Diagrama-de-Arquitectura-y-Dossier-Visual.pdf`](./ENTREGABLES/4-Diagrama-de-Arquitectura-y-Dossier-Visual.pdf)
 > 5. 📄 **Documento de Decisiones Técnicas (2 págs)**: [`ENTREGABLES/5-Documento-de-Decisiones-Tecnicas.pdf`](./ENTREGABLES/5-Documento-de-Decisiones-Tecnicas.pdf)

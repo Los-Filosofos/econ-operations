@@ -9,3 +9,8 @@
 *.png binary
 *.jpg binary
 *.pdf binary
+*.xlsx binary
+# Byte-compared by scripts/docs/exportar_matrices.py --check: never normalise.
+output/matrices/*.csv text eol=lf
+# UTF-8 BOM and CRLF for Excel; byte-compared by exportar_entregables.py --check.
+ENTREGABLES/*.csv -text
