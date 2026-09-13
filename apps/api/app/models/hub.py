@@ -34,6 +34,14 @@ class SourceStatus(BaseModel):
     message: str
 
 
+class ReceiptSummary(BaseModel):
+    receiver: str
+    received_at: datetime
+    reference: str
+    recorded_at: datetime | None = None
+    note: str | None = None
+
+
 class TransferRecord(BaseModel):
     id: str
     code: str
@@ -50,6 +58,11 @@ class TransferRecord(BaseModel):
     evidence_origin: Literal["task_observation", "creation_acknowledgment"] = "task_observation"
     source_data: dict[str, str | float | int | None] = Field(default_factory=dict)
     provenance: Provenance
+    arrival_observed: bool = False
+    arrival_event_time: datetime | None = None
+    arrival_poi_id: str | None = None
+    arrival_evidence_origin: str | None = None
+    receipt: ReceiptSummary | None = None
 
 
 class LocationObservation(BaseModel):

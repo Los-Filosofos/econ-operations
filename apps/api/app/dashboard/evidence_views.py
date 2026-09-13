@@ -191,6 +191,25 @@ def source_comparison(
                                 or task.destination_project_id
                                 or "Sin informar",
                             ),
+                            (
+                                "Señal de llegada GPS",
+                                (
+                                    f"Observada en {task.arrival_poi_id} "
+                                    f"({instant(task.arrival_event_time)})"
+                                    if task.arrival_observed
+                                    else "Sin señal de llegada observada"
+                                ),
+                            ),
+                            (
+                                "Constancia de recepción",
+                                (
+                                    f"Recibió {task.receipt.receiver} · "
+                                    f"{task.receipt.reference} "
+                                    f"({instant(task.receipt.received_at)})"
+                                    if task.receipt
+                                    else "Sin constancia de recepción"
+                                ),
+                            ),
                         ]
                     ),
                     dcc.Link("Abrir movimiento", href=context.movement_href(task.movement_id))
