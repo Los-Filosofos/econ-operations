@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Camión o transportador">
+  <path fill="#e6e2d8" d="M5 19h34v29H5zm36 10h10l8 10v9H41zm5 5v8h8l-5-8z"/>
+  <circle cx="17" cy="50" r="7" fill="#e6e2d8"/><circle cx="49" cy="50" r="7" fill="#e6e2d8"/>
+  <circle cx="17" cy="50" r="3" fill="#26302c"/><circle cx="49" cy="50" r="3" fill="#26302c"/>
+  <path fill="#aaa9a3" d="M10 24h24v6H10z"/>
+</svg>
