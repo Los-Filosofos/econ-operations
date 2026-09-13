@@ -111,7 +111,7 @@ en desarrollo con `AUTH_REQUIRED=false`. Detalles en
 ./scripts/check.sh --container  # PowerShell: .\scripts\check.ps1 -Container
 ```
 
-Las pruebas usan SQLite y HTTP controlado: callbacks reales de Dash, contrato
+Las pruebas (462 pruebas automatizadas) usan SQLite y HTTP controlado: callbacks reales de Dash, contrato
 API, filtros, reglas y errores sin fallback. El segundo comando construye la
 imagen Docker; no publica servicios. El [despliegue](docs/despliegue-backend.md)
 sirve interfaz y API juntas.
