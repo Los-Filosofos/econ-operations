@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 import dash_mantine_components as dmc
+from dash import html
 
 from app.dashboard.analytics import equipment_label
 from app.dashboard.components import (
@@ -121,15 +122,14 @@ def candidate_card(candidate: CandidateUnit, context: QueryContext):
             f"{candidate.assignment_ends_on or 'ausente'})"
         )
     advice = recommendation(candidate)
-    return dmc.Paper(
+    return html.Article(
         [
-            dmc.Group(
+            html.Div(
                 [
                     link(candidate.label, context.equipment_href(candidate.equipment_id), fw=600),
                     state_text(label, family),
                 ],
-                justify="space-between",
-                gap="md",
+                className="candidate-head",
             ),
             facts(
                 [
@@ -143,9 +143,9 @@ def candidate_card(candidate: CandidateUnit, context: QueryContext):
                     ("Proyecto vigente en Prisma", project or "Sin proyecto vigente informado"),
                 ]
             ),
-            dmc.Text(advice, size="sm", fw=500) if advice else None,
+            dmc.Text(advice, size="sm", fw=500, className="candidate-advice") if advice else None,
             [
-                dmc.Text("Puntos a revisar", size="xs", c="dimmed", mt="xs"),
+                html.P("Puntos a revisar", className="eyebrow spaced"),
                 dmc.List([dmc.ListItem(reason) for reason in candidate.review_reasons], size="sm"),
             ]
             if candidate.review_reasons
@@ -164,10 +164,7 @@ def candidate_card(candidate: CandidateUnit, context: QueryContext):
                 mt="sm",
             ),
         ],
-        withBorder=True,
-        p="md",
-        mb="sm",
-        className="candidate-card",
+        className="candidate",
     )
 
 
@@ -229,6 +226,7 @@ def suggestions_section(
     excluded = [item for item in suggestion.candidates if item.eligibility == "excluded"]
     return section(
         heading,
+        html.P(AUTHORITY, className="authority-note"),
         hint(
             f"Clase solicitada «{suggestion.requested_class or 'ausente'}» · período "
             f"{usage_period_of(request).span()}. {suggestion.message}"
@@ -246,12 +244,16 @@ def suggestions_section(
         else None,
         accordion(
             disclosure(
+                f"Reglas aplicadas R0–R8 y criterios de orden ({len(suggestion.rules)})",
+                dmc.List([dmc.ListItem(rule) for rule in suggestion.rules], size="sm"),
+            ),
+            disclosure(
                 f"Descartadas y por qué ({len(excluded)})", excluded_table(excluded, context)
             )
-        )
-        if excluded
-        else None,
-        hint(f"{AUTHORITY} {NO_GEOMETRY}", fw=500),
+            if excluded
+            else None,
+        ),
+        hint(NO_GEOMETRY, fw=500),
     )
 
 

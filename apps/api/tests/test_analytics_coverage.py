@@ -80,18 +80,21 @@ def test_partial_registry_preserves_known_task_and_does_not_close_unseen_work(hu
     assert "otros movimientos sin resolver" in decision.evidence
 
 
-def test_graph_population_is_not_reduced_by_chart_dates_or_hidden_legacy_filters(hub):
+def test_overview_charts_ignore_list_filters_and_keep_exclusions_visible(hub):
     hub.requests[0].starts_on = "invalid"
     payload = json.dumps(
         overview(hub, QueryContext(), registry()), cls=PlotlyJSONEncoder, ensure_ascii=False
     )
-    assert "operations-graph-world" in payload
-    assert "Cobertura parcial" in payload
-    assert payload.count('"data-node-kind": "machine"') == 5
+    assert "decision-request-usage" in payload
+    assert "1 solicitudes con fechas no representables" in payload
+    assert "invalid" in payload
     filtered = json.dumps(
-        overview(hub, QueryContext(filter="unassigned"), registry()), cls=PlotlyJSONEncoder
+        overview(hub, QueryContext(filter="unassigned"), registry()),
+        cls=PlotlyJSONEncoder,
+        ensure_ascii=False,
     )
-    assert filtered.count('"data-node-kind": "machine"') == 5
+    assert filtered == payload
+    assert "1 solicitudes con fechas no representables" in filtered
 
 
 def test_display_label_collisions_do_not_merge_distinct_source_categories():

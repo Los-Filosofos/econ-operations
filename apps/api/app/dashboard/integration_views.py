@@ -2,7 +2,15 @@
 
 Everything shown comes from `services.integration_trace`, the same derivation the HTTP
 route returns, so the page and `GET /api/v1/integration/{request_id}` cannot diverge.
+
+The exchange is laid out as a sober sequence diagram: three actors in fixed lanes and one
+row per interaction, carrying its origin, destination, endpoint and the fields that travel.
+A row states the contract between two systems; it never claims that a request happened, and
+a prepared body is never presented as a sent one.
 """
+
+import json
+from urllib.parse import quote
 
 import dash_mantine_components as dmc
 from dash import ALL, html
@@ -24,12 +32,14 @@ from app.dashboard.components import (
     state_text,
 )
 from app.dashboard.context import QueryContext
+from app.dashboard.theme import state_color
 from app.models.hub import HubResponse
 from app.services.integration_trace import (
     TREATMENTS,
     IntegrationTrace,
     TraceCell,
     TraceEntry,
+    TraceField,
     TraceStage,
     build_trace,
     default_request_id,
@@ -47,24 +57,99 @@ STAGE_STATES = {
     "pending": ("pending", "Pendiente"),
     "blocked": ("issue", "Bloqueada"),
 }
-STAGE_ICONS = {
-    "prisma": "database",
-    "econ": "arrows-exchange",
-    "startrack_request": "send",
-    "startrack_response": "clipboard-check",
-}
 TREATMENT_ICONS = {
     "kept": "check",
     "transformed": "arrows-exchange",
     "manual": "hand-click",
     "absent": "minus",
 }
+TREATMENT_MEANINGS = {
+    "kept": "el mismo dato con el mismo significado.",
+    "transformed": "ECON lo reescribe para el contrato de destino.",
+    "manual": "lo decide una persona al preparar el traslado.",
+    "absent": "el dato no viaja a la otra plataforma.",
+}
 NO_VALUE = "No informado"
 NO_FIELD = "Sin campo equivalente"
 INTRO = (
-    "Una solicitud, cuatro etapas: lo que entrega Prisma, cómo lo nombra ECON, qué recibiría "
-    "Startrack en POST /api/job y qué devuelve la tarea. Los valores son los de la solicitud "
-    "elegida; lo que no viaja se marca como tal."
+    "Recorrido de una solicitud entre Prisma, ECON y Startrack: qué entrega cada API, "
+    "qué prepara la nuestra y qué evidencia vuelve."
+)
+# Three actors, fixed lanes. ECON is the middle lane because it coordinates every exchange.
+ACTORS = [
+    ("Prisma · Nexus", "Origen", "Proyecto, solicitud, aprobación y unidad asignada."),
+    (
+        "ECON · nuestra API",
+        "Intermediario",
+        "Normaliza, valida, prepara el envío y conserva la evidencia.",
+    ),
+    ("Startrack", "Destino", "Tarea de traslado y observaciones de su ejecución."),
+]
+# One row per interaction: step, lane span, direction, endpoint and what travels.
+EXCHANGES: dict[str, dict[str, str]] = {
+    "prisma": {
+        "step": "01",
+        "title": "Consultar solicitud y unidad",
+        "route": "ECON ⇄ Prisma",
+        "lane": "read",
+        "icon": "database",
+        "endpoint": "GET /api/maquinaria/requests · GET /api/maquinaria/equipos",
+        "carries": "Identificadores de origen, estado, aprobación, asignación y fechas.",
+    },
+    "econ": {
+        "step": "02",
+        "title": "Normalizar y validar",
+        "route": "Dentro de ECON",
+        "lane": "normalize",
+        "icon": "arrows-exchange",
+        "endpoint": "Servicios compartidos de ECON · IDs, aprobación y correspondencias",
+        "carries": "Los mismos hechos con los nombres del modelo de lectura.",
+    },
+    "startrack_request": {
+        "step": "03",
+        "title": "Preparar tarea de traslado",
+        "route": "ECON → Startrack",
+        "lane": "send",
+        "icon": "send",
+        "endpoint": "POST /api/job",
+        "carries": "Objetivo, descripción, programación, geocerca y usuarios asignados.",
+    },
+    "startrack_response": {
+        "step": "04",
+        "title": "Consultar evidencia de retorno",
+        "route": "Startrack → ECON",
+        "lane": "return",
+        "icon": "clipboard-check",
+        "endpoint": "GET /api/job · GET /api/visits",
+        "carries": "Estado de la tarea, cierre y visitas a la geocerca vinculadas por ID.",
+    },
+}
+CONTRACT_NOTE = (
+    "Cada fila describe el contrato de interacción entre dos sistemas. No es una captura de "
+    "tráfico: una flecha no prueba que la petición se haya hecho."
+)
+PREPARED_NOTE = (
+    "Un cuerpo preparado no acredita envío. La llegada por GPS, el cierre de la tarea y la "
+    "recepción declarada son hechos distintos y se registran por separado."
+)
+MODE_NOTES = {
+    "fixture": (
+        "Origen «fixture»: muestras documentales leídas de archivo. En esta pantalla no se "
+        "contactó a ningún proveedor."
+    ),
+    "live": (
+        "Origen «live»: lecturas del sandbox hechas desde el servidor. Las credenciales no "
+        "salen de él y no hay respaldo entre orígenes."
+    ),
+}
+STATE_CAPTION = (
+    "El estado de cada fila describe la evidencia disponible en esta lectura, no que la "
+    "petición se haya ejecutado."
+)
+RECEIPT_NOTE = (
+    "Fuera de este intercambio: la recepción la declara el proyecto en ECON "
+    "(POST /api/v1/operations/{movement_id}/receipt) con responsable, instante con zona y "
+    "constancia. Startrack no la devuelve y una visita a la geocerca no la sustituye."
 )
 
 
@@ -87,6 +172,11 @@ def request_options(hub: HubResponse):
     ]
 
 
+def eyebrow(text: str, className: str = "eyebrow"):
+    """Micro-label above a block; the shared class keeps it aligned with the base sheet."""
+    return html.P(text, className=className)
+
+
 def code(value: str | None):
     return dmc.Code(value, fz="xs") if value else dmc.Text(NO_FIELD, size="xs", c="dimmed")
 
@@ -97,8 +187,9 @@ def observed(value: str | None, **props):
 
 
 def cell_view(cell: TraceCell):
+    """One platform column of the field map; a missing counterpart is named, not dimmed away."""
     if cell.field is None:
-        return dmc.Text(TREATMENTS["absent"], size="sm", c="dimmed")
+        return html.Span(NO_FIELD, className="fm-none")
     return html.Div([code(cell.field), observed(cell.value, mt=2)])
 
 
@@ -114,36 +205,211 @@ def treatment_view(treatment: str):
     )
 
 
-def steps(trace: IntegrationTrace):
-    return [
-        dmc.StepperStep(
-            label=f"{position}. {stage.title}",
-            description=STAGE_STATES[stage.state][1],
-            icon=icon(STAGE_ICONS[stage.key], 18),
-            completedIcon=icon(STAGE_ICONS[stage.key], 18),
+def stage_state_span(stage: TraceStage):
+    """Phrasing-only state label for the diagram row: text first, icon only for an issue."""
+    family, label = STAGE_STATES[stage.state]
+    parts = []
+    if family == "issue":
+        parts.append(html.Span(icon("alert-triangle", 14), style={"color": state_color(family)}))
+    parts.append(html.Span(label, className="exchange-state-label"))
+    return html.Span(parts, className=f"exchange-state exchange-state-{family}")
+
+
+def fields_count(stage: TraceStage) -> str:
+    """How much of the contract this read actually fills; absence is never counted as zero."""
+    total = len(stage.entries)
+    if not total:
+        return "Sin campos observados en esta lectura"
+    informed = sum(1 for entry in stage.entries if entry.value)
+    return f"{informed} de {total} campos con valor"
+
+
+def fields_preview(stage: TraceStage) -> str | None:
+    names = [entry.field for entry in stage.entries if entry.field]
+    if not names:
+        return None
+    shown = " · ".join(names[:3])
+    return f"{shown} …" if len(names) > 3 else shown
+
+
+def stage_note(trace: IntegrationTrace, key: str) -> str:
+    """What this interaction does and does not prove, for the mode that is being read."""
+    if key == "prisma":
+        return (
+            "Datos del archivo de muestras; no se hizo una consulta HTTP a Prisma."
+            if trace.mode == "fixture"
+            else "ECON consulta Prisma desde el servidor y conserva el origen de los datos."
         )
-        for position, stage in enumerate(trace.stages, start=1)
-    ]
+    if key == "econ":
+        return (
+            "ECON conserva los identificadores y transforma los nombres de los campos. "
+            "Para preparar una tarea exige aprobación, unidad y correspondencias explícitas."
+        )
+    if key == "startrack_request":
+        return (
+            "Este es el contrato de creación. En muestras nunca se envía. En live requiere "
+            "un plan validado, autorización y envío habilitado en el servidor. "
+            "Un cuerpo preparado no acredita que Startrack haya recibido la tarea."
+        )
+    return (
+        "ECON consulta tareas y visitas y conserva la evidencia vinculada por ID. "
+        "Este retorno no es un webhook de aprobación. La llegada observada y la "
+        "recepción declarada por el proyecto siguen siendo hechos distintos."
+    )
 
 
-def stepper(trace: IntegrationTrace):
-    """Horizontal on the desktop, vertical on a phone; the same four stages either way."""
-    active = sum(1 for stage in trace.stages if stage.state == "done")
+def actors_row():
+    """Lane headers of the diagram; every row below is aligned to these three columns."""
     return html.Div(
         [
-            dmc.Stepper(
-                steps(trace),
-                active=active,
-                orientation=orientation,
-                iconSize=34,
-                size="sm",
-                my="md",
-                visibleFrom="sm" if orientation == "horizontal" else None,
-                hiddenFrom="sm" if orientation == "vertical" else None,
-                **{"aria-label": "Etapas del recorrido de los datos"},
+            html.Div(
+                [
+                    eyebrow(role, "exchange-role"),
+                    html.P(name, className="exchange-actor-name"),
+                    html.P(duty, className="exchange-duty"),
+                ],
+                className="exchange-actor",
             )
-            for orientation in ("horizontal", "vertical")
-        ]
+            for name, role, duty in ACTORS
+        ],
+        className="exchange-actors",
+    )
+
+
+def connection_tab(stage: TraceStage):
+    """One interaction of the sequence: its lane span states origin and destination."""
+    meta = EXCHANGES[stage.key]
+    preview = fields_preview(stage)
+    return dmc.TabsTab(
+        [
+            html.Span(
+                [
+                    html.Span(f"Paso {meta['step']}", className="exchange-step"),
+                    html.Span(meta["route"], className="exchange-route"),
+                    stage_state_span(stage),
+                ],
+                className="exchange-head",
+            ),
+            html.Span(meta["title"], className="exchange-title"),
+            html.Span(meta["endpoint"], className="exchange-endpoint-line"),
+            html.Span(
+                [
+                    html.Span(fields_count(stage), className="exchange-fields-count"),
+                    html.Span(preview, className="exchange-fields-list") if preview else None,
+                ],
+                className="exchange-fields",
+            ),
+        ],
+        value=stage.key,
+        className=f"exchange-call exchange-{meta['lane']}",
+    )
+
+
+def contract_block(stage: TraceStage):
+    meta = EXCHANGES[stage.key]
+    return html.Div(
+        [
+            eyebrow(f"Contrato de interacción · paso {meta['step']}"),
+            dmc.Group(
+                [icon(meta["icon"], 16), html.Span(meta["route"], className="contract-route")],
+                gap=8,
+                wrap="nowrap",
+            ),
+            dmc.Code(meta["endpoint"], block=True, className="exchange-endpoint"),
+            html.P(meta["carries"], className="contract-carries"),
+            html.P(fields_count(stage), className="contract-count"),
+        ],
+        className="exchange-contract",
+    )
+
+
+def json_block(*, kind: str, contract: str, body: str, label: str, note: str | None = None):
+    """A JSON contract with its name attached: what it is, and what it does not prove."""
+    return html.Figure(
+        [
+            html.Figcaption(
+                [
+                    eyebrow(kind, "json-kind"),
+                    html.Span(contract, className="json-contract"),
+                ],
+                className="json-caption",
+            ),
+            html.Pre(body, className="exchange-json", tabIndex=0, **{"aria-label": label}),
+            html.P(note, className="json-note") if note else None,
+        ],
+        className="json-figure",
+    )
+
+
+def prepared_payload(trace: IntegrationTrace):
+    if trace.payload is None:
+        return empty(
+            "Todavía no hay cuerpo para enviar",
+            "Revisa los datos pendientes de esta etapa.",
+        )
+    return json_block(
+        kind="Petición preparada",
+        contract="POST /api/job · cuerpo construido por ECON",
+        body=json.dumps(trace.payload, indent=2, ensure_ascii=False),
+        label="JSON preparado para Startrack",
+        note="Preparado no es enviado: este cuerpo no acredita que Startrack lo haya recibido.",
+    )
+
+
+def exchange_view(trace: IntegrationTrace, context: QueryContext):
+    """A selectable sequence of server interactions, backed by the shared trace.
+
+    Rows describe the connector contract, never a packet capture or evidence of a POST.
+    The view is read-only: selecting a row only reveals its already-loaded projection.
+    """
+    return html.Div(
+        [
+            dmc.Title("Interacción entre las APIs", order=2, size="h4"),
+            html.P(
+                "Prisma y Startrack no se llaman entre sí: ECON coordina cada intercambio "
+                "desde el servidor y conserva las evidencias por separado.",
+                className="exchange-lede",
+            ),
+            html.Div(
+                [
+                    html.P(CONTRACT_NOTE, className="truth-line"),
+                    html.P(PREPARED_NOTE, className="truth-line"),
+                    html.P(MODE_NOTES[trace.mode], className="truth-mode"),
+                ],
+                className="exchange-truth",
+            ),
+            actors_row(),
+            dmc.Tabs(
+                [
+                    dmc.TabsList(
+                        [connection_tab(stage) for stage in trace.stages],
+                        className="exchange-connections",
+                        **{"aria-label": "Interacciones entre Prisma, ECON y Startrack"},
+                    ),
+                    html.P(STATE_CAPTION, className="exchange-caption"),
+                    *[
+                        dmc.TabsPanel(
+                            [
+                                contract_block(stage),
+                                dmc.Text(stage_note(trace, stage.key), size="sm", mt="sm"),
+                                stage_section(position, stage, context),
+                                section("Cuerpo preparado para Startrack", prepared_payload(trace))
+                                if stage.key == "startrack_request"
+                                else None,
+                            ],
+                            value=stage.key,
+                            pt="lg",
+                        )
+                        for position, stage in enumerate(trace.stages, start=1)
+                    ],
+                ],
+                value="prisma",
+                keepMounted=False,
+                className="exchange-tabs",
+            ),
+            html.P(RECEIPT_NOTE, className="exchange-closing"),
+        ],
+        className="exchange-view",
     )
 
 
@@ -153,7 +419,10 @@ def stage_section(position: int, stage: TraceStage, context: QueryContext):
         rows_table({entry.label: entry_view(entry) for entry in stage.entries})
         if stage.entries
         else empty("Sin campos que mostrar en esta etapa", stage.summary),
-        dmc.List([dmc.ListItem(rule) for rule in stage.rules], size="sm", mt="xs")
+        [
+            eyebrow("Pendientes y reglas de esta etapa"),
+            dmc.List([dmc.ListItem(rule) for rule in stage.rules], size="sm"),
+        ]
         if stage.rules
         else None,
     ]
@@ -172,7 +441,11 @@ def stage_section(position: int, stage: TraceStage, context: QueryContext):
     return section(
         f"Etapa {position} · {stage.title}",
         dmc.Group(
-            [state_text(STAGE_STATES[stage.state][1], STAGE_STATES[stage.state][0])],
+            [
+                eyebrow("Estado de la evidencia"),
+                state_text(STAGE_STATES[stage.state][1], STAGE_STATES[stage.state][0]),
+            ],
+            gap="xs",
             mb="xs",
         ),
         *body,
@@ -194,6 +467,7 @@ def times_section(trace: IntegrationTrace):
     expected = timeline.expected_duration_seconds
     return section(
         "Tiempos del traslado",
+        eyebrow("Instantes registrados"),
         simple_table(
             ["Instante", "Momento registrado", "De dónde sale"],
             [
@@ -206,6 +480,7 @@ def times_section(trace: IntegrationTrace):
             ],
             caption="Instantes registrados por las fuentes para este traslado",
         ),
+        eyebrow("Duraciones calculadas", "eyebrow spaced"),
         simple_table(
             ["Duración", "Valor", "Lectura"],
             [
@@ -231,38 +506,101 @@ def times_section(trace: IntegrationTrace):
     )
 
 
+def treatment_summary(rows: list[TraceField]) -> str:
+    counts = {key: sum(1 for row in rows if row.treatment == key) for key in TREATMENTS}
+    detail = " · ".join(f"{counts[key]} {TREATMENTS[key].lower()}" for key in TREATMENTS)
+    return f"{len(rows)} conceptos comparados: {detail}."
+
+
+def map_table(rows: list[TraceField], *, caption: str):
+    """Field map with a row rule on every concept that has no direct counterpart."""
+    return dmc.TableScrollContainer(
+        dmc.Table(
+            [
+                dmc.TableCaption(caption, className="sr-only"),
+                dmc.TableThead(
+                    dmc.TableTr(
+                        [
+                            dmc.TableTh(label)
+                            for label in ["Concepto", "Prisma", "ECON", "Startrack", "Tratamiento"]
+                        ]
+                    )
+                ),
+                dmc.TableTbody(
+                    [
+                        dmc.TableTr(
+                            [
+                                dmc.TableTd(
+                                    html.Div(
+                                        [
+                                            dmc.Text(row.concept, size="sm", fw=600),
+                                            dmc.Text(row.note, size="xs", c="dimmed", mt=2)
+                                            if row.note
+                                            else None,
+                                        ]
+                                    )
+                                ),
+                                dmc.TableTd(cell_view(row.prisma)),
+                                dmc.TableTd(cell_view(row.econ)),
+                                dmc.TableTd(cell_view(row.startrack)),
+                                dmc.TableTd(treatment_view(row.treatment)),
+                            ],
+                            className="fm-row fm-absent" if row.treatment == "absent" else "fm-row",
+                        )
+                        for row in rows
+                    ]
+                ),
+            ],
+            highlightOnHover=True,
+        ),
+        minWidth=760,
+        type="native",
+        **{"aria-label": caption},
+    )
+
+
+def treatment_legend():
+    return html.Dl(
+        [
+            item
+            for key in TREATMENTS
+            for item in (
+                html.Dt(TREATMENTS[key]),
+                html.Dd(TREATMENT_MEANINGS[key]),
+            )
+        ],
+        className="treatment-legend",
+    )
+
+
 def field_map_section(trace: IntegrationTrace):
+    """Two audited groups: what ECON maps across platforms and what it never sends."""
+    sent = [row for row in trace.field_map if row.prisma.field or row.econ.field]
+    provider_only = [row for row in trace.field_map if not (row.prisma.field or row.econ.field)]
     return section(
         "Mapeo campo a campo",
+        html.P(treatment_summary(trace.field_map), className="map-summary"),
+        html.P(
+            "Las filas con una regla al margen no tienen mapeo directo: el dato no viaja o "
+            "depende de una decisión del operador.",
+            className="map-rule-note",
+        ),
         html.Div(
-            simple_table(
-                ["Concepto", "Prisma", "ECON", "Startrack", "Tratamiento"],
-                [
-                    [
-                        html.Div(
-                            [
-                                dmc.Text(row.concept, size="sm", fw=500),
-                                dmc.Text(row.note, size="xs", c="dimmed", mt=2)
-                                if row.note
-                                else None,
-                            ]
-                        ),
-                        cell_view(row.prisma),
-                        cell_view(row.econ),
-                        cell_view(row.startrack),
-                        treatment_view(row.treatment),
-                    ]
-                    for row in trace.field_map
-                ],
-                caption="Correspondencia de campos entre Prisma, ECON y Startrack",
-            ),
+            [
+                eyebrow("Campos que ECON toma de Prisma y prepara para Startrack"),
+                map_table(sent, caption="Correspondencia de campos entre Prisma, ECON y Startrack"),
+                eyebrow("Campos del formulario de Startrack que ECON no envía", "eyebrow spaced"),
+                map_table(
+                    provider_only,
+                    caption="Campos del formulario de Startrack sin origen en Prisma ni en ECON",
+                )
+                if provider_only
+                else hint("La lectura no registra campos exclusivos del formulario de Startrack."),
+            ],
             className="field-map",
         ),
-        hint(
-            "Conservado: el mismo dato con el mismo significado. Transformado: ECON lo reescribe "
-            "para el contrato de destino. Manual (operador): lo decide una persona al preparar "
-            "el traslado. Sin equivalente: el dato no viaja."
-        ),
+        eyebrow("Cómo leer el tratamiento", "eyebrow spaced"),
+        treatment_legend(),
     )
 
 
@@ -278,6 +616,8 @@ def trace_panel(hub: HubResponse, context: QueryContext, workflow, request_id: s
             "Solicitud fuera de la consulta",
             "Comprueba el origen seleccionado y el identificador de la solicitud.",
         )
+    current = next((stage for stage in trace.stages if stage.state != "done"), None)
+    api_href = f"/api/v1/integration/{quote(trace.request_id, safe='')}?mode={trace.mode}"
     return [
         facts(
             [
@@ -291,22 +631,90 @@ def trace_panel(hub: HubResponse, context: QueryContext, workflow, request_id: s
                 ),
             ]
         ),
-        stepper(trace),
-        hint(
-            "Sin envío registrado para esta solicitud. Prepara el traslado desde el detalle de "
-            "la solicitud; ECON no inventa un mapeo de destino ni de usuarios."
-        )
-        if trace.movement_id is None
-        else None,
-        *[
-            stage_section(position, stage, context)
-            for position, stage in enumerate(trace.stages, start=1)
-        ],
-        times_section(trace),
-        field_map_section(trace),
-        hint(
-            f"Este recorrido está disponible como respuesta JSON en "
-            f"GET /api/v1/integration/{trace.request_id}?mode={trace.mode}."
+        dmc.Tabs(
+            [
+                dmc.TabsList(
+                    [
+                        dmc.TabsTab("Recorrido", value="overview"),
+                        dmc.TabsTab("Tiempos", value="times"),
+                        dmc.TabsTab("Mapa de campos", value="fields"),
+                        dmc.TabsTab("Respuesta de nuestra API", value="api"),
+                    ]
+                ),
+                dmc.TabsPanel(
+                    [
+                        exchange_view(trace, context),
+                        html.Div(
+                            [
+                                dmc.Title("Qué falta resolver", order=2, size="h4"),
+                                dmc.List(
+                                    [dmc.ListItem(rule) for rule in current.rules],
+                                    size="sm",
+                                    mt="sm",
+                                )
+                                if current and current.rules
+                                else hint(
+                                    current.summary
+                                    if current
+                                    else "Las cuatro etapas tienen evidencia. "
+                                    "Revisa llegada y recepción por separado."
+                                ),
+                                link(
+                                    "Revisar solicitud y asignación",
+                                    context.request_href(trace.request_id),
+                                    mt="md",
+                                    display="block",
+                                ),
+                            ],
+                            className="trace-next",
+                        ),
+                    ],
+                    value="overview",
+                ),
+                dmc.TabsPanel(times_section(trace), value="times"),
+                dmc.TabsPanel(
+                    [
+                        field_map_section(trace),
+                        link(
+                            "Consultar contrato JSON",
+                            api_href,
+                        ),
+                    ],
+                    value="fields",
+                ),
+                dmc.TabsPanel(
+                    [
+                        dmc.Title("Lo que expone nuestra API", order=2, size="h4"),
+                        hint(
+                            "Esta es la misma proyección que entrega el endpoint de ECON: "
+                            "origen, transformación, preparación y evidencia de retorno. "
+                            "No es una captura de tráfico HTTP entre proveedores."
+                        ),
+                        link(
+                            "Abrir respuesta JSON de ECON",
+                            api_href,
+                            display="block",
+                            mb="md",
+                        ),
+                        json_block(
+                            kind="Respuesta de nuestra API",
+                            contract=f"GET {api_href}",
+                            body=trace.model_dump_json(indent=2),
+                            label="Respuesta JSON de la API de ECON",
+                            note="Un HTTP 200 de ECON puede describir evidencia faltante; no "
+                            "certifica conexión ni envío a Startrack.",
+                        ),
+                    ],
+                    value="api",
+                ),
+            ],
+            id={"type": "integration-stage", "request": trace.request_id},
+            value="overview",
+            persistence=trace.mode,
+            persistence_type="session",
+            keepMounted=False,
+            className="analysis-tabs",
+            mt="md",
         ),
     ]
 
@@ -318,8 +726,10 @@ def integration_page(hub: HubResponse, context: QueryContext, workflow=None):
         dmc.Select(
             id=SELECT_ID,
             label="Solicitud a seguir",
-            description="Se muestran las solicitudes de la consulta actual.",
+            description="Cambiar la solicitud solo vuelve a leer lo que ya está en memoria.",
             value=selected,
+            persistence=context.mode,
+            persistence_type="session",
             data=request_options(hub),
             allowDeselect=False,
             searchable=True,

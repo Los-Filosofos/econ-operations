@@ -1,0 +1,78 @@
+/* Access and administration: the /login screen, the session block in the header and the
+ * /administracion tables and forms. Loaded after style.css, ahead of the other z-* sheets in name order. Colors and
+ * spacing come from the tokens declared in style.css, which mirror app/dashboard/theme.py;
+ * there are no literal values here.
+ */
+
+/* ------------------------------------------------------------------- 1. Login */
+/* Two columns: identity on the canvas, form on paper, separated by one hairline.
+   Nothing floats: the panels reach the edges of the viewport. */
+.login-page { min-height: 100dvh; background: var(--econ-canvas); color: var(--econ-ink); }
+.login-grid { min-height: 100dvh; }
+.login-grid > div { min-height: inherit; }
+.login-identity { display: flex; align-items: center; padding: 64px clamp(24px, 7vw, 96px); }
+.login-identity-inner { width: 100%; max-width: 52ch; }
+.login-logo { display: block; margin-bottom: 40px; }
+.login-title { margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+.login-line { max-width: 52ch; margin: var(--econ-gap-lg) 0 0; font-size: 1rem; line-height: 1.55; color: var(--econ-muted); }
+.login-note { max-width: 52ch; margin: var(--econ-block) 0 0; padding-top: var(--econ-gap-lg); border-top: var(--econ-rule); font-size: .8125rem; line-height: 1.5; color: var(--econ-muted); }
+
+.login-panel { display: flex; align-items: center; background: var(--econ-paper); border-left: var(--econ-rule); }
+.login-form { width: 100%; max-width: 380px; padding: 64px clamp(24px, 4vw, 56px); }
+.login-form-title { margin: 0 0 24px; font-size: 1.0625rem; line-height: 1.35; letter-spacing: -.005em; }
+.login-field { margin-bottom: var(--econ-gap-lg); }
+.login-field .mantine-InputWrapper-label { font-size: .8125rem; font-weight: 600; color: var(--econ-ink); }
+/* The message keeps its own line under the fields; the callback toggles its display. */
+.login-error-slot { min-height: 0; }
+.login-error { margin: 0 0 var(--econ-gap); line-height: 1.5; }
+.login-submit { margin-top: var(--econ-step); }
+.login-hint { margin: var(--econ-gap-lg) 0 0; font-size: .75rem; line-height: 1.5; color: var(--econ-muted); }
+/* Visible focus on both panels, whatever the base sheet sets for the shell. */
+.login-page :focus-visible { outline: 2px solid var(--econ-brand); outline-offset: 2px; }
+
+/* Below the Mantine md breakpoint the grid stacks: identity first, then the form. */
+@media (max-width: 61.99em) {
+  .login-grid, .login-grid > div { min-height: 0; }
+  .login-identity { align-items: flex-start; padding: 32px 20px 24px; }
+  .login-identity-inner { max-width: none; }
+  .login-logo { margin-bottom: 24px; }
+  .login-note { margin-top: 24px; }
+  .login-panel { border-left: 0; border-top: var(--econ-rule); }
+  .login-form { max-width: 460px; padding: 28px 20px 48px; }
+}
+
+/* ------------------------------------------------- 2. Session block in the header */
+.econ-header .econ-session-group { align-items: center; }
+.econ-session { text-align: right; min-width: 0; }
+.econ-session-name { color: var(--econ-ink); line-height: 1.25; }
+.econ-session-role { color: var(--econ-muted); line-height: 1.25; }
+.econ-session-note { color: var(--econ-muted); }
+.econ-header .econ-logout { height: 32px; padding-inline: 10px; font-weight: 500; color: var(--econ-ink); background: var(--econ-paper); border-color: var(--econ-line); }
+.econ-header .econ-logout:hover { background: var(--econ-canvas); }
+.econ-header .econ-logout .ui-icon { opacity: .75; }
+
+/* ------------------------------------------------------- 3. Permission messages */
+/* Says which role carries the action and what to do; a rule, not an alert box. */
+.permission-note { max-width: 72ch; margin: 12px 0; padding: var(--econ-gap) 0 var(--econ-gap) 12px; border-left: 2px solid var(--econ-line-strong); }
+.permission-title { color: var(--econ-ink); }
+.permission-detail { margin-top: var(--econ-step); color: var(--econ-muted); line-height: 1.55; }
+.permission-next { margin-top: var(--econ-step); color: var(--econ-muted); line-height: 1.5; }
+
+/* ---------------------------------------------------------- 4. Administration */
+.admin-users { margin-top: var(--econ-gap-lg); }
+.admin-users-table { width: 100%; }
+.admin-users-table th { white-space: nowrap; font-size: .75rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--econ-muted); }
+.admin-user-name { font-weight: 600; color: var(--econ-ink); }
+.admin-user-email { color: var(--econ-muted); overflow-wrap: anywhere; }
+.admin-user-date { white-space: nowrap; color: var(--econ-muted); font-variant-numeric: tabular-nums; }
+.admin-user-action { text-align: right; white-space: nowrap; }
+.admin-form-grid { max-width: 760px; }
+.admin-form .mantine-InputWrapper-label { font-size: .8125rem; font-weight: 600; color: var(--econ-ink); }
+.admin-form .mantine-InputWrapper-description { line-height: 1.45; }
+.admin-modal .mantine-InputWrapper-description, .admin-modal .mantine-Switch-description { line-height: 1.45; }
+.admin-modal-account { padding-bottom: var(--econ-gap); border-bottom: var(--econ-rule); }
+
+@media (max-width: 47.99em) {
+  .econ-header .econ-logout { padding-inline: 8px; }
+  .admin-users { margin-top: 12px; }
+}

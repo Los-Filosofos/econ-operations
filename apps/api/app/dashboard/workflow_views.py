@@ -21,7 +21,7 @@ from app.dashboard.analytics import instant
 from app.dashboard.auth_views import ROLE_LABELS, current_user, denied, permitted
 from app.dashboard.components import (
     accordion,
-    back_link,
+    breadcrumbs,
     disclosure,
     empty,
     facts,
@@ -83,6 +83,21 @@ ACTOR_KINDS = {
     "cli_worker": "el worker de sincronización",
 }
 READ_ONLY = "Solo consulta: la gestión de movimientos no está habilitada en esta conexión."
+# What each action actually does, next to the control that does it.
+SYNC_EFFECTS = {
+    "fixture": (
+        "Efecto: relee las muestras documentales y guarda un corte en el registro. "
+        "No contacta a Prisma ni a Startrack."
+    ),
+    "live": (
+        "Efecto: lee Prisma, revalida los planes guardados y consulta el seguimiento de "
+        "Startrack. Procesa la cola solo si el servidor tiene el envío habilitado."
+    ),
+}
+QUEUE_EFFECT = (
+    "Efecto: deja el movimiento en cola. El envío ocurre al sincronizar y solo si el "
+    "servidor lo tiene habilitado; poner en cola no crea la tarea."
+)
 READ_FAILURE = "No se pudo consultar el registro de movimientos. Intenta actualizar."
 ACTION_FAILURE = (
     "No se pudo completar la acción. Actualiza el registro para consultar su estado "
@@ -131,6 +146,25 @@ def receipt_label(movement: MovementRecord) -> str:
     if movement.receipt:
         return f"Recibida · {instant(movement.receipt.received_at)}"
     return "Sin constancia de recepción"
+
+
+def next_step(movement: MovementRecord) -> str:
+    """An operational prompt from the recorded state, without inferring provider facts."""
+    if movement.state == "unknown":
+        return "Conciliar envío antes de continuar"
+    if movement.state == "failed":
+        return "Revisar el error de envío"
+    if movement.state == "blocked":
+        return "Resolver los datos pendientes"
+    if movement.mode == "fixture":
+        return "Revisar plan local · sin envío"
+    if movement.state == "draft":
+        return "Revisar preparación del envío"
+    if movement.state in {"queued", "sending"}:
+        return "Consultar el avance del envío"
+    if movement.receipt:
+        return "Consultar recepción registrada"
+    return "Confirmar recepción con el proyecto"
 
 
 def declared_by_label(receipt: ReceiptRecord | None) -> str | None:
@@ -353,11 +387,42 @@ def movements_panel(
     movements: list[MovementRecord], *, total: int, page: int, page_size: int, context: QueryContext
 ):
     """One ledger page as rows with its visible window; the search only filters this page."""
+    if total == 0:
+        return [
+            section(
+                "Todavía no hay traslados preparados",
+                dmc.Text(
+                    "Las muestras documentales incluyen solicitudes y maquinaria, pero no "
+                    "aportan tareas de Startrack, ubicaciones GPS ni recepciones. "
+                    "Tampoco hay planes locales guardados en este origen."
+                    if context.mode == "fixture"
+                    else "No hay movimientos guardados en ECON para este origen. "
+                    "Esto no confirma que no existan tareas o recepciones en los proveedores.",
+                    size="sm",
+                    maw="80ch",
+                ),
+                dmc.Text(
+                    "Abre una solicitud para revisar su aprobación y la unidad asignada. "
+                    "Desde su detalle, los roles autorizados pueden preparar el traslado.",
+                    size="sm",
+                    maw="80ch",
+                    mt="md",
+                ),
+                link(
+                    "Revisar solicitudes",
+                    context.href("/solicitudes"),
+                    fw=600,
+                    mt="md",
+                    display="inline-block",
+                ),
+                hint("En este origen solo se guardan planes locales; no se envían a Startrack.")
+                if context.mode == "fixture"
+                else None,
+            ),
+        ]
     pages = max(1, ceil(total / page_size))
     first = (page - 1) * page_size + 1
-    if total == 0:
-        coverage = "Sin movimientos registrados en este origen."
-    elif not movements:
+    if not movements:
         coverage = f"Sin movimientos en la página {page} de {pages}; {total} registrados."
     else:
         coverage = (
@@ -386,10 +451,20 @@ def movements_panel(
             "La búsqueda no consulta otras páginas."
         )
     registry = (
-        "Población completa."
+        "Todos los movimientos guardados en ECON para este origen están en esta página. "
+        "Esto no acredita cobertura de los proveedores."
         if page == 1 and total <= len(movements)
         else "Registro paginado: la ausencia en esta página no acredita ausencia en otras."
     )
+    if not shown:
+        return [
+            hint(coverage, role="status"),
+            empty(
+                "Sin coincidencias en esta página" if context.query else "Página sin movimientos",
+                "Cambia la búsqueda o consulta otra página del registro.",
+            ),
+            link("Limpiar búsqueda", context.href("/operaciones")) if context.query else None,
+        ]
     rows = [
         {
             "reference": markdown_link(
@@ -398,39 +473,43 @@ def movements_panel(
             "project": movement.source_request.get("project_name") or "Proyecto sin nombre",
             "state": STATES[movement.state],
             "job": task_status(movement),
-            "arrival": arrival_label(movement),
             "receipt": receipt_label(movement),
+            "next": next_step(movement),
         }
         for movement in shown
     ]
-    if rows:
-        table = grid(
-            "operations-grid",
-            rows,
-            [
-                ("reference", "Movimiento"),
-                ("project", "Proyecto"),
-                ("state", "Preparación / envío"),
-                ("job", "Tarea · Estado Startrack"),
-                ("arrival", "Llegada"),
-                ("receipt", "Recepción"),
-            ],
-            state_field="state",
-        )
-        # The server already pages the ledger; a second, client-side pager would mislead.
-        table.dashGridOptions = {**table.dashGridOptions, "pagination": False}
-    elif total == 0:
-        table = empty(
-            "Sin movimientos en este origen",
-            "Abre una solicitud para preparar su traslado. Los planes se conservan por origen.",
-        )
-    else:
-        table = empty(
-            "Sin movimientos que mostrar en esta página",
-            "Cambia de página o limpia la búsqueda; la búsqueda no consulta otras páginas.",
-        )
+    table = grid(
+        "operations-grid",
+        rows,
+        [
+            ("reference", "Movimiento"),
+            ("project", "Proyecto"),
+            ("state", "Envío"),
+            ("job", "Tarea Startrack"),
+            ("receipt", "Recepción"),
+            ("next", "Siguiente paso"),
+        ],
+        state_field="state",
+        column_overrides={
+            "reference": {"width": 150},
+            "project": {"width": 130},
+            "state": {"width": 155},
+            "job": {"width": 120},
+            "receipt": {"width": 135},
+            "next": {"width": 170},
+        },
+    )
+    # The server already pages the ledger; a second, client-side pager would mislead.
+    table.dashGridOptions = {**table.dashGridOptions, "pagination": False}
     return [
-        html.Div(dmc.Text(f"{coverage} {registry}", size="xs", c="dimmed", my="xs"), role="status"),
+        html.Div(
+            [
+                html.P(coverage, className="scope-window"),
+                html.P(registry, className="scope-registry"),
+            ],
+            className="table-scope",
+            role="status",
+        ),
         table,
     ]
 
@@ -439,14 +518,14 @@ def operations(workflow: WorkflowOverview | None, context: QueryContext):
     content = [
         heading(
             "Operaciones",
-            "Planes de traslado, envíos y evidencia conservados por solicitud y movimiento.",
+            "Revisa bloqueos, envíos y recepciones pendientes.",
         )
     ]
     if workflow is None:
         return [*content, loading(6)]
     allowed = permitted(Permission.manage_transfers)
     content.append(
-        dmc.Group(
+        html.Div(
             [
                 action_button(
                     "sync",
@@ -456,30 +535,22 @@ def operations(workflow: WorkflowOverview | None, context: QueryContext):
                 )
                 if allowed
                 else denied(),
+                html.P(SYNC_EFFECTS[context.mode], className="action-effect"),
                 dmc.Text(
-                    f"Última sincronización: {instant(workflow.last_sync_at)}"
+                    f"Última lectura guardada: {instant(workflow.last_sync_at)}"
                     if workflow.last_sync_at
-                    else "Sin sincronización registrada",
+                    else "Sin lectura guardada",
                     size="xs",
                     c="dimmed",
                 ),
             ],
-            gap="md",
-            mb="md",
+            className="action-bar",
         )
     )
     if not workflow.available:
         # The empty state already carries the message; do not repeat it as a hint.
         return [*content, empty("Registro no disponible", workflow.message)]
     movements, page, size, total = initial_window(workflow)
-    content.append(
-        hint(workflow.message)
-        if workflow.complete
-        else hint(
-            "Registro leído por páginas desde el servidor. Cambia de página o de tamaño para "
-            "consultar otros movimientos; la búsqueda solo filtra la página cargada."
-        )
-    )
     if allowed and not workflow.management_enabled:
         content.append(hint(READ_ONLY))
     return [
@@ -495,11 +566,44 @@ def operations(workflow: WorkflowOverview | None, context: QueryContext):
             delay_show=150,
             show_initially=False,
         ),
-        hint(
-            "Una llegada observada y una recepción son evidencias distintas. Los envíos con "
-            "resultado incierto requieren conciliación; no se reenvían automáticamente."
+        accordion(
+            disclosure(
+                "Estado del registro y criterios de seguimiento",
+                hint(workflow.message),
+                hint(
+                    "Llegada y recepción son evidencias distintas. Un envío incierto requiere "
+                    "conciliación antes de continuar. La búsqueda solo filtra la página cargada."
+                ),
+            ),
         ),
     ]
+
+
+def event_entry(event: MovementEventRecord, movement: MovementRecord):
+    """One row of the chronology: when it happened, what was kept, when it was read and by whom."""
+    return html.Li(
+        [
+            html.P(
+                [
+                    html.Span("Fecha del hecho", className="event-when-label"),
+                    instant(event.event_time),
+                ],
+                className="event-when",
+            ),
+            html.Div(
+                [
+                    html.P(EVENTS.get(event.kind, event.kind), className="event-name"),
+                    html.P(event_description(event), className="event-detail"),
+                    html.P(
+                        f"Observado: {instant(event.observed_at)} · "
+                        f"registrado: {instant(event.recorded_at)} · "
+                        f"{actor_label(event, movement)}",
+                        className="event-meta",
+                    ),
+                ]
+            ),
+        ]
+    )
 
 
 def events_panel(movement: MovementRecord, page: int = 1):
@@ -522,27 +626,14 @@ def events_panel(movement: MovementRecord, page: int = 1):
         )
         if len(events) > EVENTS_PAGE_SIZE
         else None,
-        simple_table(
-            [
-                "Evento",
-                "Evidencia conservada",
-                "Fecha del evento",
-                "Observado",
-                "Registrado",
-                "Registrado por",
-            ],
-            [
-                [
-                    EVENTS.get(event.kind, event.kind),
-                    event_description(event),
-                    instant(event.event_time),
-                    instant(event.observed_at),
-                    instant(event.recorded_at),
-                    actor_label(event, movement),
-                ]
-                for event in shown
-            ],
-            caption="Historial persistido, con fechas de origen y registro separadas",
+        html.P(
+            "Historial persistido, con fechas de origen y registro separadas",
+            className="eyebrow",
+        ),
+        html.Ol(
+            [event_entry(event, movement) for event in shown],
+            className="event-timeline",
+            **{"aria-label": "Cronología persistida del movimiento"},
         ),
         accordion(
             *[
@@ -645,8 +736,9 @@ def movement_body(workflow: WorkflowOverview, context: QueryContext, movement: M
         movement.mode == "live" and movement.state == "sent" and movement.job_id and not receipt
     )
     declared = declared_by_label(receipt)
+    reasons = pending_reasons(movement)
     return [
-        heading(movement.movement_reference, "Evidencia y acciones de este traslado concreto."),
+        heading(movement.movement_reference, next_step(movement)),
         facts(
             [
                 ("Preparación / envío", state_label(movement)),
@@ -663,58 +755,12 @@ def movement_body(workflow: WorkflowOverview, context: QueryContext, movement: M
         link("Ver solicitud de origen", context.request_href(movement.source_request["id"]))
         if movement.source_request.get("id")
         else None,
-        *machine_sections,
         section(
-            "Programación",
-            facts(
-                [
-                    ("Fecha programada", mapping.get("scheduled_date") or "Sin informar"),
-                    ("Hora programada", mapping.get("scheduled_time") or "Sin informar"),
-                ]
-            ),
-            hint(
-                "La programación es independiente del período solicitado de uso. "
-                "La correspondencia GPS puede identificar el transportador."
-            ),
-            accordion(
-                disclosure(
-                    "Referencias de integración y origen",
-                    rows_table(references),
-                    accordion(
-                        source_evidence(
-                            "Procedencia conservada de la solicitud", movement.source_request
-                        ),
-                        source_evidence(
-                            "Procedencia conservada de la unidad", movement.source_equipment
-                        ),
-                    ),
-                )
-            ),
-        ),
-        section(
-            "Tarea de Startrack",
-            facts(
-                [
-                    ("Estado de tarea", task_status(movement)),
-                    ("Envío registrado", instant(movement.sent_at)),
-                ]
-            ),
-            dmc.List([dmc.ListItem(reason) for reason in pending_reasons(movement)], size="sm")
-            if pending_reasons(movement)
+            "Acción pendiente",
+            dmc.List([dmc.ListItem(reason) for reason in reasons], size="sm") if reasons else None,
+            hint(sending_note)
+            if movement.mode == "fixture" or not workflow.sending_enabled
             else None,
-            accordion(
-                disclosure(
-                    "Contenido preparado para Startrack",
-                    rows_table(prepared),
-                    dmc.List(
-                        [dmc.ListItem(note) for note in movement.preparation.get("notes", [])],
-                        size="sm",
-                    ),
-                )
-            )
-            if movement.payload
-            else None,
-            hint(sending_note),
             dmc.Group(
                 [
                     action_button(
@@ -725,50 +771,19 @@ def movement_body(workflow: WorkflowOverview, context: QueryContext, movement: M
                         primary=True,
                         icon_name="send",
                     ),
-                    hint(
-                        "La cola se procesa al sincronizar. El servidor vuelve a comprobar la "
-                        "solicitud, la unidad y las correspondencias antes de crear la tarea."
-                    ),
+                    hint(QUEUE_EFFECT),
                 ]
             )
-            if movement.mode == "live" and allowed
+            if movement.mode == "live" and movement.state == "draft" and allowed
             else denied()
-            if movement.mode == "live"
+            if movement.mode == "live" and movement.state == "draft"
             else None,
             [
-                hint(
-                    "Si Startrack no muestra la tarea tras comprobarlo a mano, el operador "
-                    "puede cerrar este movimiento como fallido con un motivo permitido; la "
-                    "unidad queda libre para un nuevo plan y nada se reenvía."
-                ),
+                hint("Comprueba la tarea en Startrack antes de cerrar el envío como fallido."),
                 resolve_form(movement.id, enabled=enabled) if allowed else denied(),
             ]
             if can_resolve
             else None,
-        ),
-        section(
-            "Llegada y recepción",
-            facts(
-                [
-                    ("Llegada al destino", arrival_label(movement)),
-                    ("Recepción física", receipt_label(movement)),
-                ]
-            ),
-            facts(
-                [
-                    ("Recibió", receipt.receiver),
-                    ("Referencia", receipt.reference),
-                    ("Registrada", instant(receipt.recorded_at)),
-                    *([("Declarada por", declared)] if declared else []),
-                ]
-            )
-            if receipt
-            else None,
-            hint(receipt.note) if receipt and receipt.note else None,
-            hint(
-                "Una entrada a geocerca o una tarea completada no acredita recepción. "
-                "La constancia se registra con responsable, fecha y referencia explícitos."
-            ),
             (
                 receipt_form(
                     movement.id, enabled=workflow.available and workflow.management_enabled
@@ -778,14 +793,70 @@ def movement_body(workflow: WorkflowOverview, context: QueryContext, movement: M
             )
             if can_receive
             else None,
+        )
+        if reasons or movement.mode == "fixture" or movement.state == "draft" or can_receive
+        else None,
+        section(
+            "Seguimiento del traslado",
+            facts(
+                [
+                    ("Programado", mapping.get("scheduled_date") or "Sin fecha programada"),
+                    ("Hora programada", mapping.get("scheduled_time") or "Sin informar"),
+                    ("Tarea de Startrack", task_status(movement)),
+                    ("Envío registrado", instant(movement.sent_at)),
+                    ("Llegada", arrival_label(movement)),
+                    ("Recepción", receipt_label(movement)),
+                ]
+            ),
+            hint("La llegada observada o una tarea completada no acreditan recepción."),
         ),
         section(
-            "Historial y evidencia del movimiento",
-            hint(
-                "Eventos en orden de registro. La fecha del hecho y el momento de observación "
-                "se muestran por separado; el historial puede ser parcial."
+            "Evidencia y referencias de este traslado",
+            accordion(
+                disclosure(
+                    "Constancia de recepción",
+                    facts(
+                        [
+                            ("Recibió", receipt.receiver),
+                            ("Referencia", receipt.reference),
+                            ("Registrada", instant(receipt.recorded_at)),
+                            *([("Declarada por", declared)] if declared else []),
+                        ]
+                    ),
+                    hint(receipt.note) if receipt.note else None,
+                )
+                if receipt
+                else None,
+                disclosure(
+                    "Historial y evidencia del movimiento",
+                    hint(
+                        "Fechas del hecho, observación y registro separadas; "
+                        "el historial puede ser parcial."
+                    ),
+                    timeline(movement),
+                ),
+                disclosure("Comparar evidencia de las fuentes", *machine_sections)
+                if machine_sections
+                else None,
+                disclosure(
+                    "Referencias de integración y origen",
+                    rows_table(references),
+                    accordion(
+                        source_evidence("Procedencia de la solicitud", movement.source_request),
+                        source_evidence("Procedencia de la unidad", movement.source_equipment),
+                    ),
+                ),
+                disclosure(
+                    "Contenido preparado para Startrack",
+                    rows_table(prepared),
+                    dmc.List(
+                        [dmc.ListItem(note) for note in movement.preparation.get("notes", [])],
+                        size="sm",
+                    ),
+                )
+                if movement.payload
+                else None,
             ),
-            timeline(movement),
         ),
     ]
 
@@ -819,8 +890,10 @@ def movement_content(
 
 
 def movement_detail(workflow: WorkflowOverview | None, context: QueryContext, identifier: str):
-    back = back_link("Volver a operaciones", context.href("/operaciones", filter=context.filter))
-    return [back, *movement_content(workflow, context, identifier)]
+    trail = breadcrumbs(
+        "Operaciones", context.href("/operaciones", filter=context.filter), "Movimiento"
+    )
+    return [trail, *movement_content(workflow, context, identifier)]
 
 
 def resolution_reason(value) -> str:

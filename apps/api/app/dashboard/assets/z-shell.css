@@ -1,0 +1,55 @@
+/* Shell presentation: header, sidebar, workspace, mobile drawer and loading state.
+   Loaded after style.css, whose tokens and shell rules this file completes rather
+   than repeats. Every selector is scoped to a shell element so page rules stay put.
+   Colors come from the Mantine theme built in app/dashboard/theme.py. */
+
+/* ------------------------------------------------------------- 1. Header */
+/* Identity: the mark links home, the product name sits beside it as plain text. */
+.econ-shell-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.econ-shell-logo { display: inline-flex; align-items: center; }
+.econ-shell-logo img { display: block; }
+.econ-header .header-product-name { line-height: 1.2; white-space: nowrap; color: var(--econ-ink); }
+/* Reading state and account: text controls, not buttons competing with the content. */
+.econ-header .read-status { color: var(--econ-muted); }
+.econ-header .read-status .mantine-Button-label { font-variant-numeric: tabular-nums; }
+.econ-header .read-status .ui-icon { opacity: .75; }
+.econ-header .read-status:hover { background: var(--econ-canvas); }
+.econ-header .mantine-Menu-dropdown { border: var(--econ-rule); box-shadow: none; }
+.econ-shell-reading { align-items: center; }
+
+/* ------------------------------------------------------------ 2. Sidebar */
+/* Links scroll, the origin of the data stays pinned to the bottom edge. */
+.econ-sidebar { display: flex; flex-direction: column; }
+.econ-sidebar .econ-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; padding: 4px 8px 12px; }
+.econ-nav .nav-group-label:first-child { padding-top: 12px; }
+.econ-nav .nav-link[data-active] .mantine-NavLink-label { font-weight: 600; }
+.econ-nav .nav-link .mantine-NavLink-section { margin-inline-end: 10px; opacity: .8; }
+.econ-nav .nav-link:hover .mantine-NavLink-section,
+.econ-nav .nav-link[data-active] .mantine-NavLink-section { opacity: 1; }
+.econ-nav .nav-link .ui-icon { width: 18px; height: 18px; }
+.econ-shell-datamode { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; padding: 12px 16px 16px; border-top: 1px solid var(--mantine-color-econ-6); }
+.econ-sidebar .eyebrow { margin: 0; color: var(--mantine-color-econ-1); }
+.econ-sidebar .econ-shell-origin { font-size: .8125rem; line-height: 1.4; color: var(--econ-paper); }
+
+/* ---------------------------------------------------------- 3. Workspace */
+.econ-workspace .mantine-Container-root { width: 100%; }
+.econ-workspace #scope:not(:empty) { margin-bottom: var(--econ-gap); }
+/* The workspace width belongs to the tables; text blocks cap themselves at 72ch. */
+.econ-workspace .econ-grid, .econ-workspace .mantine-Table-root { width: 100%; }
+
+/* ------------------------------------------------------ 4. Mobile drawer */
+.econ-mobile-heading { align-items: center; border-bottom: 1px solid var(--mantine-color-econ-6); }
+.econ-mobile-heading .header-product-name { border-left-color: var(--mantine-color-econ-6); color: var(--econ-paper); line-height: 1.2; white-space: nowrap; }
+.econ-mobile-body { padding-inline: 8px; }
+
+/* ------------------------------------------------- 5. Loading indicators */
+/* Plain text while an action runs, and a still placeholder: no shimmer, no spinner. */
+.econ-shell-progress { margin: 0; font-size: .8125rem; color: var(--econ-muted); }
+.econ-workspace .mantine-Skeleton-root::after { animation: none; }
+
+/* ---------------------------------------------------------- 6. Responsive */
+@media (max-width: 47.99em) {
+  /* Phones keep the mark alone on the left; the two controls tighten on the right. */
+  .econ-shell-identity { gap: 8px; }
+  .econ-shell-controls { gap: var(--econ-gap); }
+}

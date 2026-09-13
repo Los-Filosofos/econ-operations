@@ -59,7 +59,7 @@
 - **Diagrama de Componentes**:
   - *Capa de Ingesta*: Conectores desacoplados para Nexus/Prisma (OpenAPI) y Startrack (REST API).
   - *Capa de Dominio & Ledger*: Modelo unificado ECON (SQLModel + Alembic + SQLite/PostgreSQL) con control de concurrencia y roles (RACI).
-  - *Capa de Entrega*: API REST documentada con OpenAPI/Swagger (18 endpoints) + SPA Web interactiva (Vite + Canvas 2D + Chart.js).
+  - *Capa de Entrega*: API REST documentada con OpenAPI/Swagger (18 endpoints) + Consola Analítica Unificada (Dash Mantine + AG Grid Community + Plotly).
 - **Flujo de 4 Etapas**:
   1. Prisma Entrega (Solicitud aprobada).
   2. ECON Normaliza (Validación de reglas R0-R8 y preparación del plan).

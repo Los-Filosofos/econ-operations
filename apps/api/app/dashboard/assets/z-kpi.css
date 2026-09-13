@@ -1,0 +1,27 @@
+/* ECON — KPI band of /indicadores. Loaded after style.css (Dash reads assets in order).
+   It only resizes the shared `.data-strip` primitive for an executive reading: a larger
+   tabular figure, a micro-caps label and a muted qualifier carrying coverage, the reason
+   when nothing is evaluable, and the links to the rows that hold the figure up.
+   No background, no shadow, no radius: hairlines and white space carry the structure. */
+
+.kpi-board .kpi-group + .kpi-group { margin-top: var(--econ-gap-lg); }
+.kpi-board .kpi-area { margin: 0 0 var(--econ-gap); }
+
+/* The figure: the only element that grows. Digits stay tabular so columns line up. */
+.kpi-board .data-strip dd { font-size: 1.75rem; line-height: 1.1; letter-spacing: -.015em; }
+/* A word is not a measurement: «Sin casos», «No evaluable» and «No verificable» stay
+   at reading size and in the muted ink so no absence is mistaken for a quantity. */
+.kpi-board .kpi-word { font-size: 1rem; font-weight: 500; line-height: 1.4; color: var(--econ-muted); }
+
+.kpi-board .data-strip .data-note { max-width: 42ch; }
+.kpi-board .kpi-line { display: block; }
+.kpi-board .kpi-line + .kpi-line { margin-top: var(--econ-step); }
+.kpi-board .kpi-source { font-variant-numeric: normal; overflow-wrap: anywhere; }
+/* An issue is never carried by color alone: icon, label and the state color together. */
+.kpi-board .kpi-state { color: var(--econ-ink); font-weight: 600; }
+.kpi-board .kpi-state .ui-icon { vertical-align: -2px; margin-right: var(--econ-step); }
+
+@media (max-width: 47.99em) {
+  .kpi-board .data-strip dd { font-size: 1.5rem; }
+  .kpi-board .data-strip .data-note { max-width: none; }
+}

@@ -1,0 +1,49 @@
+/* Front page, lists and sources. Loaded after style.css, so it only adds what the
+   base sheet leaves open: it reuses the eyebrow, lede, numeric and rule tokens
+   declared there instead of redefining them, and introduces no color of its own.
+   Assets are linked explicitly: this sheet reaches the browser once "z-pages.css"
+   matches STYLESHEET_PATTERN (application.py), so stylesheets() links it after
+   "style.css". */
+
+/* ------------------------------------------------------------ Scope line */
+/* Plain reading context: items separated by a middot, reading menu at the end. */
+.scope-line { align-items: center; row-gap: var(--econ-step); }
+.scope-item + .scope-item::before { content: "·"; margin-right: var(--econ-gap); color: var(--econ-line-strong); }
+.scope-line .reading-trigger { margin-left: auto; }
+
+/* ------------------------------------------------- Notes and limitations */
+/* A caveat is text on the page grid, held by a hairline instead of a badge. */
+.page-note { display: block; max-width: 78ch; padding-left: 10px; border-left: var(--econ-rule); }
+
+/* ----------------------------------------------------- Charts and legends */
+/* The color sample repeats a written state; it never carries the meaning alone. */
+.chart-legend { align-items: center; row-gap: var(--econ-gap); padding-block: var(--econ-step) var(--econ-gap); }
+.legend-swatch { border-radius: 1px; }
+.econ-plot { margin-block: var(--econ-step) var(--econ-gap); }
+/* A section built around a chart keeps the page rule the base sheet drops. */
+.page-section.agenda-panel,
+.page-section.coverage-panel,
+.page-section.inventory-panel {
+  margin-block: var(--econ-block) var(--econ-gap);
+  padding-top: var(--econ-gap-lg);
+  border-top: var(--econ-rule);
+}
+
+/* -------------------------------------------------------- Lists and tables */
+/* Right-aligned headers over right-aligned figures (cells use `.numeric`). */
+.econ-grid .ag-header-cell.head-num .ag-header-cell-label { justify-content: flex-end; }
+.econ-grid .ag-header-cell-text { font-size: .8125rem; letter-spacing: .01em; }
+/* Filter tabs: the current one carries weight, not only an underline. */
+.filter-tabs .mantine-Tabs-tab { padding: 10px var(--econ-gap-lg); font-size: .875rem; font-weight: 500; color: var(--econ-muted); }
+.filter-tabs .mantine-Tabs-tab[data-active] { color: var(--econ-ink); font-weight: 600; }
+/* An empty result explains the reading and offers the way back to the full list. */
+.empty-state { max-width: 72ch; }
+.empty-state + .econ-link { margin-top: var(--econ-gap); }
+
+@media (max-width: 47.99em) {
+  .page-note { padding-left: var(--econ-gap); }
+  .filter-tabs .mantine-Tabs-tab { padding: 10px; }
+  .page-section.agenda-panel,
+  .page-section.coverage-panel,
+  .page-section.inventory-panel { margin-block: 24px var(--econ-gap); padding-top: 12px; }
+}

@@ -150,28 +150,39 @@ def interpretation(item: EquipmentRecord, movements: list[MovementRecord]):
 
 
 def interpretation_section(item: EquipmentRecord, movements: list[MovementRecord]):
+    """The reading of the compared facts: a rule and a heading, not a colored panel."""
     title, explanation, next_step = interpretation(item, movements)
-    return dmc.Alert(
+    return html.Div(
         [
-            dmc.Text(explanation, size="sm"),
-            dmc.Text([html.Strong("Siguiente paso: "), next_step], size="sm", mt="xs"),
+            dmc.Group(
+                [icon("eye-check", 16), html.Span("Interpretación de la evidencia")],
+                gap=8,
+                wrap="nowrap",
+                className="interpretation-eyebrow",
+            ),
+            dmc.Title(title, order=3, size="h5", mt=6),
+            dmc.Text(explanation, size="sm", maw="80ch", mt=6),
+            dmc.Text([html.Strong("Siguiente paso: "), next_step], size="sm", maw="80ch", mt="xs"),
         ],
-        title=title,
-        color="econ",
-        variant="outline",
-        icon=icon("eye-check"),
-        my="md",
         className="interpretation",
     )
 
 
+def audit_rows(rows: list[list], *, caption: str):
+    """Audit layout for compared facts: source value, when it was observed and what it proves."""
+    return simple_table(
+        ["Hecho", "Valor", "Fecha de observación", "Qué acredita"], rows, caption=caption
+    )
+
+
 def _task_card(title, rows: list[tuple[str, object]], *children):
-    return dmc.Paper(
-        [dmc.Text(title, fw=600, size="sm", mb="xs"), facts(rows, cols=2), *children],
-        withBorder=True,
-        p="md",
-        mb="sm",
-        className="transfer-record",
+    return html.Div(
+        [
+            dmc.Text(title, fw=600, size="sm", className="record-title"),
+            facts(rows, cols=2),
+            *children,
+        ],
+        className="evidence-record",
     )
 
 
@@ -190,10 +201,38 @@ def source_comparison(
         task_status,
     )
 
+    reading = source_date(item.provenance)
     prisma = [
-        dmc.Text(source_date(item.provenance), size="xs", c="dimmed"),
-        facts(maintenance_facts(item), cols=2),
-        hint("La ocupación administrativa no acredita ubicación ni disponibilidad física."),
+        audit_rows(
+            [
+                [
+                    "Estado administrativo",
+                    state_text(item.machinery_status),
+                    reading,
+                    "Ocupación administrativa en Prisma. No acredita ubicación ni "
+                    "disponibilidad física.",
+                ],
+                [
+                    "Mantenimiento",
+                    item.maintenance_status or "Sin información",
+                    reading,
+                    "Condición informada por Prisma; la confirma Mantenimiento, no esta lectura.",
+                ],
+                [
+                    "Paro registrado",
+                    stopped_label(item),
+                    reading,
+                    "«Sin información» no equivale a «sin paro»: el dato no viene en la lectura.",
+                ],
+                [
+                    "Falla activa",
+                    item.maintenance_failure_id or "Sin referencia informada",
+                    reading,
+                    "Referencia de la falla registrada; por sí sola no acredita indisponibilidad.",
+                ],
+            ],
+            caption="Hechos administrativos de Prisma con su fecha de lectura",
+        ),
         accordion(
             disclosure(
                 "Procedencia y valores de la unidad",
@@ -284,20 +323,34 @@ def source_comparison(
     source = (
         next((source for source in hub.sources if source.id == "startrack"), None) if hub else None
     )
+    location = item.location
+    observation_rows = [
+        [
+            "Ubicación observada",
+            location.label if location else "Sin observación disponible",
+            instant(location.observed_at) if location else "Sin lectura fechada",
+            "Posición del activo vinculado. Una visita de geocerca puede corresponder al "
+            "transportador y no acredita recepción.",
+        ]
+    ]
+    if not tasks:
+        observation_rows.insert(
+            0,
+            [
+                "Estado de tarea",
+                "No determinado",
+                "Sin observación disponible",
+                "Sin tarea vinculada en esta lectura; la ausencia no acredita que no exista.",
+            ],
+        )
     startrack = [
         dmc.Text(f"{SOURCE_STATES[source.status]} · {source.message}", size="xs", c="dimmed")
         if source
         else None,
-        *tasks,
-        facts(
-            [
-                ("Estado de tarea", "No determinado"),
-                ("Observación de tarea", "Sin observación disponible"),
-            ],
-            cols=2,
-        )
-        if not tasks
-        else None,
+        audit_rows(
+            observation_rows,
+            caption="Hechos observados en Startrack con su fecha de observación",
+        ),
         hint(unknown + ". La ausencia de evidencia no confirma que no existan traslados.")
         if unknown
         else None,
@@ -311,7 +364,6 @@ def source_comparison(
             "Los estados conservan su fecha de observación; no representan una "
             "consulta actual del proveedor."
         ),
-        facts(location_facts(item), cols=2),
         accordion(disclosure("Procedencia de la ubicación", provenance(item.location.provenance)))
         if item.location
         else None,
@@ -319,6 +371,7 @@ def source_comparison(
             "Una visita de geocerca puede corresponder al transportador o al teléfono. "
             "No se presenta como posición de la maquinaria ni acredita recepción."
         ),
+        *([html.P("Tareas vinculadas", className="eyebrow spaced"), *tasks] if tasks else []),
     ]
     receipts = [
         _task_card(
@@ -344,23 +397,20 @@ def source_comparison(
         )
         for movement in movements
     ]
-    column = {"base": 1, "md": 2}
     return [
         section(
             "Comparación de fuentes",
-            dmc.SimpleGrid(
-                [
-                    dmc.Paper(
-                        [dmc.Title(title, order=3, size="h5", mb="xs"), *children],
-                        withBorder=True,
-                        p="md",
-                        className="source-column",
-                    )
-                    for title, children in [("Prisma / Nexus", prisma), ("Startrack", startrack)]
-                ],
-                cols=column,
-                spacing="md",
+            hint(
+                "Cada fuente conserva su valor y su fecha de observación. Son hechos distintos: "
+                "ninguno resuelve al otro y la ausencia no se cuenta como cero."
             ),
+            *[
+                html.Div(
+                    [dmc.Title(title, order=3, size="h5", mb="xs"), *children],
+                    className="source-audit",
+                )
+                for title, children in [("Prisma / Nexus", prisma), ("Startrack", startrack)]
+            ],
         ),
         section(
             "Llegada y recepción por movimiento",

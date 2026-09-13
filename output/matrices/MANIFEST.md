@@ -3,7 +3,7 @@
 Generado el 2026-09-13 por `scripts/docs/exportar_matrices.py` desde:
 
 - [`docs/equivalencias-prisma-startrack.md`](../../docs/equivalencias-prisma-startrack.md) (SHA-256 `028001dcdf54b4951172a8297617c95433065315710b18bb4af8a1cff533d306`; revisión del origen: 12 de septiembre de 2026; el glosario de sinónimos y las inconsistencias internas se añadieron el 13 de septiembre de 2026).
-- [`docs/matriz-requisitos-entregables.md`](../../docs/matriz-requisitos-entregables.md) (SHA-256 `87c78899199de31ee701729ec77c460addcebd9fd99e8d71e3fb82db8ecffd22`; revisión del origen: 13 de septiembre de 2026).
+- [`docs/matriz-requisitos-entregables.md`](../../docs/matriz-requisitos-entregables.md) (SHA-256 `a84e518a2947907ed100db7a7484f867334847dbf998087e0c92214e9cf64345`; revisión del origen: 13 de septiembre de 2026).
 
 Las tablas Markdown siguen siendo el origen editable; estos archivos son copias
 derivadas para reutilizar en hojas de cálculo (RNF-02). No añaden filas, IDs ni
@@ -15,7 +15,7 @@ uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices
 uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py --check
 ```
 
-Libro: [`matrices-econ.xlsx`](matrices-econ.xlsx) (SHA-256 `870c65b21e3b880886475edce03a114b097ef3bcb1b5dbb02e53680289e51bb9`,
+Libro: [`matrices-econ.xlsx`](matrices-econ.xlsx) (SHA-256 `140fc80ad6351fa2f56b9ef1ea6e69d67a8603c3da7d4301a58ae052d0d2aa8d`,
 openpyxl 3.1.5, una hoja por tabla, sin formato decorativo).
 
 | Tabla | Documento y sección de origen | Requisito | Filas | Columnas | SHA-256 del CSV |
@@ -36,7 +36,7 @@ openpyxl 3.1.5, una hoja por tabla, sin formato decorativo).
 | [`estados-separados.csv`](estados-separados.csv) | `equivalencias-prisma-startrack.md` › Fechas, unidades y estados separados | RF-05: estados por objeto y regla de interpretación | 7 | 3 | `942bba61d2cbffaf2b58c91ae164d83779e695b4c67d8231699e0ac6b72582d9` |
 | [`evidencia-retorno.csv`](evidencia-retorno.csv) | `equivalencias-prisma-startrack.md` › Evidencia de retorno y cobertura | RF-04: qué evidencia de Startrack está implementada y su límite | 5 | 3 | `20bff46c626d93b7ed4d54c3257a223a6252ec793c282dd86fc2816357edede5` |
 | [`raci-propuesta.csv`](raci-propuesta.csv) | `equivalencias-prisma-startrack.md` › Responsabilidades propuestas para confirmar | RF-03: matriz RACI propuesta, pendiente de validación empresarial | 9 | 5 | `0408151d367807eec86c5f32d065c4a463b27c251bf8140991048d55b2fedc65` |
-| [`trazabilidad-requisitos.csv`](trazabilidad-requisitos.csv) | `matriz-requisitos-entregables.md` › Matriz de trazabilidad | RNF-04: RF-01 a RF-06, RNF-01 a RNF-04 y entregables de §6/§9 con evidencia, dónde lo ve el jurado, estado y brecha | 19 | 6 | `1740e52ec23f1cbd88e5401dc1385f8d8dafb6d70d4c2b1c41bdd985c908d442` |
+| [`trazabilidad-requisitos.csv`](trazabilidad-requisitos.csv) | `matriz-requisitos-entregables.md` › Matriz de trazabilidad | RNF-04: RF-01 a RF-06, RNF-01 a RNF-04 y entregables de §6/§9 con evidencia, dónde lo ve el jurado, estado y brecha | 19 | 6 | `d3b7e0bee286ee1a80e3f29013e9dc2d4f52b78a3cbd9e376c716ae00d1d00dd` |
 
 - Solo se exportan tablas ya escritas en los documentos; no se inventan filas ni IDs.
 - La RACI es una propuesta pendiente de validación empresarial (RF-03).

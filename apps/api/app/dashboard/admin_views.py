@@ -11,13 +11,28 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.api.users import UserCreate, UserUpdate, create_user, list_users, update_user
-from app.core.auth import Permission, Role, can
+from app.core.auth import Permission, Role, can, permissions_of
 from app.dashboard.analytics import instant
-from app.dashboard.auth_views import ROLE_LABELS, current_user
-from app.dashboard.components import heading, icon, notice, section, state_text
+from app.dashboard.auth_views import ROLE_LABELS, current_user, permission_note
+from app.dashboard.components import (
+    eyebrow,
+    heading,
+    hint,
+    icon,
+    notice,
+    section,
+    simple_table,
+)
 from app.models.users import User
 
 ROLE_OPTIONS = [{"value": role.value, "label": ROLE_LABELS[role]} for role in Role]
+# Wording of each permission for people who do not read the permission table in the ADR.
+PERMISSION_LABELS = {
+    Permission.read: "Consultar el hub",
+    Permission.manage_transfers: "Preparar y enviar traslados",
+    Permission.declare_reception: "Declarar la recepción",
+    Permission.manage_users: "Administrar usuarios",
+}
 FIELD_ERRORS = {
     "email": "Escribe un correo válido.",
     "full_name": "Escribe el nombre completo.",
@@ -25,6 +40,20 @@ FIELD_ERRORS = {
     "role": "Elige un rol.",
 }
 NO_ACCESS = ("Sin acceso", "Solo un administrador puede gestionar usuarios.")
+ASK_ADMIN = "Si necesitas crear cuentas o cambiar roles, pídelo a un administrador de ECON."
+PAGE_NOTE = (
+    "Alta de cuentas, cambio de rol, activación y contraseña. Cada cambio se guarda al "
+    "confirmarlo y se aplica a las sesiones abiertas del usuario."
+)
+CREATE_NOTE = "La cuenta queda activa y puede entrar en cuanto se crea."
+EDIT_RULES = (
+    "Un administrador no puede desactivar su propia cuenta ni dejar el sistema sin "
+    "ningún administrador activo."
+)
+ROLE_FIELD_NOTE = "Decide qué consulta y qué puede registrar; ver Roles y permisos."
+PASSWORD_NOTE = "Mínimo 12 caracteres. Entrégala por un canal seguro: no vuelve a mostrarse."
+ACTIVE_NOTE = "Una cuenta inactiva no puede entrar y pierde sus sesiones abiertas."
+TABLE_HEADERS = ["Usuario", "Correo", "Rol", "Estado", "Alta", "Acción"]
 
 
 def admin_user() -> User | None:
@@ -36,13 +65,18 @@ def is_admin() -> bool:
     return admin_user() is not None
 
 
+def no_access():
+    """Same wording as the API, with the role that carries the permission and what to do."""
+    return permission_note(NO_ACCESS[0], NO_ACCESS[1], guidance=ASK_ADMIN)
+
+
 def field(identifier: str, label: str, **props):
     return dmc.TextInput(id=identifier, label=label, autoComplete="off", **props)
 
 
-def role_select(identifier: str, value: str | None = None):
+def role_select(identifier: str, value: str | None = None, **props):
     return dmc.Select(
-        id=identifier, label="Rol", data=ROLE_OPTIONS, value=value, allowDeselect=False
+        id=identifier, label="Rol", data=ROLE_OPTIONS, value=value, allowDeselect=False, **props
     )
 
 
@@ -56,29 +90,68 @@ def password_input(identifier: str, label: str, description: str):
     )
 
 
+def role_reference():
+    """What each role may do, built from the permission rules instead of a copied list."""
+    rows = [
+        [
+            ROLE_LABELS[role],
+            ", ".join(PERMISSION_LABELS[permission] for permission in permissions_of(role)),
+        ]
+        for role in Role
+    ]
+    return simple_table(["Rol", "Qué puede hacer"], rows, caption="Permisos de cada rol")
+
+
 def new_user_form():
     return dmc.Stack(
         [
             dmc.SimpleGrid(
                 [
-                    field("new-name", "Nombre completo", required=True),
-                    field("new-email", "Correo", inputProps={"type": "email"}, required=True),
-                    role_select("new-role", Role.lectura.value),
-                    password_input("new-password", "Contraseña", "Mínimo 12 caracteres."),
+                    field(
+                        "new-name",
+                        "Nombre completo",
+                        description="Queda como autor de las acciones que registre.",
+                        required=True,
+                    ),
+                    field(
+                        "new-email",
+                        "Correo",
+                        description="Con él inicia sesión; se guarda en minúsculas y no se repite.",
+                        inputProps={"type": "email"},
+                        required=True,
+                    ),
+                    role_select(
+                        "new-role",
+                        Role.lectura.value,
+                        description=ROLE_FIELD_NOTE,
+                    ),
+                    password_input(
+                        "new-password",
+                        "Contraseña",
+                        PASSWORD_NOTE,
+                    ),
                 ],
-                cols={"base": 1, "xs": 2},
-                spacing="md",
+                cols={"base": 1, "sm": 2},
+                spacing="lg",
+                verticalSpacing="md",
+                className="admin-form-grid",
             ),
             dmc.Group(
-                dmc.Button(
-                    "Crear usuario",
-                    id="user-create",
-                    n_clicks=0,
-                    leftSection=icon("user-plus", 16),
-                )
+                [
+                    dmc.Button(
+                        "Crear usuario",
+                        id="user-create",
+                        n_clicks=0,
+                        leftSection=icon("user-plus", 16),
+                    ),
+                    dmc.Text(CREATE_NOTE, size="xs", c="dimmed"),
+                ],
+                gap="md",
+                align="center",
             ),
         ],
         gap="md",
+        className="admin-form",
     )
 
 
@@ -86,15 +159,31 @@ def user_modal():
     return dmc.Modal(
         dmc.Stack(
             [
-                dmc.Text(id="user-email", size="sm", c="dimmed"),
+                html.Div(
+                    [
+                        eyebrow("Cuenta"),
+                        dmc.Text(id="user-email", size="sm", fw=500),
+                    ],
+                    className="admin-modal-account",
+                ),
                 field("user-name", "Nombre completo", required=True),
-                role_select("user-role"),
-                dmc.Switch(id="user-active", label="Cuenta activa", checked=True),
+                role_select(
+                    "user-role",
+                    description="El nuevo rol se aplica en la siguiente petición del usuario.",
+                ),
+                dmc.Switch(
+                    id="user-active",
+                    label="Cuenta activa",
+                    description=ACTIVE_NOTE,
+                    checked=True,
+                ),
                 password_input(
                     "user-password",
                     "Nueva contraseña (opcional)",
-                    "Mínimo 12 caracteres; cierra las sesiones abiertas del usuario.",
+                    "Déjala vacía para no cambiarla. Mínimo 12 caracteres; al cambiarla se "
+                    "cierran las sesiones abiertas del usuario.",
                 ),
+                hint(EDIT_RULES),
                 dmc.Group(
                     dmc.Button(
                         "Guardar cambios",
@@ -111,37 +200,34 @@ def user_modal():
         title="Editar usuario",
         opened=False,
         closeButtonProps={"aria-label": "Cerrar"},
+        className="admin-modal",
     )
+
+
+def created_at(user) -> str:
+    stamp = user.created_at
+    return instant(stamp if stamp.tzinfo else stamp.replace(tzinfo=UTC))
 
 
 def users_table(users: list) -> dmc.TableScrollContainer:
     rows = [
         dmc.TableTr(
             [
-                dmc.TableTd(user.full_name),
-                dmc.TableTd(user.email),
+                dmc.TableTd(user.full_name, className="admin-user-name"),
+                dmc.TableTd(user.email, className="admin-user-email"),
                 dmc.TableTd(ROLE_LABELS.get(user.role, user.role)),
+                dmc.TableTd("Activo" if user.is_active else "Inactivo"),
+                dmc.TableTd(created_at(user), className="admin-user-date"),
                 dmc.TableTd(
-                    state_text("Activo", "active")
-                    if user.is_active
-                    else state_text("Inactivo", "neutral")
-                ),
-                dmc.TableTd(
-                    instant(
-                        user.created_at
-                        if user.created_at.tzinfo
-                        else user.created_at.replace(tzinfo=UTC)
-                    )
-                ),
-                dmc.TableTd(
-                    dmc.ActionIcon(
-                        icon("pencil", 16),
+                    dmc.Button(
+                        "Editar",
                         id={"type": "user-edit", "user": user.id},
                         n_clicks=0,
-                        variant="subtle",
-                        color="gray",
+                        variant="default",
+                        size="compact-sm",
                         **{"aria-label": f"Editar a {user.full_name}"},
-                    )
+                    ),
+                    className="admin-user-action",
                 ),
             ]
         )
@@ -151,19 +237,15 @@ def users_table(users: list) -> dmc.TableScrollContainer:
         dmc.Table(
             [
                 dmc.TableCaption("Usuarios registrados", className="sr-only"),
-                dmc.TableThead(
-                    dmc.TableTr(
-                        [
-                            dmc.TableTh(label)
-                            for label in ["Nombre", "Correo", "Rol", "Activo", "Creado", ""]
-                        ]
-                    )
-                ),
+                dmc.TableThead(dmc.TableTr([dmc.TableTh(label) for label in TABLE_HEADERS])),
                 dmc.TableTbody(rows),
             ],
             highlightOnHover=True,
+            verticalSpacing="sm",
+            fz="sm",
+            className="admin-users-table",
         ),
-        minWidth=640,
+        minWidth=720,
         type="native",
         **{"aria-label": "Usuarios registrados"},
     )
@@ -171,12 +253,17 @@ def users_table(users: list) -> dmc.TableScrollContainer:
 
 def admin_layout():
     return [
-        heading("Administración", "Cuentas, roles y estado de acceso de cada usuario."),
+        heading("Usuarios", PAGE_NOTE),
         dcc.Store(id="admin-result", storage_type="memory"),
         dcc.Store(id="user-edit-id", storage_type="memory"),
         html.Div(id="admin-feedback", **{"aria-live": "polite"}),
-        section("Usuarios", html.Div(id="admin-users")),
-        section("Nuevo usuario", new_user_form()),
+        html.Div(id="admin-users", className="admin-users"),
+        section("Crear usuario", new_user_form()),
+        section(
+            "Roles y permisos",
+            hint("El rol decide qué ve y qué puede registrar cada cuenta."),
+            role_reference(),
+        ),
         user_modal(),
     ]
 
@@ -184,7 +271,7 @@ def admin_layout():
 def admin_page(_hub=None, _context=None, _workflow=None):
     """Signature matches the page registry; the page reads users, not the hub."""
     if not is_admin():
-        return [heading("Administración"), notice(*NO_ACCESS, error=True)]
+        return [heading("Administración"), no_access()]
     return admin_layout()
 
 
@@ -208,7 +295,7 @@ def register_admin_callbacks(dashboard, server) -> None:
     )
     def list_view(result):
         if not is_admin():
-            return notice(*NO_ACCESS, error=True), None
+            return no_access(), None
         feedback = None
         if isinstance(result, dict) and result.get("message"):
             ok = bool(result.get("ok"))

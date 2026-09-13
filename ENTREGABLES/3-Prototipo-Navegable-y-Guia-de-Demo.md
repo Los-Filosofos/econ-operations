@@ -7,9 +7,10 @@ Este documento describe el prototipo funcional desarrollado para resolver la int
 
 ## 1. Repositorio Oficial & Enlaces de Acceso
 - **Repositorio Git**: [https://github.com/Los-Filosofos/econ-operations](https://github.com/Los-Filosofos/econ-operations)
-- **Frontend SPA Web (Recomendado)**: `http://localhost:5173/` (Vite + Canvas 2D + Chart.js)
+- **Consola Analítica Unificada**: `http://localhost:8050/` (Dash Mantine + AG Grid + Plotly)
 - **API REST & Documentación Swagger**: `http://localhost:8050/docs` (18 endpoints operativos)
-- **Consola Analítica Unificada**: `http://localhost:8050/` (FastAPI + Dash Mantine)
+- **Tablero de KPIs e Indicadores**: `http://localhost:8050/indicadores?mode=fixture`
+- **Traza de Integración**: `http://localhost:8050/integracion?mode=fixture`
 
 ---
 
@@ -17,7 +18,7 @@ Este documento describe el prototipo funcional desarrollado para resolver la int
 
 ### Requisitos Previos
 - Python 3.11+ con `uv` instalado.
-- Node.js 18+ con `npm`.
+- Servidor PostgreSQL (opcional en desarrollo; por defecto SQLite en memoria/fichero).
 
 ### Pasos de Ejecución
 ```bash
@@ -25,13 +26,11 @@ Este documento describe el prototipo funcional desarrollado para resolver la int
 git clone https://github.com/Los-Filosofos/econ-operations.git
 cd econ-operations
 
-# 2. Iniciar el Backend (FastAPI en puerto 8050)
-uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050
+# 2. Instalar dependencias bloqueadas
+uv sync --project apps/api --locked
 
-# 3. En otra terminal, iniciar el Frontend Web (Vite en puerto 5173)
-cd frontend
-npm install
-npm run dev -- --host 127.0.0.1 --port 5173
+# 3. Iniciar el servidor único (Dash + FastAPI en puerto 8050)
+DATABASE_URL=sqlite:///apps/api/econ.db AUTH_REQUIRED=false uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050
 ```
 
 ---
@@ -39,15 +38,14 @@ npm run dev -- --host 127.0.0.1 --port 5173
 ## 3. Demostración en Vivo: Consulta Unificada
 La consulta unificada permite inspeccionar en un solo punto el **estado administrativo (Prisma)** junto con el **estado telemático y de traslado (Startrack)** de cualquier equipo.
 
-### Opción A: A través de la Interfaz Gráfica (SPA Web)
-1. Abrir el navegador en `http://localhost:5173/`.
-2. En el **Grafo Operativo** (`#/`), hacer click sobre cualquier nodo de maquinaria (ej. `CF-03`).
-3. El panel contextual derecho desplegará simultáneamente:
-   - **Estado administrativo en Prisma**: `OBSOLETA` / `DISPONIBLE`.
-   - **Proyecto y período asignado**: `PROY-014 - The Hub`.
-   - **Traslado telemático en Startrack**: Destino `POI-PROY-014`, hora y fecha programada.
-   - **Evidencia documental**: Fuente original, entorno sandbox y referencia OpenAPI.
-   - **Faltantes u observaciones de seguridad**: Advertencia explícita si la posición GPS pertenece al camión de transporte y no a la máquina.
+### Opción A: A través de la Interfaz Gráfica (Dash Mantine)
+1. Abrir el navegador en `http://localhost:8050/maquinaria/cf-03?mode=fixture`.
+2. La vista de detalle despliega simultáneamente:
+   - **Estado administrativo en Prisma**: `OBSOLETA` (con interpretación de evidencia: revisar antes de continuar).
+   - **Mantenimiento**: Sin falla activa ni paro registrado.
+   - **Ventana de asignación**: Período 11–14/09 en proyecto activo.
+   - **Traslado y ubicación en Startrack**: Seguimiento de traslado, tarea telemática y recepción física.
+   - **Trazabilidad de fuentes**: Referencias de integración y origen auditables.
 
 ### Opción B: A través de la API REST (Línea de Comandos)
 ```bash

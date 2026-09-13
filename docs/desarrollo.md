@@ -37,17 +37,12 @@ Usar `scripts/dev.sh 8051` o `scripts/dev.ps1 -Port 8051` para otro puerto.
 Sin scripts:
 
 ```sh
-# Backend FastAPI (puerto 8050)
 uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050 --reload
-
-# Frontend SPA Web (puerto 5173)
-cd frontend && npm install && npm run dev
 ```
 
 | Dirección | Uso |
 | --- | --- |
-| `http://127.0.0.1:5173` | Frontend SPA Web (Grafo Canvas 2D, KPIs Chart.js, Traza y Traslados) |
-| `http://127.0.0.1:8050` | Panel Dash integrado (redirige a `/login` sin sesión) |
+| `http://127.0.0.1:8050` | Panel Dash (redirige a `/login` sin sesión) |
 | `/administracion` | Usuarios y roles (solo `admin`) |
 | `/docs` | API y contrato OpenAPI |
 | `/api/v1/hub?mode=fixture` | Proyección operativa común |

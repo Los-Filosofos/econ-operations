@@ -40,6 +40,11 @@ def resolve_id(step: str, movement: str = "") -> dict[str, str]:
     return {"type": "workflow-resolve", "step": step, "movement": movement}
 
 
+def form_effect(text: str):
+    """What the action writes and what it does not touch, next to the button that does it."""
+    return html.P(text, className="form-effect")
+
+
 def field(name, label, *, value="", hint=None, required=True, readonly=False, placeholder=""):
     return dmc.TextInput(
         id=field_id(name),
@@ -79,36 +84,40 @@ def plan_form(*, request_source_id="", machinery_source_id="", project_source_id
                 field(
                     "poi_id",
                     "ID de geocerca de destino en Startrack",
-                    hint="Confirma el destino por su ID de origen.",
+                    hint="ID exacto de la geocerca; el nombre del proyecto no lo determina.",
                 ),
                 field(
                     "assigned_user_ids",
                     "IDs de usuarios asignables en Startrack",
-                    hint="Separa varios IDs con comas. No introduzcas nombres.",
+                    hint="IDs de usuarios de Startrack separados por comas; no son UUID de "
+                    "operadores de Prisma ni nombres.",
                 ),
                 field(
                     "movement_reference",
                     "Referencia del movimiento",
-                    hint="Identifica este traslado concreto; una solicitud puede tener varios.",
+                    hint="Identifica este traslado concreto; una solicitud puede tener varios. "
+                    "Viaja como remote_id.",
                 ),
                 field(
                     "scheduled_date",
                     "Fecha programada de traslado",
                     placeholder="AAAA-MM-DD",
-                    hint="Programación explícita, independiente del período de uso.",
+                    hint="Programación explícita del traslado; no es el inicio del período "
+                    "de uso solicitado.",
                 ),
                 field(
                     "scheduled_time",
                     "Hora programada (opcional)",
                     required=False,
                     placeholder="HH:MM",
-                    hint="Hora local de El Salvador.",
+                    hint="Hora local de El Salvador; se guarda con su zona.",
                 ),
                 field(
                     "tracked_vehicle_id",
                     "ID del activo GPS (opcional)",
                     required=False,
-                    hint="Indica el activo observado; puede ser el transportador.",
+                    hint="Activo observado; puede ser el transportador. Sin este ID, ECON no "
+                    "atribuye visitas a este movimiento.",
                 ),
             ),
             accordion(
@@ -137,13 +146,20 @@ def plan_form(*, request_source_id="", machinery_source_id="", project_source_id
                 )
             ),
             dmc.Group(
-                action_button(
-                    "save",
-                    "Guardar plan local",
-                    enabled=enabled,
-                    primary=True,
-                    icon_name="device-floppy",
-                )
+                [
+                    action_button(
+                        "save",
+                        "Guardar plan local",
+                        enabled=enabled,
+                        primary=True,
+                        icon_name="device-floppy",
+                    ),
+                    form_effect(
+                        "Efecto: guarda el plan y sus correspondencias en el registro de ECON. "
+                        "No envía la tarea a Startrack ni modifica Prisma."
+                    ),
+                ],
+                gap="md",
             ),
         ],
         gap="md",
@@ -155,13 +171,22 @@ def receipt_form(movement: str = "", *, enabled=False):
     return dmc.Stack(
         [
             form_grid(
-                field("receiver", "Persona que recibió la maquinaria"),
-                field("received_date", "Fecha de recepción", placeholder="AAAA-MM-DD"),
+                field(
+                    "receiver",
+                    "Persona que recibió la maquinaria",
+                    hint="Quien recibe en destino; no es quien declara la recepción aquí.",
+                ),
+                field(
+                    "received_date",
+                    "Fecha de recepción",
+                    placeholder="AAAA-MM-DD",
+                    hint="Día en que se recibió la maquinaria, no el de esta declaración.",
+                ),
                 field(
                     "received_time",
                     "Hora de recepción",
                     placeholder="HH:MM",
-                    hint="Hora local de El Salvador.",
+                    hint="Hora local de El Salvador; se guarda con su zona.",
                 ),
                 field(
                     "reference",
@@ -171,14 +196,21 @@ def receipt_form(movement: str = "", *, enabled=False):
                 field("note", "Observaciones (opcional)", required=False),
             ),
             dmc.Group(
-                action_button(
-                    "receipt",
-                    "Registrar recepción",
-                    movement=movement,
-                    enabled=enabled,
-                    primary=True,
-                    icon_name="clipboard-check",
-                )
+                [
+                    action_button(
+                        "receipt",
+                        "Registrar recepción",
+                        movement=movement,
+                        enabled=enabled,
+                        primary=True,
+                        icon_name="clipboard-check",
+                    ),
+                    form_effect(
+                        "Efecto: registra la constancia en ECON con responsable, instante y "
+                        "referencia. No modifica Prisma ni Startrack."
+                    ),
+                ],
+                gap="md",
             ),
         ],
         gap="md",
@@ -201,6 +233,10 @@ def resolve_form(movement: str = "", *, enabled=False):
                 disabled=not enabled,
                 variant="default",
                 leftSection=icon("alert-triangle", 16),
+            ),
+            form_effect(
+                "Efecto: abre la confirmación. El cierre queda registrado con un motivo del "
+                "catálogo; no consulta ni modifica Startrack y no repite el envío."
             ),
             dmc.Modal(
                 [

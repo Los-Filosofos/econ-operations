@@ -1,33 +1,36 @@
-# Interfaces y arquitectura del hub
+# Interfaz Dash y arquitectura del hub
 
-El sistema ofrece **dos modalidades de interfaz gráfica** conectadas al mismo backend FastAPI (`apps/api`):
-
-1. **SPA Web Standalone (`frontend/`)**: Aplicación moderna en **Vite + Vanilla JS + Canvas 2D + Chart.js** (puerto `5173`), con tema oscuro (#0f1218), lienzo interactivo de grafo a 60 FPS, micro-animaciones y consumo directo de los 18 endpoints REST `/api/v1/*` vía CORS/Proxy.
-2. **Consola Analítica Integrada (`apps/api`)**: Aplicación ejecutada en el mismo proceso Python mediante **Dash con componentes dash-mantine-components 2.8**, tablas AG Grid Community e iconos Tabler vendorizados (puerto `8050`).
-
-SQLModel, Alembic y PostgreSQL/SQLite conservan la operación en el libro mayor (*OperationsLedger*). Las decisiones base se detallan en [ADR 0003](adr/0003-python-dash-hub.md), [ADR 0004](adr/0004-persistent-transfer-workflow.md) y [ADR 0005](adr/0005-session-auth-and-roles.md).
+La interfaz y la API se ejecutan en **un servicio Python** en `apps/api`: Dash
+con componentes **dash-mantine-components 2.8** (Mantine v8), iconos Tabler locales
+(SVG vendorizados en `assets/icons`), tablas **AG Grid Community** (dash-ag-grid) y gráficos Plotly
+sobre FastAPI. SQLModel, Alembic y PostgreSQL conservan la operación. Las
+decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
+[ADR 0004](adr/0004-persistent-transfer-workflow.md) y
+[ADR 0005](adr/0005-session-auth-and-roles.md). No hay aplicación React,
+`apps/web` ni compilación o despliegue web separado.
 
 ## Rutas y acceso
 
 | Ruta | Contenido | Acceso |
 | --- | --- | --- |
-| `/login` | Formulario de inicio de sesión; `?next=` devuelve a la ruta pedida | Pública |
-| `/`, `/resumen` y `/decisiones` | Lectura ejecutiva; gráficos de estados y agenda de uso; tabla de asuntos debajo | `read` |
+| `/login` | Inicio de sesión a dos columnas (identidad y formulario), sin tarjeta flotante; etiquetas visibles y el error como texto junto a los campos; `?next=` devuelve a la ruta pedida | Pública |
+| `/`, `/resumen` y `/decisiones` | «Operación · Qué requiere atención»: bloque «Qué pasa» con la agenda de uso y su leyenda, y bloque «Qué hago» con un asunto por solicitud, su hecho observado y el siguiente paso. Los conteos por estado y los períodos excluidos quedan plegados en «Datos de la agenda» | `read` |
 | `/solicitudes` | Proyecto/solicitud, maquinaria, período, estado, traslado y recepción | `read` |
 | `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento; para una solicitud pendiente sin unidad, las unidades candidatas de `GET /api/v1/requests/{id}/suggestions` (elegible, por revisar o excluida, con motivo y faltantes «no verificable») | `read`; guardar plan exige `manage_transfers` |
 | `/maquinaria` | Gráfico de estados administrativos de la lectura y después inventario con filtros y acceso por ID | `read` |
 | `/maquinaria/{id}` | Comparación de evidencia por fuente, interpretación de estados y ubicación fechada | `read` |
-| `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción | `read`; cola y sincronización exigen `manage_transfers`, recepción `declare_reception` |
-| `/integracion` | Visor por etapas con campos y reglas; tiempos y mapeo en pestañas, selección conservada durante la sesión | `read` |
-| `/indicadores` | Hitos de una aprobación o barras de duraciones, registros visibles y SLA propuestos en tablas de referencia | `read` |
-| `/fuentes` | Procedencia, alcance y estado de las consultas | `read` |
-| `/administracion` | Alta, rol, activación y contraseña de usuarios | `manage_users` (solo `admin`) |
+| `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, recepción y el historial como cronología del movimiento; cada acción declara su efecto antes de ejecutarse | `read`; cola y sincronización exigen `manage_transfers`, recepción `declare_reception` |
+| `/integracion` | Diagrama de secuencia: tres carriles de actores y cuatro filas de interacción seleccionables; tiempos, mapa de campos y respuesta JSON en pestañas, selección conservada durante la sesión | `read` |
+| `/indicadores` | Tablero de trece cifras agrupadas por el área que decide y, debajo, una pregunta por pestaña con sus registros visibles y los SLA propuestos en tablas de referencia | `read` |
+| `/fuentes` | Tres bloques: procedencia, alcance (cobertura por colección) y estado de cada fuente y del registro | `read` |
+| `/administracion` | Alta, rol, activación y contraseña de usuarios en una tabla a ancho completo, con rol y estado en palabras; la tabla de permisos se deriva de `permissions_of()` | `manage_users` (solo `admin`) |
 
 Sin sesión, las páginas redirigen a `/login`; `/api/v1/*` y los callbacks de
 Dash responden 401. Con sesión sin permiso, la acción responde 403 y la
 interfaz no muestra el control. Los roles y permisos están en
-[ADR 0005](adr/0005-session-auth-and-roles.md); el usuario y el cierre de
-sesión aparecen en la cabecera (`header-user`). Con `AUTH_REQUIRED=false`
+[ADR 0005](adr/0005-session-auth-and-roles.md); la cabecera (`header-user`)
+muestra nombre y rol como texto junto a un botón «Cerrar sesión» con borde:
+ya no hay menú de cuenta ni un control con ID `user-menu`. Con `AUTH_REQUIRED=false`
 (solo desarrollo) no hay login y la gestión vuelve a depender de
 `ALLOW_LOCAL_MANAGEMENT` desde loopback.
 
@@ -44,18 +47,42 @@ El frontend del mapa se retiró a petición del usuario.
 
 ## Presentación y paleta
 
+**Criterio de diseño.** La pasada de rediseño fija un criterio que debe sobrevivir
+a cualquier pantalla nueva: el color solo aparece cuando codifica información;
+la estructura se dibuja con reglas de 1 px y espacio, no con cajas; los radios
+están topados en 4 px; no hay degradados ni sombras difusas —no existe ninguna
+regla `gradient` en las hojas y los cuatro `box-shadow` que quedan son reglas
+interiores sólidas, sin desenfoque, que marcan el enlace activo, la
+interacción seleccionada o la fila sin mapeo directo—; las cifras se componen
+con `tabular-nums` para poder compararlas en columna; las micro-etiquetas en
+mayúsculas (`.eyebrow`) preceden a un título, una cifra o una columna y nunca
+son la única señal.
+
 La navegación usa una barra lateral azul ECON y el área de trabajo una superficie
 clara; los estados son texto legible, con icono solo para incidencias, sin
-píldoras ni puntos decorativos. El rol de la sesión se consulta en el menú de cuenta.
+píldoras ni puntos decorativos. Nombre y rol de la sesión se leen en la cabecera.
 Las variables de superficie se definen en `theme.py`. El enlace activo usa un
 tono azul más oscuro con texto y borde blancos; se retiró el encabezado redundante.
 Las tablas ocupan el ancho de trabajo; los análisis usan una superficie única,
 sin laterales de explicación ni series de tarjetas.
 
-La portada prioriza una agenda de uso con asignación a todo el ancho y la tabla
-de acciones. Indicadores mantiene visibles los registros que sustentan el gráfico;
-los SLA se consultan en tablas, sin gráficos de umbrales propuestos. Integración
-abre en «Recorrido», con estados independientes por etapa y pendientes explícitos.
+La escala tipográfica es contenida: títulos 28/24/20/17/15/13 px (el título de
+página se compone en el paso `h2`), cuerpo 15 px y 13 px como paso menor de
+Mantine; la micro-etiqueta `.eyebrow` de la hoja base baja a 11 px. El
+`spacing` de Mantine avanza en múltiplos de 4 px, la misma rejilla vertical que
+declara `--econ-step` en la hoja base. Los radios llegan a 4 px como máximo
+—`lg` y `xl` valen lo mismo que `md`— y el radio por defecto es `xs`, 2 px;
+la única excepción es la muestra circular de 8 px del estado de lectura en la
+cabecera.
+
+Cada página abre con `page_header` (micro-etiqueta de sección, título y una línea
+que dice qué se decide ahí) y agrupa su contenido en `panel`. La portada prioriza
+la agenda de uso a todo el ancho y las acciones por solicitud. Indicadores abre
+con el tablero de cifras y mantiene visibles los registros que sustentan cada
+pregunta; los SLA se consultan en tablas, sin gráficos de umbrales propuestos.
+Integración abre en «Recorrido», con el diagrama de secuencia, estados
+independientes por etapa y pendientes explícitos. Cuando una búsqueda o un filtro
+no devuelven filas, la lista ofrece la salida hacia la lectura sin acotar.
 `coverage_analytics.py` presenta en Fuentes la cobertura de cada colección de
 Prisma, sin convertir datos ausentes en ceros. Todos conservan acceso a evidencia.
 El sondeo de estado lee solo metadatos del último corte y no carga su JSON de
@@ -77,16 +104,73 @@ Grid y el template Plotly `econ`:
 | Intensidad | Secuencial azul `#86b6ef → #0d366b` (`SEQUENTIAL`) | Reservada para datos donde la intensidad del color realmente codifique magnitud |
 | Desviación frente a meta | Divergente `#0d366b … #f0efec … #b3261e` (`DIVERGING`) | Neutro `#f0efec` en el cero; azul por debajo, rojo por encima |
 
+La paleta no cambió en esta pasada: `BRAND`, `FAMILY_COLORS`, `FAMILIES`,
+`SEQUENTIAL` y `DIVERGING` conservan sus valores. Lo que se añadió son neutros
+de estructura: `LINE_STRONG` (regla fuerte de cabeceras y separaciones),
+`CANVAS_ALT` (segundo tono de papel para bloques embebidos) y `GRID_LINE`
+(rejilla de gráfico, un paso por debajo de `LINE`). `SHELL_VARIABLES` los
+publica al navegador como `--econ-line-strong` y `--econ-canvas-alt`, y la hoja
+base los repite en `:root` para las vistas que se dibujan fuera del shell
+(login).
+
 Tipografía Public Sans (OFL), servida localmente y compartida con Plotly y
-AG Grid; radios pequeños, superficies claras y
-`focusRing: auto`. Los gráficos Plotly usan `figure()` del tema (sin zoom,
-ejes fijos, leyenda por texto) y siempre tienen una tabla alternativa; ver
-[definiciones analíticas](analitica-decisiones.md). Las capturas existentes en
-`docs/screenshots/` son referencias históricas; no validan esta reorganización.
+AG Grid; superficies claras y `focusRing: auto`. El tema de AG Grid es Quartz
+sin su apariencia de panel: cabecera blanca con regla fuerte (`LINE_STRONG`),
+reglas de fila de 1 px, sin separadores de columna. Los gráficos Plotly usan
+`figure()` del template `econ` (sin zoom, ejes fijos, leyenda por texto, rejilla
+discreta y sin líneas ni marcas de eje) y siempre tienen una tabla alternativa;
+ver [definiciones analíticas](analitica-decisiones.md). Las capturas existentes
+en `docs/screenshots/` son referencias históricas; no validan esta
+reorganización.
 
 Los iconos de navegación son Tabler locales
 (`app/dashboard/assets/icons/*.svg`, licencia MIT), pintados con `mask-image`
 para heredar el color del texto.
+
+### Hojas de estilo y su registro explícito
+
+`assets/style.css` es la hoja base, ordenada en doce secciones numeradas
+(tipografías, tokens, reset y accesibilidad, utilidades tipográficas, shell,
+estructura de página, tablas y AG Grid, gráficos, vistas de integración, estado,
+responsive, movimiento e impresión). Ahí viven las utilidades compartidas que
+cualquier vista puede usar: `.eyebrow` (micro-etiqueta en mayúsculas), `.measure`
+(medida de lectura de 72 ch), `.lede`, `.hairline` (una regla de 1 px en lugar de
+una caja), `.numeric` (cifras tabulares alineadas a la derecha), `.stack-tight`,
+`.data-strip` (franja de cifras separadas por reglas verticales) y
+`.definition-list`. El bloque `@media print` oculta cabecera, barra lateral y
+barra de consulta, pone el fondo en papel y evita partir secciones, filas de la
+traza y tablas.
+
+Encima de la base hay una hoja por área, todas con prefijo `z-` porque **se
+cargan después de `style.css` y en orden alfabético**: `z-auth.css` (login,
+bloque de sesión y administración), `z-flow.css` (integración, operaciones y
+evidencia), `z-kpi.css` (tablero de `/indicadores`), `z-pages.css` (portada,
+listas y fuentes) y `z-shell.css` (cabecera, barra lateral, área de trabajo y
+cajón móvil). Ninguna introduce un color propio: usan los tokens de la base
+(`z-flow.css` repite el valor del token como respaldo del `var()`).
+Para no pisarse, cada hoja restringe sus selectores a un elemento de su área
+(`.kpi-board .data-strip`, `.econ-header .read-status`, `.login-panel`) y
+`z-flow.css`, que sí redeclara una clase compartida, lo hace con `:where()` para
+que la base siga ganando el desempate. Hoy ninguna hoja repite un selector de
+otra; si dos coincidieran, mandaría la última en orden alfabético.
+
+`components.py` ofrece el equivalente Python de estas utilidades. `data_strip`
+lo consume el tablero de KPIs y `.numeric` viaja como `cellClass` de AG Grid;
+`measure`, `definition_list`, `.stack-tight` y `.hairline` están disponibles y
+todavía sin uso en una vista.
+
+**Trampa al añadir una hoja.** Dash descubre los assets al servir la primera
+petición, pero las rutas catch-all de FastAPI pueden responder antes; un enlace
+profundo en frío a `/login`, `/integracion` o `/indicadores` llegaría sin
+estilos. Por eso `application.py` las enlaza explícitamente: `STYLESHEET_PATTERN`
+(`(?:style|z-[\w-]+)\.css`) las excluye del escaneo con `assets_ignore`,
+`stylesheets()` descubre cualquier `z-*.css` del directorio y `stylesheet_links()`
+las pasa a `external_stylesheets` con una versión por contenido (hash del
+archivo), de modo que un despliegue solo invalida la hoja que cambió. La
+consecuencia práctica: una hoja nueva llamada `z-<área>.css` queda registrada sin
+tocar código; **cualquier otro nombre no coincide con el patrón**, no se enlaza y
+vuelve a depender del escaneo de Dash, con el fallo de enlace profundo en frío
+que motivó este registro.
 
 ## Servicios y módulos
 
@@ -97,14 +181,15 @@ La función que presenta una página consume las proyecciones ya consultadas.
 
 | Módulo bajo `apps/api/app` | Responsabilidad |
 | --- | --- |
-| `dashboard/application.py` | `MantineProvider`, `AppShell` (cabecera, navbar, `Drawer` móvil), callbacks, consultas, acciones y stores por navegador |
-| `dashboard/theme.py` | Paleta, tema Mantine, tema AG Grid y template Plotly `econ`; `state_family`/`state_color` |
-| `dashboard/components.py` | Bloques reutilizables: `icon`, `heading`, `section`, `notice`, `state_text`, `facts`, `rows_table`, `accordion`, `provenance`, `grid` (AG Grid con locale en español) |
+| `dashboard/application.py` | `MantineProvider`, `AppShell` (cabecera con identidad y estado de lectura como texto, navbar con la franja de origen, `Drawer` móvil), registro explícito de las hojas de estilo (`STYLESHEET_PATTERN`, `stylesheets()`, `stylesheet_links()`), callbacks, consultas, acciones y stores por navegador |
+| `dashboard/theme.py` | Paleta, neutros de estructura (`LINE_STRONG`, `CANVAS_ALT`, `GRID_LINE`), `SHELL_VARIABLES`, escala tipográfica y de espacio, tema Mantine, tema AG Grid y template Plotly `econ`; `state_family`/`state_color` |
+| `dashboard/components.py` | Bloques reutilizables: `icon`, `heading`, `section`, `notice`, `state_text`, `facts` (pares con `.fact-label`/`.fact-value`, ya no `dmc.Text`), `eyebrow`, `measure`, `data_strip`, `definition_list`, `rows_table`, `accordion`, `provenance`, `grid` (AG Grid con locale en español) |
 | `dashboard/context.py` | Parámetros URL validados y enlaces con IDs codificados |
-| `dashboard/views.py` | `PAGES`, navegación, línea de alcance, pestañas de filtro, resumen de decisiones, `decisions` (`/decisiones`), solicitudes, maquinaria, fuentes y `render_page` |
+| `dashboard/views.py` | `PAGES`, navegación, `page_header`/`panel`, línea de alcance, pestañas de filtro, leyenda de estados, `decisions` (portada y sus alias), solicitudes, maquinaria, fuentes en tres bloques y `render_page` |
 | `dashboard/analytics.py`, `dashboard/decision_analytics.py` | Relación solicitud/unidad, población filtrada, calendario y distribución por estado; `graph()` envuelve una figura Plotly del template `econ` |
 | `dashboard/decision_priorities.py` | Un asunto con evidencia y siguiente paso por solicitud, sin puntajes de urgencia ni reloj |
-| `dashboard/indicator_views.py` | Página `/indicadores`: una pregunta activa, resultados de `compute_indicators`, filas visibles y comparación gráfica cuando procede; metodología y SLA separados. No recalcula reglas ni alimenta un segundo resumen en la portada |
+| `dashboard/indicator_views.py` | Página `/indicadores`: el tablero de cifras arriba y después una pregunta activa, resultados de `compute_indicators`, filas visibles y comparación gráfica cuando procede; metodología y SLA separados. No recalcula reglas ni alimenta un segundo resumen en la portada |
+| `dashboard/kpi_views.py` | Tablero de trece cifras de `/indicadores`, agrupadas por el área que decide (Logística, Proyectos, Mantenimiento, Información) sobre el contrato de `GET /api/v1/indicators` más `scope` y `ledger_coverage`. Presentación pura: no toca `app/services` ni `app/models`, no consulta proveedores ni `datetime.now` —el único «ahora» es `HubResponse.generated_at`—. Una cifra es un conteo de filas de una población publicada, el valor de una fila identificada o el motivo que publicó el servicio: la ausencia nunca es cero. Ver [tablero de KPIs](kpis-tablero.md) |
 | `dashboard/evidence_views.py` | Comparación de hechos por origen, interpretación y cronología por solicitud |
 | `dashboard/workflow_forms.py`, `dashboard/workflow_views.py`, `dashboard/workflow_actions.py` | Preparación, registro de movimientos, recepción y ejecución de acciones con permiso |
 | `dashboard/auth_views.py`, `dashboard/admin_views.py` | Página `/login`, identidad en la cabecera, ayudas de permiso y página `/administracion`; las reglas viven en `api/users.py` |
@@ -117,13 +202,17 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `services/graph.py`, `api/graph.py` | `GraphProjection` de `GET /api/v1/graph`: nodos tipados, aristas con evidencia y alcance, conflictos, tensiones y faltantes «no verificable»; la presencia cuelga del movimiento, no de la máquina; sin geometría ni ETA |
 | `services/indicators.py`, `api/indicators.py` | `IndicatorsReport` de `GET /api/v1/indicators`: ocho fichas por fila, sin promedios; la ausencia no es cero; fixture sin corte |
 | `services/suggestions.py`, `api/suggestions.py` | `AssignmentSuggestion` de `GET /api/v1/requests/{id}/suggestions`: candidatas por reglas R0–R8, sin GPS ni puntajes; recomendar no es asignar |
-| `api/integration.py` | Traza de una solicitud para `/integracion` y `GET /api/v1/integration/{request_id}` |
+| `services/integration_trace.py`, `api/integration.py` | Traza de una solicitud para `/integracion` y `GET /api/v1/integration/{request_id}`: una sola derivación para la página y el endpoint |
+| `dashboard/integration_views.py` | Diagrama de secuencia de `/integracion`: carriles de actores (`ACTORS`), una fila por interacción (`EXCHANGES`), banda de honestidad en tinta, JSON con `figcaption` que nombra su contrato y mapa de campos en dos tablas (lo que ECON reenvía y lo que no). No dibuja tráfico: una flecha es el contrato de interacción |
 | `core/database.py`, `cli/sync_operations.py`, `cli/prune_snapshots.py` | Motor SQL y `cycle_lock` (`pg_try_advisory_lock`, un ciclo por proceso y por base); worker explícito y poda explícita de cortes (ADR 0006) |
-| `dashboard/assets` | Estilos, Public Sans (OFL), iconos Tabler locales y logotipos ECON |
+| `dashboard/assets` | `style.css` (base) y las hojas por área `z-auth`, `z-flow`, `z-kpi`, `z-pages` y `z-shell`, Public Sans (OFL), iconos Tabler locales y logotipos ECON |
 
 Se retiraron `icons.py`, `decision_views.py`, `equipment_views.py`, los SVG
 locales, el menú clientside y el botón Actualizar: Mantine, los recursos locales
-y el sondeo de `GET /api/v1/status` cubren esas funciones. La proyección
+y el sondeo de `GET /api/v1/status` cubren esas funciones. El rediseño retiró
+además `stepper()` y `STAGE_ICONS` de `integration_views.py` (los sustituye el
+diagrama de secuencia), `indicator_insights` de `indicator_views.py` y el menú de
+cuenta de la cabecera. La proyección
 `GET /api/v1/graph` se consulta por HTTP y Swagger; los indicadores tienen la
 página `/indicadores`, las sugerencias aparecen en el detalle de la solicitud
 pendiente. El frontend usa los componentes Mantine y AG Grid de la plataforma.
@@ -229,6 +318,8 @@ validar la imagen. Los cambios de interfaz requieren revisar escritorio
 (1280 px), móvil (390 px), teclado, estados vacío/error, preservación de
 filtros y la vista con y sin permisos de gestión.
 
-El CSS se registra con versión por contenido para servir estilos en rutas
-internas desde el primer arranque. Dash distribuye los componentes del
-navegador; el equipo mantiene los módulos Python y sus assets locales.
+El CSS se registra con versión por contenido —la hoja base y cada hoja por
+área— para servir estilos en rutas internas desde el primer arranque; el
+mecanismo y su trampa están en [hojas de estilo](#hojas-de-estilo-y-su-registro-explícito).
+Dash distribuye los componentes del navegador; el equipo mantiene los módulos
+Python y sus assets locales.

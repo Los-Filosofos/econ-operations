@@ -1,21 +1,20 @@
 # ECON · Hub de operaciones
 
-> ### 🏆 ENTREGABLES OFICIALES · HACKATHON GRUPO ECON (DOMINGO 10:00 AM)
-> Todos los entregables obligatorios solicitados en el reto están organizados en la carpeta **[`ENTREGABLES/`](./ENTREGABLES/)**:
-> 1. 📊 **Matriz de Mapeo de Campos**: [`ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.pdf`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.pdf) (Excel: [`1-Matriz-de-Mapeo-de-Campos.xlsx`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.xlsx) | CSV: [`1-Matriz-de-Mapeo-de-Campos.csv`](./ENTREGABLES/1-Matriz-de-Mapeo-de-Campos.csv))
-> 2. 📋 **Matriz de Responsabilidades (RACI)**: [`ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.pdf`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.pdf) (CSV: [`2-Matriz-de-Responsabilidades-RACI.csv`](./ENTREGABLES/2-Matriz-de-Responsabilidades-RACI.csv))
-> 3. 🌐 **Prototipo Navegable & Guía de Demo**: [`ENTREGABLES/3-Prototipo-Navegable-y-Guia-de-Demo.pdf`](./ENTREGABLES/3-Prototipo-Navegable-y-Guia-de-Demo.pdf) (Web en vivo: `http://localhost:5173/` y `http://localhost:8050/docs`)
-> 4. 🖼️ **Diagramas de Arquitectura & Estados**: [`ENTREGABLES/4-Diagrama-de-Arquitectura-y-Dossier-Visual.pdf`](./ENTREGABLES/4-Diagrama-de-Arquitectura-y-Dossier-Visual.pdf)
-> 5. 📄 **Documento de Decisiones Técnicas (2 págs)**: [`ENTREGABLES/5-Documento-de-Decisiones-Tecnicas.pdf`](./ENTREGABLES/5-Documento-de-Decisiones-Tecnicas.pdf)
-> 6. 🎙️ **Presentación Final (10 Slides & Pitch)**: [`ENTREGABLES/6-Presentacion-Final-10-Slides-y-Pitch.pdf`](./ENTREGABLES/6-Presentacion-Final-10-Slides-y-Pitch.pdf)
-> 
-> *Índice detallado y enlaces directos en el [Dossier de Entregables](ENTREGABLES/README.md).*
+Repositorio independiente: **Los-Filosofos/econ-api-integration**, rama
+**main**. Para continuar en Claude, empezar por [CLAUDE.md](CLAUDE.md).
+Se conserva esta versión de Dash y FastAPI con historial nuevo. La carpeta
+`docs/onedrive` fue excluida por petición del usuario; las referencias hacia
+ella en otros documentos son históricas y sus archivos no están incluidos.
 
----
+La [demostración de interacción entre APIs](docs/interaccion-apis.md) explica
+el visor de `/integracion`: Prisma ⇄ ECON ⇄ Startrack, contratos, datos por
+etapa y respuesta JSON de nuestra API.
 
-Aplicación **Python con Dash, Plotly y FastAPI** y **Frontend Web SPA (Vite + Canvas 2D + Chart.js)** del Equipo 6 — Los Filósofos.
+Aplicación **Python con Dash, Plotly y FastAPI** del Equipo 6 — Los Filósofos.
 Sigue cada solicitud desde el proyecto y la unidad asignada hasta el traslado,
 la llegada y la recepción, mostrando los vínculos y la evidencia que faltan.
+Interfaz y API viven en **un mismo proceso y origen**; no hay compilación
+frontend ni Node.js ([ADR 0003](docs/adr/0003-python-dash-hub.md)).
 
 ## Inicio
 
@@ -51,42 +50,74 @@ PostgreSQL.
 
 ## Recorrido
 
-- **Resumen (inicio):** decisiones y evidencia con el menú y la cabecera habituales.
-- **Solicitudes:** proyecto, tipo requerido, período, unidad asignada, traslado,
-  destino, llegada, recepción y evidencia pendiente. El detalle de una solicitud
-  pendiente sin unidad lista las **unidades candidatas** por reglas explícitas
-  (clase, estado administrativo, paro, período), sin GPS ni puntajes;
-  recomendar no es asignar.
-- **Maquinaria:** inventario consultado, comparación de fuentes por unidad e
-  interpretación de estados distintos.
+- **Acceso (`/login`):** dos columnas —identidad del producto a la izquierda,
+  formulario a la derecha—, apiladas en pantalla estrecha; el mensaje de error
+  aparece junto a los campos, no en un aviso flotante.
+- **Resumen (`/`; `/resumen` y `/decisiones` abren la misma página):** empieza en
+  «Operación · Qué requiere atención» con dos bloques. «Qué pasa · Agenda de uso
+  y asignación» dibuja una franja por solicitud entre el inicio y el fin
+  pedidos, con su proyecto, unidad y estado; no son plazos de entrega ni
+  duración del traslado. «Qué hago · Acciones por solicitud» lista un asunto por
+  solicitud con proyecto, unidad, hecho observado y siguiente paso, sin puntajes
+  de urgencia ni orden inferido del reloj. El desplegable «Datos de la agenda»
+  conserva la tabla alternativa del gráfico y el conteo por estado de solicitud.
+- **Solicitudes:** proyecto, unidad, período solicitado, estado de la solicitud,
+  traslado, recepción y la acción siguiente, con pestañas de filtro. El detalle
+  reúne los datos y referencias de la solicitud, su siguiente paso, el traslado
+  guardado y, en un desplegable, la interpretación y la evidencia de la unidad
+  asignada. El detalle de una solicitud pendiente sin unidad lista las **unidades
+  candidatas** por reglas explícitas (clase, estado administrativo, paro,
+  período), sin GPS ni puntajes; recomendar no es asignar.
+- **Maquinaria:** inventario consultado con estado administrativo, proyecto
+  informado y mantenimiento, encabezado por el gráfico de conteos por estado
+  administrativo de la lectura visible, con su tabla alternativa; el estado de
+  Prisma no confirma disponibilidad física ni describe la flota. El detalle abre
+  con «Interpretación de la evidencia» —una regla nombrada, el hecho que la
+  sostiene y el siguiente paso— y guarda la comparación de fuentes por unidad en
+  un desplegable.
 - **Operaciones:** prepara y guarda el traslado, consulta su envío, conserva
   cambios de estado y registra una recepción con responsable y constancia. La
   tabla pagina en el navegador (15, 30 o 50 filas) la lectura del registro y
   declara cuando esa lectura es parcial.
-- **Integración:** traza completa de una solicitud —lo leído de Prisma, la
-  transformación de ECON con sus reglas, el payload preparado para Startrack, lo
-  que Startrack devuelve y los tiempos del traslado—. Demuestra en una pantalla
-  que la API acepta los datos de Prisma y produce el payload del proveedor.
-- **Indicadores y SLA:** las ocho fichas de `GET /api/v1/indicators` agrupadas
-  por el área que decide, cada una con una lectura en lenguaje llano, sus filas
-  (evaluables, parciales o no evaluables con motivo) y el SLA propuesto al lado
-  con umbral «a validar con ECON»; sin promedios ni porcentajes, y la ausencia
-  nunca es cero.
-- **Decisiones:** un asunto por solicitud con su evidencia y siguiente paso,
-  las tres lecturas más accionables de los indicadores, el calendario de
-  períodos de uso solicitado y la distribución por estado, cada gráfico con
-  tabla alternativa.
-- **Fuentes y cobertura:** diferencia muestras proporcionadas y lecturas live.
-- **Administración** (solo `admin`): usuarios, roles, activación y contraseñas.
+- **Integración:** el intercambio como diagrama de secuencia sobre tres carriles
+  fijos (Prisma, ECON, Startrack) y cuatro interacciones —consultar solicitud y
+  unidad, normalizar y validar, preparar la tarea de traslado y consultar la
+  evidencia de retorno—, cada una con su estado de evidencia. Una banda fija
+  repite que cada fila describe el contrato entre dos sistemas y no una captura
+  de tráfico, que un cuerpo preparado no acredita envío y de qué origen procede
+  la lectura. Cuatro pestañas: «Recorrido», «Tiempos», «Mapa de campos» —en dos
+  tablas: lo que ECON toma de Prisma y prepara para Startrack, y los campos del
+  formulario de Startrack que ECON no envía— y «Respuesta de nuestra API».
+- **Indicadores:** abre con el **tablero de trece cifras** agrupadas por el área
+  que decide (Logística, Proyectos, Mantenimiento e Información), construido
+  sobre el mismo `GET /api/v1/indicators`. Cada cifra declara la población y la
+  cobertura de la lectura que cuenta y enlaza con las filas que la sustentan;
+  cuando el indicador no publica población contable, la celda publica su motivo
+  en lugar de un número. Debajo, una pestaña por pregunta con la lectura en
+  lenguaje llano y sus filas (evaluables, parciales o no evaluables con motivo),
+  y la pestaña «SLA propuestos» con los seis umbrales «a validar con ECON» y sin
+  cálculo de cumplimiento. Sin promedios ni porcentajes, y la ausencia nunca es
+  cero ([tablero de KPIs](docs/kpis-tablero.md)).
+- **Fuentes y cobertura:** tres bloques —«Procedencia» con el estado y la última
+  lectura de cada fuente, «Alcance» con la cobertura por colección de Prisma y su
+  tabla alternativa, y «Estado» con el detalle de cada fuente, el registro de
+  operaciones y los criterios de cobertura—. Diferencia muestras proporcionadas
+  y lecturas live.
+- **Administración** (solo `admin`): usuarios, roles, activación y contraseñas;
+  la tabla dice «Activo» o «Inactivo» en texto, sin distintivos de color.
 
 Cada página conserva `mode` en la URL; los enlaces llevan el ID original
-codificado (`nexus:equipment:…`, `nexus:request:…`). No hay botón de
-actualizar: la interfaz sondea `GET /api/v1/status` cada 15 segundos y vuelve a
-leer el hub y el registro solo cuando `registry_version` cambia. En el servidor,
-`SYNC_INTERVAL_SECONDS` (0 = apagado; mínimo 30) ejecuta un ciclo live acotado
-por intervalo dentro del mismo proceso, bajo el candado de ciclo de PostgreSQL;
-exige `ALLOW_LIVE_READS=true`, nunca corre en `fixture` y ningún refresco
-sustituye una lectura fallida por la anterior.
+codificado (`nexus:equipment:…`, `nexus:request:…`). La cabecera dice en texto
+cuándo se leyó lo que está en pantalla y guarda en su menú el estado del registro
+del servidor, el de la sincronización y «Volver a leer ahora» como alternativa
+accesible; la barra lateral declara el origen de datos («Muestra documental» o
+«Sandbox sintético») mientras se trabaja. No hay botón de actualizar en el
+cuerpo de la página: la interfaz sondea `GET /api/v1/status` cada 15 segundos y
+vuelve a leer el hub y el registro solo cuando `registry_version` cambia. En el
+servidor, `SYNC_INTERVAL_SECONDS` (0 = apagado; mínimo 30) ejecuta un ciclo live
+acotado por intervalo dentro del mismo proceso, bajo el candado de ciclo de
+PostgreSQL; exige `ALLOW_LIVE_READS=true`, nunca corre en `fixture` y ningún
+refresco sustituye una lectura fallida por la anterior.
 
 La interfaz usa componentes Mantine (dash-mantine-components) con iconos
 Tabler, tablas AG Grid Community y gráficos Plotly. El azul ECON identifica la
@@ -112,6 +143,11 @@ lecturas y escrituras remotas están deshabilitadas por defecto.
 
 ## Guion de demo para el jurado
 
+El [guion de pitch y demo](docs/pitch.md) reparte estos mismos contenidos en
+los cinco minutos de pitch, los cinco de demostración y los tres de preguntas,
+con las voces, los tiempos y el plan B. Lo que sigue es el recorrido completo de
+la aplicación, del que esa demostración toma un subconjunto.
+
 Diez pasos en modo `fixture`, sin proveedores; el jurado elige la unidad o la
 solicitud y nada se inventa. Cada paso dice qué URL abrir y qué mostrar; lo que
 la muestra no trae se enseña como faltante, no se rellena. Los IDs largos son
@@ -122,11 +158,16 @@ y la PENDIENTE es `nexus:request:0cbbbd77-4593-4791-9be5-afd46b06c888`.
 1. **Arrancar, iniciar sesión y dejar que el jurado elija.** `/login` y luego
    `/maquinaria?mode=fixture`: cinco unidades (CF-01, CF-02, CF-03, EXC-01,
    EXC-02) con estado administrativo, proyecto y procedencia; el buscador filtra
-   por código, activo, nombre o proyecto. El jurado elige cualquiera; el guion
-   sigue con CF-03. Con `live` habilitado en el servidor la misma tabla lista lo
+   por código, activo, nombre, proyecto o empresa. El jurado elige cualquiera; el
+   guion sigue con CF-03. Con `live` habilitado en el servidor la misma tabla lista lo
    leído de Prisma, con la cobertura de páginas declarada.
-2. **Resumen de decisiones.** `/?mode=fixture`: asuntos por solicitud, evidencia
-   disponible y acceso al detalle desde la interfaz habitual de ECON.
+2. **La portada: qué requiere atención.** `/?mode=fixture` abre en «Operación ·
+   Qué requiere atención»: «Qué pasa · Agenda de uso y asignación» con una franja
+   por solicitud entre el inicio y el fin pedidos, y «Qué hago · Acciones por
+   solicitud» con un asunto por solicitud, el hecho observado que lo sustenta y
+   el siguiente paso. Con la muestra los asuntos son «Resolver aprobación y
+   asignación» y «Revisar la asignación». No es un tablero de conteos; el gráfico
+   conserva su tabla alternativa en «Datos de la agenda».
 3. **Consulta unificada de la unidad** ([RF-04](docs/matriz-requisitos-entregables.md#matriz-de-trazabilidad)).
    `/maquinaria/{id}?mode=fixture`: estado administrativo de Prisma
    (`OBSOLETA`), mantenimiento (sin falla activa), ventana de asignación 11–14/09,
@@ -134,9 +175,17 @@ y la PENDIENTE es `nexus:request:0cbbbd77-4593-4791-9be5-afd46b06c888`.
    de Startrack y recepción; con la muestra esas filas dicen **no verificable**
    porque el archivo no trae tareas ni posición, y así se dice.
 4. **Estados que difieren y cómo se resuelven** ([RF-05](docs/matriz-requisitos-entregables.md#matriz-de-trazabilidad)).
-   Misma pantalla y `/solicitudes/{id APROBADA}?mode=fixture`: la solicitud
-   está APROBADA con `approved_at` sobre una unidad `OBSOLETA`; ECON lo muestra
-   como tensión y no lo «corrige». La regla de
+   `/solicitudes/{id APROBADA}?mode=fixture` y la misma pantalla de la unidad: la
+   solicitud está APROBADA con `approved_at` sobre una unidad `OBSOLETA` y ECON
+   no lo «corrige». En la interfaz el caso se lee en dos sitios: el asunto
+   **«Revisar la asignación»** de la portada y del detalle de la solicitud, con
+   su evidencia literal («Unidad CF-03; estado administrativo OBSOLETA. Sin falla
+   activa ni paro registrados»), y la **«Interpretación de la evidencia»** del
+   detalle de la unidad —«Revisar el estado administrativo antes de continuar»—,
+   que nombra a quién corresponde el siguiente paso. La palabra «tensión» no
+   aparece en pantalla: la proyección `tensions` con
+   `obsolete_with_approved_request` es la vía por API y se ve en
+   `GET /api/v1/graph?mode=fixture` (paso 9). La regla de
    [estados separados](docs/equivalencias-prisma-startrack.md#fechas-unidades-y-estados-separados)
    y el [diagrama «dónde vive cada estado»](docs/entregables-visuales.md#diagrama-6-dónde-vive-cada-estado)
    explican el caso Ocupada/Completada; el caso con un estado de Startrack
@@ -156,24 +205,34 @@ y la PENDIENTE es `nexus:request:0cbbbd77-4593-4791-9be5-afd46b06c888`.
    lectura del registro y avisa si es parcial. Con un usuario `lectura` no
    aparecen acciones. En fixture no hay envío: encolar responde 409.
 7. **La traza de integración.** `/integracion?mode=fixture` (selector
-   «Solicitud a seguir»): qué leyó de Prisma, cómo lo nombra ECON y con qué
-   reglas, el payload preparado para `POST /api/job` y lo que Startrack
-   devolvería. El bloque «Mapeo campo a campo» marca los campos **sin
+   «Solicitud a seguir»). Pestaña «Recorrido»: las cuatro etapas del intercambio
+   —qué leyó de Prisma, cómo lo nombra ECON y con qué reglas, el cuerpo preparado
+   para `POST /api/job` y la evidencia de retorno que Startrack devolvería—, cada
+   una con su estado; la banda superior recuerda que una flecha es el contrato de
+   interacción, no prueba de una petición, y que un cuerpo preparado no acredita
+   envío. Pestaña «Mapa de campos»: dos tablas, la de los campos que ECON toma de
+   Prisma y prepara para Startrack y la de los campos del formulario de Startrack
+   que no envía, con el tratamiento de cada fila; ahí están los campos **sin
    equivalente** (Origen, «Completar antes de», ventana horaria, artículos) que
-   el jurado puede pedir, y los
+   el jurado puede pedir. Pestaña «Tiempos»: los
    [tiempos del traslado](docs/solucion-integracion.md#tiempos-del-traslado-qué-se-sabe-y-qué-no)
-   solo se calculan con instantes existentes. Misma respuesta en
-   `GET /api/v1/integration/{request_id}`.
-8. **Indicadores y decisiones.** `/indicadores?mode=fixture` («Indicadores y
-   SLA»): ocho fichas agrupadas por área; `approval_time` es evaluable para la
-   APROBADA (42,2 s entre creación y aprobación) y «sin approved_at» para la
-   PENDIENTE; el resto «no evaluable» con el motivo (sin corte de observación,
-   sin tareas en la muestra), y cada ficha lleva al lado su SLA propuesto con
-   umbral «a validar con ECON». La ausencia no es cero y no hay promedios
-   ([fichas](docs/indicadores-calculables.md)). `/decisiones?mode=fixture`: un
-   asunto por solicitud con evidencia y siguiente paso, «Lo que dicen los
-   indicadores», calendario de períodos de uso (11–14 y 16–18/09) y
-   distribución por estado con tabla alternativa.
+   solo se calculan con instantes existentes. Pestaña «Respuesta de nuestra API»:
+   el mismo JSON de `GET /api/v1/integration/{request_id}`.
+8. **Indicadores y decisiones.** `/indicadores?mode=fixture` abre con el
+   «Tablero de indicadores»: trece cifras agrupadas por Logística, Proyectos,
+   Mantenimiento e Información, cada una con su población, su cobertura y el
+   enlace a las filas que la sustentan; una celda sin población contable publica
+   su motivo en lugar de un número («sin corte de observación», «las muestras no
+   envían tareas»). Debajo, una pestaña por pregunta: `approval_time` es
+   evaluable para la APROBADA (42,2 s entre creación y aprobación) y «sin
+   approved_at» para la PENDIENTE; el resto declara por qué no es evaluable. La
+   pestaña «SLA propuestos» lleva los seis objetivos con umbral «a validar con
+   ECON» y sin cálculo de cumplimiento. La ausencia no es cero y no hay promedios
+   ([fichas](docs/indicadores-calculables.md),
+   [tablero](docs/kpis-tablero.md)). `/decisiones?mode=fixture` es la misma
+   página que la portada del paso 2: la agenda de períodos de uso (11–14 y
+   16–18/09) con su tabla alternativa y un asunto por solicitud con evidencia y
+   siguiente paso. Esa página no repite las cifras de indicadores.
 9. **Las proyecciones en Swagger.** `/docs` (iniciar sesión con
    `POST /api/v1/auth/login` en la misma pestaña): `GET /api/v1/graph?mode=fixture`
    devuelve 5 máquinas, 2 solicitudes y 1 proyecto `referenced_only`, 4 aristas
@@ -193,7 +252,12 @@ y la PENDIENTE es `nexus:request:0cbbbd77-4593-4791-9be5-afd46b06c888`.
     fixture **no los trae** porque el OpenAPI proporcionado no contiene tareas,
     visitas ni recepciones; esas filas quedan visibles como faltantes. Cierre:
     matrices en `output/matrices`, PDFs con [manifiesto](output/pdf/MANIFEST.md)
-    y `scripts/check.sh` en verde.
+    y el estado real de la verificación. La suite completa **no está en verde**:
+    la última ejecución registrada en [CLAUDE.md](CLAUDE.md) dejó 565 pruebas
+    correctas, 49 fallos y 20 omitidas, con expectativas antiguas de callbacks y
+    de estructura visual, un caso de codificación y una simulación de fallo de
+    registro pendientes de revisión. Esos pendientes se conservan a propósito y
+    no se ocultan eliminando pruebas.
 
 ## Cómo revisar las matrices
 
@@ -278,9 +342,18 @@ imagen Docker; no publica servicios. El [despliegue](docs/despliegue-backend.md)
 sirve interfaz y API juntas y documenta `SYNC_INTERVAL_SECONDS` y
 `/api/v1/status`.
 
+**La suite completa no está en verde.** La última ejecución registrada en
+[CLAUDE.md](CLAUDE.md) dejó 565 pruebas correctas, 49 fallos y 20 omitidas: hay
+expectativas antiguas de callbacks y de estructura visual, un caso de
+codificación y una simulación de fallo de registro pendientes de revisión, y la
+reproducibilidad de las matrices exportadas frente al Markdown también está por
+comprobar. Esos pendientes se conservan a propósito; no se cierran eliminando
+pruebas ni se declaran resueltos aquí.
+
 ## Documentación
 
 [Índice](docs/README.md) · [Contexto vigente](docs/contexto-vigente.md) ·
+[Pitch y demo](docs/pitch.md) ·
 [Arquitectura Dash](docs/frontend-architecture.md) ·
 [Sesión y roles](docs/adr/0005-session-auth-and-roles.md) ·
 [Solución y operación](docs/solucion-integracion.md) ·
@@ -288,6 +361,7 @@ sirve interfaz y API juntas y documenta `SYNC_INTERVAL_SECONDS` y
 [Mapeo y responsabilidades](docs/equivalencias-prisma-startrack.md) ·
 [Gráficos y diagramas](docs/entregables-visuales.md) ·
 [Indicadores calculables](docs/indicadores-calculables.md) ·
+[Tablero de KPIs](docs/kpis-tablero.md) ·
 [Matriz de trazabilidad](docs/matriz-requisitos-entregables.md) ·
 [Matrices CSV/XLSX](output/matrices/MANIFEST.md) ·
 [Backlog](https://github.com/Los-Filosofos/econ-operations/issues) ·

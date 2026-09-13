@@ -11,7 +11,8 @@ from dash import Input, Output, State, dcc, html
 from dash.exceptions import DashException
 
 from app.core.auth import Permission, Role, can, session_user
-from app.dashboard.components import hint, icon
+from app.dashboard.components import eyebrow, icon
+from app.dashboard.theme import FAMILY_COLORS, PAPER, SURFACE
 from app.models.users import User
 
 ROLE_LABELS = {
@@ -23,6 +24,17 @@ ROLE_LABELS = {
     Role.lectura: "Lectura",
 }
 DENIED = "Tu rol no permite esta acción"
+ROLE_CHANGE = "Un administrador puede cambiar tu rol desde Administración."
+# The only product sentence on the login screen: what the hub holds, in plain terms.
+PRODUCT_LINE = (
+    "Reúne las solicitudes y la maquinaria leídas de Prisma, los traslados enviados a "
+    "Startrack y el historial de cada movimiento."
+)
+ACCOUNT_NOTE = "Las cuentas y los roles los crea un administrador de ECON."
+# Mirrors the 429 the API returns after repeated failures from the same address.
+ATTEMPTS_NOTE = (
+    "Tras varios intentos fallidos el servidor deja de aceptar intentos durante unos minutos."
+)
 LOGIN_JS = """
 async function(clicks, emailSubmit, passwordSubmit, email, password, next) {
   const noUpdate = window.dash_clientside.no_update;
@@ -75,8 +87,43 @@ def permitted(permission: Permission) -> bool:
     return user is None or can(user.role, permission)
 
 
-def denied():
-    return hint(DENIED, role="status")
+def roles_allowed(permission: Permission) -> str:
+    """Names of the roles that hold a permission, read from the rules in core.auth."""
+    return ", ".join(ROLE_LABELS[role] for role in Role if can(role, permission))
+
+
+def permission_note(title: str, detail: str, *, guidance: str = ROLE_CHANGE):
+    """Plain block that names who may act and what to do; no alert colors, no icons."""
+    user = current_user()
+    acting = (
+        f"Tu sesión actúa como {ROLE_LABELS.get(user.role, user.role)}."
+        if user is not None
+        else None
+    )
+    return html.Div(
+        [
+            dmc.Text(title, size="sm", fw=600, className="permission-title"),
+            dmc.Text(detail, size="sm", className="permission-detail"),
+            dmc.Text(
+                " ".join(filter(None, (acting, guidance))), size="xs", className="permission-next"
+            ),
+        ],
+        className="permission-note",
+        role="status",
+    )
+
+
+def denied(permission: Permission | None = None):
+    """Why this control is absent for the acting role, and which role carries it."""
+    if permission is None:
+        detail = (
+            "Preparar y enviar traslados corresponde a: "
+            f"{roles_allowed(Permission.manage_transfers)}. Declarar la recepción, a: "
+            f"{roles_allowed(Permission.declare_reception)}."
+        )
+    else:
+        detail = f"Corresponde a: {roles_allowed(permission)}."
+    return permission_note(DENIED, detail)
 
 
 def safe_next(search: str | None) -> str:
@@ -95,117 +142,139 @@ def redirect(href: str):
     return dcc.Location(id="login-redirect", href=href, refresh=True)
 
 
-def login_page(search: str | None):
-    return dmc.Center(
-        html.Main(
-            dmc.Paper(
-                [
-                    dmc.Stack(
-                        [
-                            html.Img(src="/assets/econ-color.png", alt="Grupo ECON", height=40),
-                            dmc.Title("Iniciar sesión", order=1, size="h3"),
-                            dmc.Text(
-                                "Control de maquinaria · acceso con cuenta de usuario",
-                                size="sm",
-                                c="dimmed",
-                            ),
-                        ],
-                        gap=6,
-                        align="center",
-                        mb="lg",
-                    ),
-                    dmc.Stack(
-                        [
-                            dmc.TextInput(
-                                id="login-email",
-                                label="Correo",
-                                inputProps={"type": "email"},
-                                autoComplete="username",
-                                required=True,
-                                leftSection=icon("mail", 16),
-                            ),
-                            dmc.PasswordInput(
-                                id="login-password",
-                                label="Contraseña",
-                                autoComplete="current-password",
-                                required=True,
-                                leftSection=icon("lock", 16),
-                                visibilityToggleButtonProps={
-                                    "aria-label": "Mostrar u ocultar la contraseña"
-                                },
-                            ),
-                            dmc.Alert(
-                                id="login-error",
-                                color="red",
-                                variant="light",
-                                icon=icon("alert-circle"),
-                                display="none",
-                            ),
-                            dmc.Button(
-                                "Entrar",
-                                id="login-submit",
-                                n_clicks=0,
-                                fullWidth=True,
-                                leftSection=icon("login", 16),
-                            ),
-                        ],
-                        gap="md",
-                    ),
-                    dcc.Store(id="login-next", data=safe_next(search)),
-                ],
-                withBorder=True,
-                p="xl",
-                w="100%",
-                maw=400,
-                className="login-card",
+def login_identity():
+    """Left column: who this is and what the hub holds. One sentence, no illustration."""
+    return html.Div(
+        [
+            html.Img(
+                src="/assets/econ-color.png", alt="Grupo ECON", height=36, className="login-logo"
             ),
-            id="login-main",
+            eyebrow("Centro de operaciones"),
+            dmc.Title("Control de maquinaria", order=1, size="h2", className="login-title"),
+            dmc.Text(PRODUCT_LINE, className="login-line"),
+            dmc.Text(ACCOUNT_NOTE, className="login-note"),
+        ],
+        className="login-identity-inner",
+    )
+
+
+def login_form(search: str | None):
+    """Right column: labelled fields, the error beside them and one primary action."""
+    return html.Main(
+        [
+            dmc.Title("Iniciar sesión", order=2, size="h4", className="login-form-title"),
+            dmc.TextInput(
+                id="login-email",
+                label="Correo",
+                inputProps={"type": "email", "autoFocus": True},
+                autoComplete="username",
+                required=True,
+                withAsterisk=False,
+                size="md",
+                className="login-field",
+            ),
+            dmc.PasswordInput(
+                id="login-password",
+                label="Contraseña",
+                autoComplete="current-password",
+                required=True,
+                withAsterisk=False,
+                size="md",
+                className="login-field",
+                visibilityToggleButtonProps={"aria-label": "Mostrar u ocultar la contraseña"},
+            ),
+            # The clientside callback writes the text and toggles its display; it stays
+            # next to the fields it talks about instead of floating in a banner.
+            html.Div(
+                dmc.Text(
+                    id="login-error",
+                    display="none",
+                    size="sm",
+                    c=FAMILY_COLORS["issue"],
+                    className="login-error",
+                ),
+                className="login-error-slot",
+                role="alert",
+            ),
+            dmc.Button(
+                "Entrar",
+                id="login-submit",
+                n_clicks=0,
+                fullWidth=True,
+                size="md",
+                className="login-submit",
+            ),
+            dmc.Text(ATTEMPTS_NOTE, className="login-hint"),
+            dcc.Store(id="login-next", data=safe_next(search)),
+        ],
+        id="login-main",
+        className="login-form",
+    )
+
+
+def login_page(search: str | None):
+    """Two columns on a desktop, stacked on a phone; no floating card, no gradient.
+
+    The surfaces are also set inline from the theme so a cold first load still shows the
+    two panels while z-auth.css refines their rules and spacing.
+    """
+    return html.Div(
+        dmc.Grid(
+            [
+                dmc.GridCol(
+                    login_identity(), span={"base": 12, "md": 7}, className="login-identity"
+                ),
+                dmc.GridCol(
+                    login_form(search),
+                    span={"base": 12, "md": 5},
+                    bg=PAPER,
+                    className="login-panel",
+                ),
+            ],
+            gutter=0,
+            className="login-grid",
         ),
-        mih="100vh",
-        p="md",
-        bg="gray.0",
+        className="login-page",
+        style={"background": SURFACE, "minHeight": "100vh"},
     )
 
 
 def header_user(user: User | None, auth_required: bool):
+    """Who is signed in and how to leave: plain text plus one labelled control."""
     if user is None:
         text = "Sesión local sin autenticación" if not auth_required else "Sin sesión"
-        return dmc.Text(text, size="xs", c="dimmed", visibleFrom="xs")
-    role = ROLE_LABELS.get(user.role, user.role)
-    return dmc.Menu(
+        return dmc.Text(text, size="xs", className="econ-session-note", visibleFrom="xs")
+    return dmc.Group(
         [
-            dmc.MenuTarget(
-                dmc.Button(
-                    [
-                        dmc.Text(user.full_name, size="sm", fw=500, visibleFrom="sm"),
-                        dmc.Badge(role, size="xs", variant="light", visibleFrom="sm"),
-                    ],
-                    id="user-menu",
-                    variant="subtle",
-                    color="gray",
-                    size="sm",
-                    leftSection=icon("user-circle", 20),
-                    rightSection=icon("chevron-down", 14),
-                    **{"aria-label": f"Cuenta de {user.full_name}"},
-                )
-            ),
-            dmc.MenuDropdown(
+            dmc.Stack(
                 [
-                    dmc.MenuLabel(f"{user.full_name} · {role}"),
-                    dmc.MenuLabel(user.email),
-                    dmc.MenuDivider(),
-                    dmc.MenuItem(
-                        "Cerrar sesión",
-                        id="logout",
-                        n_clicks=0,
-                        leftSection=icon("logout", 16),
+                    dmc.Text(user.full_name, size="sm", fw=600, className="econ-session-name"),
+                    dmc.Text(
+                        ROLE_LABELS.get(user.role, user.role),
+                        size="xs",
+                        className="econ-session-role",
                     ),
-                ]
+                ],
+                gap=0,
+                visibleFrom="sm",
+                className="econ-session",
+            ),
+            dmc.Button(
+                [
+                    dmc.Text("Cerrar sesión", span=True, size="sm", visibleFrom="xs"),
+                    dmc.Text("Salir", span=True, size="sm", hiddenFrom="xs"),
+                ],
+                id="logout",
+                n_clicks=0,
+                variant="default",
+                size="xs",
+                leftSection=icon("logout", 16),
+                className="econ-logout",
             ),
         ],
-        shadow="md",
-        width=240,
-        position="bottom-end",
+        gap="sm",
+        wrap="nowrap",
+        className="econ-session-group",
     )
 
 

@@ -80,9 +80,9 @@ Estructurada conforme a los estándares de gobernanza para las tres gerencias cl
 
 ## 3. Prototipo Navegable & Guía de Demostración en Vivo
 
-El sistema ofrece dos modalidades de interfaz conectadas a la misma API REST backend:
-1. **Frontend Web Moderno (SPA Vite + Canvas 2D + Chart.js)** en el puerto `5173`.
-2. **Consola Analítica Unificada (FastAPI + Dash Mantine)** en el puerto `8050`.
+El sistema opera bajo un único proceso Python unificado (`apps/api`) que sirve la API REST FastAPI y la interfaz analítica en Dash:
+1. **Consola Analítica Unificada (Dash Mantine + AG Grid + Plotly)** en `http://localhost:8050/`.
+2. **API REST y Documentación Interactiva OpenAPI/Swagger** en `http://localhost:8050/docs`.
 
 ### Instrucciones de Arranque Rápido
 ```bash
@@ -90,23 +90,22 @@ El sistema ofrece dos modalidades de interfaz conectadas a la misma API REST bac
 git clone https://github.com/Los-Filosofos/econ-operations.git
 cd econ-operations
 
-# 2. Iniciar el Backend (FastAPI en puerto 8050)
-uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050
+# 2. Instalar dependencias bloqueadas
+uv sync --project apps/api --locked
 
-# 3. Iniciar el Frontend Web (Vite en puerto 5173)
-cd frontend
-npm install
-npm run dev -- --host 127.0.0.1 --port 5173
+# 3. Iniciar el servidor (Dash + FastAPI en puerto 8050)
+DATABASE_URL=sqlite:///apps/api/econ.db AUTH_REQUIRED=false uv run --directory apps/api uvicorn app.main:app --host 127.0.0.1 --port 8050
 ```
 
 ### Accesos para el Jurado
-- **Frontend SPA**: `http://localhost:5173/` (Sin autenticación requerida en modo evaluación).
+- **Dashboard Integrado**: `http://localhost:8050/` (con `AUTH_REQUIRED=false` en desarrollo entra directo con permisos locales; con autenticación activada: usuario `admin`, clave `admin123456`).
 - **Backend API & Swagger interactivo**: `http://localhost:8050/docs`
-- **Dashboard Integrado**: `http://localhost:8050/` (Credenciales demo: usuario `admin`, clave `admin123456` si `AUTH_REQUIRED=true`).
+- **Tablero de KPIs e Indicadores**: `http://localhost:8050/indicadores?mode=fixture`
+- **Traza de Integración y Mapeo**: `http://localhost:8050/integracion?mode=fixture`
 
 ### Consulta Unificada: Estado y Ubicación Combinando Ambas Plataformas
 Para verificar en un solo llamado el estado administrativo (Prisma) y la ubicación/traslado telemático (Startrack):
-- **En la Interfaz**: Acceder a `http://localhost:5173/#/maquinaria` o hacer click en cualquier máquina en el **Grafo Operativo** (`http://localhost:5173/#/`).
+- **En la Interfaz**: Acceder a `http://localhost:8050/maquinaria/cf-03?mode=fixture` para ver el estado administrativo de Prisma (`OBSOLETA`), mantenimiento (sin falla activa) y estado de traslado.
 - **Por API (cURL)**:
 ```bash
 # Consulta unificada de grafo con identidades combinadas:
@@ -140,8 +139,8 @@ flowchart TD
     end
 
     subgraph Interfaces["Visualización y Operación"]
-        WEB["SPA Frontend Web<br/>(Vite + Canvas 2D + Chart.js)<br/>:5173"]
-        DASH["Dash Hub Operativo<br/>(AG Grid + Mantine)<br/>:8050"]
+        DASH["Dash Hub Operativo<br/>(Dash Mantine + AG Grid + Plotly)<br/>:8050"]
+        DOCS["Swagger UI / OpenAPI<br/>(/docs)<br/>:8050"]
     end
 
     P -->|Lectura HTTP| C1
@@ -151,8 +150,8 @@ flowchart TD
     NORM <--> LEDGER
     SCHED --> NORM
     LEDGER --> API
-    API --> WEB
     API --> DASH
+    API --> DOCS
     NORM -.->|Despacho POST /api/job| S
 ```
 

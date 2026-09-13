@@ -29,8 +29,7 @@ Tabla estructurada en formato RACI que define quién es Responsable, quién Apru
 ### [3. Prototipo o Mockup Navegable & Guía de Demo](./3-Prototipo-Navegable-y-Guia-de-Demo.pdf)
 Dashboard web interactivo con instrucciones de acceso para la demostración en vivo y los scripts de arranque para la consulta unificada (estado y ubicación combinando ambas plataformas).
 - 📕 [Reporte Oficial en PDF](./3-Prototipo-Navegable-y-Guia-de-Demo.pdf)
-- 📝 [Guía de Acceso y Demo en Markdown](./3-Prototipo-Navegable-y-Guia-de-Demo.md)
-- 🌐 **Acceso Web en Vivo**: `http://localhost:5173/` (SPA Web) y `http://localhost:8050/docs` (API REST)
+- 🌐 **Acceso Web en Vivo**: `http://localhost:8050/` (Consola Dash Mantine) y `http://localhost:8050/docs` (API REST)
 
 ---
 

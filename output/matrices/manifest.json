@@ -12,7 +12,7 @@
     },
     {
       "path": "docs/matriz-requisitos-entregables.md",
-      "sha256": "87c78899199de31ee701729ec77c460addcebd9fd99e8d71e3fb82db8ecffd22",
+      "sha256": "a84e518a2947907ed100db7a7484f867334847dbf998087e0c92214e9cf64345",
       "revision": "13 de septiembre de 2026"
     }
   ],
@@ -289,12 +289,12 @@
         "Brecha y acción"
       ],
       "rows": 19,
-      "sha256": "1740e52ec23f1cbd88e5401dc1385f8d8dafb6d70d4c2b1c41bdd985c908d442"
+      "sha256": "d3b7e0bee286ee1a80e3f29013e9dc2d4f52b78a3cbd9e376c716ae00d1d00dd"
     }
   ],
   "workbook": {
     "path": "output/matrices/matrices-econ.xlsx",
-    "sha256": "870c65b21e3b880886475edce03a114b097ef3bcb1b5dbb02e53680289e51bb9",
+    "sha256": "140fc80ad6351fa2f56b9ef1ea6e69d67a8603c3da7d4301a58ae052d0d2aa8d",
     "openpyxl": "3.1.5",
     "sheets": [
       "Clasificaciones",

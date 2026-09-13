@@ -31,12 +31,17 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
 
 ## Decisiones del usuario
 
-- Dos modalidades de interfaz gráfica: consola analítica integrada en Python (Dash + FastAPI en puerto 8050) y SPA Web independiente en Vite + Canvas 2D + Chart.js (puerto 5173 en `frontend/`), consumiendo los 18 endpoints REST `/api/v1/*`. Persistencia transaccional con SQLModel/Alembic sobre PostgreSQL/SQLite.
+- Un solo proceso Python: Dash, Plotly, AG Grid Community y FastAPI, con
+  SQLModel/Alembic sobre PostgreSQL. React y la salida estática fueron retirados
+  y no se recrean ([ADR 0003](adr/0003-python-dash-hub.md)).
 - Todo el caso usa **datos sintéticos**. `fixture` son ejemplos del archivo;
   `live` es una lectura actual del sandbox. Nunca se sustituyen entre sí.
-- La portada abre con la agenda de uso a todo el ancho, identificando proyecto,
-  unidad asignada y estado de solicitud. Después muestra asuntos, evidencia y
-  acción. Se retiraron los conteos destacados y el gráfico de estados; el tiempo
+- La portada abre con «Operación · Qué requiere atención» y dos bloques: «Qué
+  pasa», con la agenda de uso a todo el ancho identificando proyecto, unidad
+  asignada y estado de solicitud; y «Qué hago», con un asunto por solicitud, el
+  hecho observado que lo sustenta y el siguiente paso. Se conservan retirados los
+  conteos destacados y el gráfico de estados —los conteos por estado y los
+  períodos no representables quedan plegados en «Datos de la agenda»—; el tiempo
   de aprobación se consulta en Indicadores.
   `/resumen` y `/decisiones`
   son alias de la portada; no duplican entradas del menú. Cabecera y navegación
@@ -51,18 +56,47 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
   escala secuencial; desviaciones frente a meta, escala divergente
   ([arquitectura](frontend-architecture.md)). Public Sans (OFL) se sirve
   localmente y se comparte entre la interfaz, Plotly y AG Grid.
+- **Criterio de diseño del rediseño de septiembre de 2026**, vigente para toda
+  pantalla nueva: color solo cuando codifica información; reglas de 1 px y
+  espacio en lugar de cajas; radios topados en 4 px; sin degradados ni sombras
+  difusas; cifras tabulares para poder compararlas en columna; micro-etiquetas en
+  mayúsculas sobre un título, una cifra o una columna, y nunca como única señal.
+  La paleta no cambió: se añadieron neutros de estructura (`LINE_STRONG`,
+  `CANVAS_ALT`, `GRID_LINE`), una escala tipográfica contenida (h1 28 px, h2
+  24 px, cuerpo 15 px) y una rejilla vertical de 4 px
+  ([arquitectura](frontend-architecture.md#presentación-y-paleta)).
+- El estilo se reparte entre `assets/style.css` y una hoja por área (`z-auth`,
+  `z-flow`, `z-kpi`, `z-pages`, `z-shell`). `application.py` las enlaza
+  explícitamente, con una versión por contenido, para que un enlace profundo en
+  frío llegue con estilos; una hoja nueva debe llamarse `z-<área>.css` o no queda
+  registrada.
 - Sin botón Actualizar: la interfaz sondea `GET /api/v1/status` cada 15 s y
   recarga solo cuando cambia `registry_version`; el ritmo de sincronización con
   los proveedores lo fija el servidor (`SYNC_INTERVAL_SECONDS`, solo live, con
   el candado de ciclo de PostgreSQL). Además de solicitudes, maquinaria,
   operaciones, fuentes y administración existen `/integracion` (traza),
   `/indicadores` (resultados por fila) y `/decisiones` (alias de Resumen).
-  Indicadores muestra una pregunta activa con gráfico antes de sus registros;
-  una aprobación aislada tiene una cronología. Sus registros están visibles y
-  los SLA propuestos quedan en tablas de referencia, sin cálculo de cumplimiento.
+  Indicadores abre con un tablero de trece cifras agrupadas por el área que
+  decide (Logística, Proyectos, Mantenimiento, Información) y después una
+  pregunta activa con gráfico antes de sus registros; una aprobación aislada
+  tiene una cronología. Sus registros están visibles y los SLA propuestos quedan
+  en tablas de referencia, sin cálculo de cumplimiento. El tablero no mide nada
+  nuevo: cuenta filas de las poblaciones que `GET /api/v1/indicators` ya publica,
+  o copia el valor de una fila identificada, y publica el motivo del servicio
+  cuando no hay caso evaluable ([tablero de KPIs](kpis-tablero.md)).
   La navegación lateral tiene fondo azul ECON y conserva sus enlaces. Integración
-  abre con las etapas de la traza y los datos pendientes; Fuentes compara registros
-  leídos y no incluidos, conservando los totales desconocidos.
+  se lee como un diagrama de secuencia —tres carriles de actores y cuatro filas
+  de interacción, con la advertencia en tinta de que una flecha es el contrato y
+  no prueba una petición— y conserva tiempos, mapa de campos y respuesta JSON en
+  pestañas; Fuentes se lee en tres bloques (procedencia, alcance y estado) y
+  compara registros leídos y no incluidos, conservando los totales desconocidos.
+- Las pantallas de acceso no usan tarjeta flotante: `/login` es de dos columnas
+  con etiquetas visibles y el error como texto junto a los campos; la cabecera
+  muestra nombre y rol en texto con un botón «Cerrar sesión» con borde, sin menú
+  de cuenta; `/administracion` lista usuarios a ancho completo con rol y estado
+  en palabras, sin badges de color, y deriva su tabla de permisos de
+  `permissions_of()`. En Operaciones cada acción declara su efecto antes de
+  ejecutarse y el historial del movimiento se lee como cronología.
 - Credenciales solo en el servidor; lecturas y escrituras remotas deshabilitadas
   por defecto; no publicar acceso live sin protección.
 - La autenticación y los roles se administran en la aplicación
@@ -171,14 +205,19 @@ indicadores por fila (`GET /api/v1/indicators`,
 matrices CSV/XLSX (incluida la [matriz de trazabilidad](matriz-requisitos-entregables.md#matriz-de-trazabilidad)
 de requisitos y entregables) y diccionario RF-01 generados y verificados en
 `scripts/check.sh` y CI, con pruebas PostgreSQL ejecutadas en CI; páginas
-`/indicadores` (resultados por fila, metodología y SLA plegados) y la portada
-con agenda y acciones (`/decisiones` como alias); unidades candidatas en el detalle de la solicitud
+`/indicadores` (tablero de trece cifras por área, resultados por fila,
+metodología y SLA plegados) y la portada con agenda y acciones
+(`/decisiones` como alias); unidades candidatas en el detalle de la solicitud
 pendiente; `GET /api/v1/status` con refresco de la interfaz sin botón;
 sincronización automática opcional en el proceso web (`SYNC_INTERVAL_SECONDS`,
 solo live, `skipped` si otro proceso tiene el ciclo); paginación del registro
 en Operaciones.
 La portada conserva la estética Mantine de ECON y los accesos a las solicitudes
-con su evidencia y siguiente paso.
+con su evidencia y siguiente paso. El rediseño de septiembre de 2026 cambió la
+presentación —jerarquía, reglas, escala y hojas por área— sin tocar los
+contratos de API ni las claves de los stores del navegador; en la cabecera
+desapareció el menú de cuenta (`user-menu`) y la barra lateral estrenó la salida
+`navbar-origin` con el origen de los datos.
 La [integración por eventos con orquestación central](arquitectura-integracion-eventos.md)
 distingue esa base implementada de la propuesta de incidencias durables por cambios
 posteriores al envío y comandos por autoridad de campo. La propuesta no habilita

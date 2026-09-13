@@ -4,7 +4,6 @@ from secrets import token_urlsafe
 
 from fastapi import FastAPI, Request
 from starlette.concurrency import run_in_threadpool
-from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, Response
 
@@ -158,13 +157,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_age=settings.session_max_age_seconds,
         same_site="lax",
         https_only=settings.session_https_only,
-    )
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-        allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
-        allow_credentials=True,
     )
     application.include_router(health_router)
     application.include_router(status_router)

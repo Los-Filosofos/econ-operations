@@ -2,9 +2,13 @@
 
 La portada («Qué requiere atención») combina agenda de períodos de uso y
 acciones por solicitud. `/resumen` y `/decisiones` son alias de esa misma vista.
-La página `/indicadores` presenta resultados de `GET /api/v1/indicators` por fila,
-con gráficos de tiempos y detalle metodológico desplegable.
-Ninguna convierte conteos ni ausencias en KPI. Las definiciones siguientes
+La página `/indicadores` abre con el tablero de cifras por área
+([tablero de KPI](kpis-tablero.md)) y presenta después los resultados de
+`GET /api/v1/indicators` por fila, con gráficos de tiempos y detalle
+metodológico desplegable. El tablero cuenta filas de la lectura y cita su
+cobertura; **ninguna vista convierte una ausencia en cero ni promedia la
+cohorte**: una cifra bloqueada publica el motivo del servicio, no un número.
+Las definiciones siguientes
 corresponden a la implementación vigente; el contexto de negocio está en
 [contexto vigente](contexto-vigente.md) y las fórmulas de los indicadores, en
 [indicadores calculables](indicadores-calculables.md), su única fuente.

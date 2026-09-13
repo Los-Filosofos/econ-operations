@@ -1,17 +1,16 @@
 # Documentación de ECON
 
-> ### 🏆 Entregables Oficiales del Reto
-> Los documentos oficiales para la entrega del domingo a las 10:00 AM se encuentran en **[`../ENTREGABLES/`](../ENTREGABLES/)** y sintetizados en el **[Dossier de Entregables](DOSSIER-ENTREGABLES-HACKATHON.md)** y la **[Presentación Final (10 Slides & Pitch)](presentacion-final.md)**.
-
-Aplicación de integración y gobernanza operativa (FastAPI + Dash + Frontend SPA en Vite/Canvas 2D) para seguir **proyecto, solicitud, asignación, traslado y recepción** de maquinaria. Todos los datos del caso son sintéticos. Empezar por el [contexto vigente](contexto-vigente.md); el guion de la demo y la guía de las matrices están en el [README raíz](../README.md).
+Aplicación Python (Dash + FastAPI + PostgreSQL) para seguir **proyecto,
+solicitud, asignación, traslado y recepción** de maquinaria. Todos los datos del
+caso son sintéticos. Empezar por el [contexto vigente](contexto-vigente.md); el
+guion de la demo y la guía de las matrices están en el
+[README raíz](../README.md#guion-de-demo-para-el-jurado).
 
 ## Entregables del reto
 
 | Documento | Para qué sirve |
 | --- | --- |
-| [Dossier de Entregables Oficiales](DOSSIER-ENTREGABLES-HACKATHON.md) | Compilación ejecutiva de los 6 entregables obligatorios del hackathon y guion del pitch |
-| [Presentación Final y Pitch](presentacion-final.md) | 10 diapositivas estructuradas y pitch oral de 3 minutos para perfiles tech y directivos |
-| [Matriz de trazabilidad](matriz-requisitos-entregables.md) | RF-01 a RF-06, RNF-01 a RNF-04 y entregables de §6/§9: evidencia en el repo, dónde lo ve el jurado y estado; exportada a `trazabilidad-requisitos.csv` |
+| [Matriz de trazabilidad](matriz-requisitos-entregables.md) | RF-01 a RF-06, RNF-01 a RNF-04 y entregables de §6/§9: evidencia en el repo, dónde lo ve el jurado, estado (13 cumple, 5 parcial, 1 pendiente) y brecha; exportada a `trazabilidad-requisitos.csv` |
 | [Equivalencias Prisma y Startrack](equivalencias-prisma-startrack.md) | [Glosario de sinónimos](equivalencias-prisma-startrack.md#glosario-de-sinónimos-entre-plataformas), mapeo del formulario, campos sin equivalente y RACI propuesta |
 | [Matrices exportadas CSV/XLSX](../output/matrices/MANIFEST.md) | Copias reproducibles de esas tablas (17 CSV, `matrices-econ.xlsx`) con manifiesto SHA-256 y `exportar_matrices.py --check` en CI (RNF-02) |
 | [Diccionario del modelo ECON](diccionario-modelo-econ.md) | Inventario generado de campos, tipos, ejemplos y procedencia; `generar_diccionario.py --check` en `scripts/check.sh` y CI (RF-01) |
@@ -22,7 +21,9 @@ Aplicación de integración y gobernanza operativa (FastAPI + Dash + Frontend SP
 | [Analítica para decisiones](analitica-decisiones.md) | Población, reglas del grafo y de la página `/decisiones`; sin KPIs inventados |
 | [Indicadores y referencias ISO](kpis-y-referencias-iso.md) | Dónde vive cada definición y referencias normativas consultadas; sin resultados ni certificación |
 
-PDFs en [`output/pdf`](../output/pdf) y en [`../ENTREGABLES`](../ENTREGABLES) con fecha, páginas y SHA-256 en su [manifiesto](../output/pdf/MANIFEST.md). Backlog con criterios de aceptación en [los issues del repositorio](https://github.com/Los-Filosofos/econ-operations/issues).
+PDFs en [`output/pdf`](../output/pdf) con fecha, páginas y SHA-256 en su
+[manifiesto](../output/pdf/MANIFEST.md). Backlog con criterios de aceptación en
+[los issues del repositorio](https://github.com/Los-Filosofos/econ-operations/issues).
 
 ## Implementación y operación
 

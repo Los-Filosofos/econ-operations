@@ -34,7 +34,7 @@ from app.integrations.startrack import (
     StartrackWriteUnknown,
 )
 from app.models.hub import DataMode, EquipmentRecord, Provenance, RequestRecord
-from app.models.operations import Actor, Movement, MovementRecord
+from app.models.operations import Actor, Movement, MovementRecord, SourceSnapshot
 from app.models.workflow import MappingCatalogs, OperationsCoverage, WorkflowOverview
 from app.services.hub import BUSINESS_TIMEZONE, map_live, read_hub
 from app.services.ledger import (
@@ -43,7 +43,6 @@ from app.services.ledger import (
     MovementConflict,
     OperationsLedger,
     effective_event_sort_key,
-    last_read_at,
 )
 from app.services.transfers import TransferMapping, prepare_transfer
 
@@ -167,6 +166,23 @@ class CycleOutcome(BaseModel):
     result: str
 
 
+class _RegistryCut(BaseModel):
+    """Only the columns needed by polling and overview, without the source JSON payload."""
+
+    content_hash: str
+    recorded_at: datetime
+    last_confirmed_at: datetime | None
+    data_as_of: datetime | None
+
+    @property
+    def last_read_at(self) -> datetime:
+        return max(
+            value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+            for value in (self.recorded_at, self.last_confirmed_at)
+            if value is not None
+        )
+
+
 def _stamp(value: object) -> str:
     if isinstance(value, datetime):
         value = value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
@@ -272,6 +288,30 @@ class WorkflowService:
             )
         return actor
 
+    @staticmethod
+    def _registry_cut(session: Session, mode: DataMode) -> _RegistryCut | None:
+        """Match ledger.last_snapshot ordering without loading the large content payload."""
+        row = session.exec(
+            select(
+                SourceSnapshot.content_hash,
+                SourceSnapshot.recorded_at,
+                SourceSnapshot.last_confirmed_at,
+                SourceSnapshot.data_as_of,
+            )
+            .where(SourceSnapshot.mode == mode)
+            .order_by(SourceSnapshot.recorded_at.desc(), SourceSnapshot.id)
+            .limit(1)
+        ).first()
+        if row is None:
+            return None
+        content_hash, recorded_at, last_confirmed_at, data_as_of = row
+        return _RegistryCut(
+            content_hash=content_hash,
+            recorded_at=recorded_at,
+            last_confirmed_at=last_confirmed_at,
+            data_as_of=data_as_of,
+        )
+
     def read(
         self,
         mode: DataMode,
@@ -289,7 +329,8 @@ class WorkflowService:
                 offset=(page - 1) * page_size,
                 limit=page_size,
             )
-            snapshot = self.ledger.last_snapshot(mode)
+            with Session(self.ledger.engine) as session:
+                snapshot = self._registry_cut(session, mode)
         except WorkflowError as error:
             return WorkflowOverview(available=False, message=str(error))
         except SQLAlchemyError:
@@ -334,7 +375,7 @@ class WorkflowService:
             movements=movements,
             # Latest read of the source: the cut's record time or its later unchanged
             # confirmation (ADR 0006); an unchanged re-read inserts no cut.
-            last_sync_at=last_read_at(snapshot) if snapshot else None,
+            last_sync_at=snapshot.last_read_at if snapshot else None,
             coverage=coverage,
             **coverage.model_dump(include={"total", "page", "page_size", "total_pages"}),
         )
@@ -356,13 +397,13 @@ class WorkflowService:
                     Movement.mode == mode
                 )
             ).one()
-        snapshot = self.ledger.last_snapshot(mode)
+            snapshot = self._registry_cut(session, mode)
         cut = [snapshot.content_hash, _stamp(snapshot.recorded_at)] if snapshot else ["", ""]
         digest = sha256("|".join([mode, str(count), _stamp(latest), *cut]).encode())
         return RegistryState(
             mode=mode,
             version=digest.hexdigest()[:12],
-            last_read_at=last_read_at(snapshot) if snapshot else None,
+            last_read_at=snapshot.last_read_at if snapshot else None,
             data_as_of=snapshot.data_as_of if snapshot else None,
         )
 
