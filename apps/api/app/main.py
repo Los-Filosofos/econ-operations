@@ -1,3 +1,4 @@
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -68,8 +69,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @application.middleware("http")
     async def private_callback_responses(request: Request, call_next):
+        if settings.api_auth_token and request.url.path.startswith("/api/v1/"):
+            auth_header = request.headers.get("authorization")
+            api_key = request.headers.get("x-api-key")
+            token_val = None
+            if api_key:
+                token_val = api_key.strip()
+            elif auth_header and auth_header.lower().startswith("bearer "):
+                token_val = auth_header[7:].strip()
+            expected = settings.api_auth_token.get_secret_value()
+            if not token_val or not secrets.compare_digest(token_val, expected):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Autenticación requerida para acceder al API."},
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
         with management_scope(settings.allow_local_management and local_request(request)):
             response = await call_next(request)
+
+        # Security headers on all HTTP responses
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+
         if request.url.path.startswith(("/_dash-", "/api/v1/")):
             response.headers["Cache-Control"] = "no-store"
         return response

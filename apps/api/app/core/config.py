@@ -13,7 +13,14 @@ class Settings(BaseSettings):
 
     app_name: str = "ECON Integration API"
     database_url: str = Field(repr=False)
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: list[str] = []
+    # Security: optional tokens to protect management and read operations
+    management_token: SecretStr | None = Field(default=None, repr=False)
+    api_auth_token: SecretStr | None = Field(default=None, repr=False)
+    trusted_proxies: list[str] = ["127.0.0.1", "::1"]
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = Field(default=60, ge=1, le=1000)
+    rate_limit_live_per_minute: int = Field(default=20, ge=1, le=200)
     # There is no application login. Enabling live reads exposes them to API callers.
     allow_live_reads: bool = False
     allow_local_management: bool = False

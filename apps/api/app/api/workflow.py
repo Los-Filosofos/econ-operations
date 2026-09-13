@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Path, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.documentation import MODE_DESCRIPTION, PLAN_EXAMPLES, WORKFLOW_CONFLICT
+from app.core.rate_limit import check_rate_limit
 from app.integrations.startrack import Identifier
 from app.models.hub import DataMode
 from app.models.operations import MovementRecord
@@ -114,6 +115,7 @@ def list_operations(
     responses=WORKFLOW_CONFLICT,
 )
 def mapping_catalogs(request: Request) -> MappingCatalogs:
+    check_rate_limit(request, is_live=True)
     return request.app.state.workflow.catalogs()
 
 
@@ -182,6 +184,7 @@ def sync_operations(
         ),
     ],
 ) -> WorkflowOverview:
+    check_rate_limit(request, is_live=(body.mode == "live"))
     return request.app.state.workflow.sync(body.mode)
 
 

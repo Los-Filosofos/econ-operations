@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, Response
 
 from app.api.documentation import MODE_DESCRIPTION
+from app.core.rate_limit import check_rate_limit
 from app.models.hub import DataMode, HubResponse
 from app.services.hub import read_hub
 
@@ -39,6 +40,7 @@ def get_hub(
         ),
     ] = "",
 ) -> HubResponse:
+    check_rate_limit(request, is_live=(mode == "live"))
     response.headers["Cache-Control"] = "no-store"
     return read_hub(
         request.app.state.settings,
