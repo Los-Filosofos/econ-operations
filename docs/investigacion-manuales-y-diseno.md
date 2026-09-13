@@ -1,12 +1,15 @@
 # Manuales, problema operativo y decisiones de interfaz
 
-> Registro anterior a la migración solicitada a Dash. La arquitectura vigente
-> está en [ADR 0003](adr/0003-python-dash-hub.md). Las observaciones de negocio
-> y los límites de integración se conservan con su fecha original.
+> Investigación histórica del 12/09/2026, anterior al flujo persistente.
+> Las lecturas de manuales y límites de acceso se conservan con esa fecha; no
+> describen una comprobación actual de proveedores. La implementación y operación
+> vigentes están en [contexto vigente](contexto-vigente.md) y
+> [guía operativa](solucion-integracion.md): Dash/FastAPI, planes, eventos,
+> cola de envío y recepción declarada ya están implementados.
 
 La [revisión analítica posterior](analitica-decisiones.md) concreta la portada para responsables de decisión, elimina elementos decorativos y define los gráficos que los datos actuales permiten sostener.
 
-Revisión del **12 de septiembre de 2026**, ampliada por pedido del usuario después de la primera versión del frontend. Complementa la [revisión del kit](revision-contexto.md) y el [modelo operativo](modelo-operativo.md). Las instrucciones de los manuales se leyeron como referencia: no se ejecutaron altas, aprobaciones, cambios de estado, regeneraciones de claves ni modificaciones de permisos.
+Revisión del **12 de septiembre de 2026**, ampliada por pedido del usuario después de la primera versión del frontend. Complementa la [revisión del kit](revision-contexto.md). El [modelo operativo de aquella etapa](https://github.com/Los-Filosofos/econ-operations/blob/e851c7ec01890eda54d736d4d9eeaa161a8a8fce/docs/modelo-operativo.md) permanece en el historial; para el mapeo vigente usar [equivalencias Prisma–Startrack](equivalencias-prisma-startrack.md). Las instrucciones de los manuales se leyeron como referencia: no se ejecutaron altas, aprobaciones, cambios de estado, regeneraciones de claves ni modificaciones de permisos.
 
 ## Qué se consultó
 
@@ -37,7 +40,7 @@ La sección [Administrador de usuarios de Startrack](https://support.gps-platfor
 
 La [API de usuarios](https://support.gps-platform.com/api/users/) documenta `id`, grupos, estado de rastreo y su fecha, además de configuración móvil. Ese estado técnico no sustituye los estados de tarea ni una decisión de mantenimiento. No se necesita traer teléfonos o correos al panel para mostrar el vínculo operativo; el contrato inicial debe limitarse a los campos útiles.
 
-Al contrastar la [API de tareas](https://support.gps-platform.com/api/jobs/), `status` es un ID: el catálogo entrega su nombre y `workflow_role` (`0` pendiente, `1` completada, `2` cancelada). También distingue tipo de tarea, varios usuarios asignados, formularios requeridos, referencia externa y geocerca. `closed_date` cubre completar **o cancelar**, no recepción. La guía de creación habla de solo título obligatorio, pero el contrato API exige también `start_date`; no trasladar reglas de una pantalla directamente al conector. La muestra cURL de listar estados apunta a tipos, aunque el encabezado define `/api/job/status`: queda como discrepancia documental, sin haber probado esa ruta con nuestra cuenta. El frontend actual conserva estados del contrato del hub; incorporar este catálogo externo requiere primero validar una respuesta autorizada.
+Al contrastar la [API de tareas](https://support.gps-platform.com/api/jobs/), `status` es un ID: el catálogo entrega su nombre y `workflow_role` (`0` pendiente, `1` completada, `2` cancelada). También distingue tipo de tarea, varios usuarios asignados, formularios requeridos, referencia externa y geocerca. `closed_date` cubre completar **o cancelar**, no recepción. La guía de creación habla de solo título obligatorio, pero el contrato API exige también `start_date`; no trasladar reglas de una pantalla directamente al conector. La muestra cURL de listar estados apunta a tipos, aunque el encabezado define `/api/job/status`: quedó como discrepancia documental, sin probar esa ruta con nuestra cuenta. El SDK implementado posteriormente incluye catálogos; la validación con una respuesta autenticada de esta cuenta continúa pendiente.
 
 La [introducción de la API](https://support.gps-platform.com/api/intro/) confirma Basic con API key de usuario y contraseña, la ubicación de la clave en Usuarios → Integraciones (API), y el límite general de 240 peticiones por IP cada dos minutos con respuesta `529`; algunas rutas tienen límites propios. Es documentación del producto, no una prueba de permiso de nuestra cuenta. Sigue pendiente una clave habilitada: la nueva lectura documental no resuelve el `403` registrado en [la exploración](integraciones-reales.md).
 
@@ -57,7 +60,7 @@ flowchart LR
     V["Activo rastreado y fecha de posición"] --> E
 ```
 
-Las flechas representan relaciones por comprobar, no equivalencias ni escrituras automáticas. Una solicitud puede involucrar varios viajes; el GPS puede pertenecer al transporte. La asignación del equipo Los Filósofos sigue siendo RE-03 / MOT-006 / PROY-006. Los ejemplos locales tienen sus propios IDs y no acreditan que exista esa cadena completa en el sandbox.
+Las flechas representan la interpretación documental de aquella revisión, no equivalencias ni escrituras automáticas. Una solicitud puede involucrar varios viajes; el GPS puede pertenecer al transporte. La asignación del equipo Los Filósofos es RE-03 / MOT-006 / PROY-006. El runtime vigente usa las muestras proporcionadas del OpenAPI y no inventa una cadena completa para esa asignación. El registro explícito de recepción ya existe; la validación del criterio empresarial y de la evidencia del caso propio sigue pendiente.
 
 | Usuario funcional | Pregunta que debe resolver | Presentación y acción útil |
 | --- | --- | --- |
@@ -67,17 +70,17 @@ Las flechas representan relaciones por comprobar, no equivalencias ni escrituras
 
 Son responsabilidades funcionales propuestas. No son roles autenticados del hub ni una reproducción de los permisos de las plataformas.
 
-## Criterios del rediseño
+## Criterios conservados en la interfaz vigente
 
-La referencia visual es [ECON El Salvador](https://econ.com.sv/), cuya actividad incluye construcción, asfaltos y alquiler de maquinaria. Su identidad se toma del sitio corporativo, no del tema morado de MAIC ni de empresas con nombres parecidos. El origen de los recursos gráficos y las decisiones de componentes se registran en [arquitectura del frontend](frontend-architecture.md).
+La revisión tomó la identidad del sitio corporativo de [ECON El Salvador](https://econ.com.sv/). La identidad y los componentes vigentes están descritos en [arquitectura de la interfaz](frontend-architecture.md).
 
 - Superficies cuadradas, bordes claros y uso contenido del azul corporativo. Reducir contenedores decorativos, mensajes repetidos y grandes tarjetas que apartan los registros de la vista.
-- Tablas y detalles organizados por la pregunta operativa. Mostrar primero equipo, estado de asignación, traslado y faltantes; ampliar procedencia y evidencia cuando se necesiten.
+- Tablas y detalles organizados por la pregunta operativa. Mostrar primero proyecto, solicitud, revisión necesaria y siguiente paso; ampliar procedencia y evidencia cuando se necesiten.
 - Números vinculados a los registros que los forman, con ámbito y corte visibles. No introducir tendencias, porcentajes de cumplimiento, costos ni recepción sin datos suficientes.
-- Acceso etiquetado a los dos sandboxes y a su documentación. Los enlaces generales no prometen abrir un registro específico, especialmente en los ejemplos inventados.
+- Acceso etiquetado a los dos sandboxes y a su documentación. Los enlaces generales no prometen abrir un registro específico; las muestras proporcionadas conservan su procedencia documental.
 - Mantener búsqueda, navegación por teclado, foco visible, estados de carga/error/vacío, modo explícito y funcionamiento móvil. Cambiar la estética no debe reducir esas capacidades.
-- Separar primitivas shadcn, composición de pantallas, validación del contrato y consultas de TanStack Query. La arquitectura concreta y su política de caché se documentan junto al código.
+- Mantener Dash, AG Grid Community y servicios Python compartidos. El estado del navegador se valida con Pydantic; no habilita proveedores ni reemplaza la persistencia PostgreSQL.
 
-## Próximas validaciones operativas
+## Validaciones operativas pendientes
 
-Confirmar con las áreas responsables el catálogo de estados, la relación de IDs, los viajes de cada solicitud, la evidencia de recepción, el activo que porta el GPS y la antigüedad aceptable de la señal. Esas decisiones siguen abiertas; no se enviaron consultas a terceros. La implementación actual puede enseñar datos y faltantes comprobables mientras se obtienen esos acuerdos.
+Confirmar con las áreas responsables el catálogo de estados, la relación de IDs, los viajes de cada solicitud, la evidencia de recepción, el activo que porta el GPS y la antigüedad aceptable de la señal. Estas son validaciones de negocio y de acceso API; no requieren reconstruir la interfaz, el SDK o la persistencia ya implementados. Consultar [la guía operativa](solucion-integracion.md), [el manual de mapeo](manual-mapeo-integracion.md) y [las definiciones analíticas](analitica-decisiones.md) para continuar desde el estado vigente. Esta depuración documental no realizó consultas a terceros.

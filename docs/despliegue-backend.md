@@ -1,104 +1,126 @@
-# Dónde desplegar el hub Python y PostgreSQL
+# Despliegue del servicio Python y PostgreSQL
 
-Recomendación consultada el **12 de septiembre de 2026**. El hub actual reúne Dash y FastAPI en un contenedor Python; véase
-[ADR 0003](adr/0003-python-dash-hub.md). Esta comparación no crea servicios
-ni contrata un plan.
+ECON se entrega como un contenedor con Dash, FastAPI, Plotly y AG Grid Community.
+PostgreSQL conserva planes, cortes, eventos y recepción. La misma imagen puede
+ejecutar un worker separado y explícito; el servidor web no lo inicia.
+Esta guía describe la configuración disponible y no publica infraestructura.
 
-## Recomendación para ECON
+La implementación está definida en [ADR 0003](adr/0003-python-dash-hub.md),
+[ADR 0004](adr/0004-persistent-transfer-workflow.md) y
+[la guía operativa](solucion-integracion.md).
 
-Empezaría con **Render: un Web Service Docker para Dash y FastAPI y Render Postgres 18
-en la misma región**. Encaja con el contenedor actual y permite añadir después
-un proceso de sincronización independiente. La recomendación es una decisión
-para esta base, no un benchmark de rendimiento ni una estimación de capacidad.
-Render documenta [servicios Docker](https://render.com/docs/docker),
-[PostgreSQL 18 y conexión interna](https://render.com/docs/postgresql-creating-connecting)
-y [workers que ejecutan procesos continuos](https://render.com/docs/background-workers).
+## Imagen y procesos
 
-| Opción | Cuándo la elegiría | Qué revisar antes de contratar |
-| --- | --- | --- |
-| **Render** | Primera opción para API Docker, base administrada y futuros procesos independientes | Región conjunta, memoria, conexiones de base, respaldo/recuperación y costo total de API + base + worker cuando exista |
-| **Railway** | Alternativa cómoda para trabajar con servicios del proyecto y desplegar directamente el Dockerfile | Versión de PostgreSQL, backups, consumo y límites de cada servicio; decidir cuándo habilitar alta disponibilidad |
-| **Fly.io Machines** | Si necesitamos controlar más la ejecución y la distribución de contenedores por región | Operación de Machines, configuración de parada/arranque y compatibilidad de la versión elegida de su base administrada |
+Desde la raíz del repositorio:
 
-Railway detecta el Dockerfile del directorio del servicio y ofrece PostgreSQL
-con red privada y opciones de respaldo y alta disponibilidad. No asumir que
-todas esas opciones se habilitan por crear la base.
-[Dockerfiles](https://docs.railway.com/builds/dockerfiles),
-[PostgreSQL](https://docs.railway.com/databases/postgresql).
+```powershell
+.\scripts\check.ps1 -Container
+docker build -t econ-hub apps/api
+```
 
-Fly.io puede ejecutar una imagen Docker en Machines y tiene una oferta
-administrada de PostgreSQL. Revisar la versión soportada antes de mover nuestra
-base PostgreSQL 18. La configuración de autostop debe ser compatible con un
-proceso que necesite ejecutarse continuamente.
-[Machines](https://fly.io/docs/machines/flyctl/fly-machine-run/),
-[Managed Postgres](https://fly.io/docs/mpg/),
-[autostop/autostart](https://fly.io/docs/launch/autostop-autostart/).
+[El Dockerfile](../apps/api/Dockerfile) usa `apps/api` como contexto de construcción.
+Instala dependencias con el lockfile, copia `app`, `migrations` y `alembic.ini`,
+y ejecuta el servicio con un usuario sin privilegios. Los archivos `.env` y las
+bases locales están excluidos de la imagen.
 
-No fijamos todavía tamaños ni una factura mensual: faltan carga, retención,
-presupuesto y frecuencia de sincronización. Comparar el costo total de cómputo,
-base, almacenamiento, backups y tráfico al elegir el plan. Para una operación
-continua, elegir recursos que permanezcan ejecutándose según la configuración
-contratada. [Precios de Render](https://render.com/pricing).
+El comando predeterminado inicia Uvicorn en `0.0.0.0`, con `PORT` si está
+definido o `8000` por defecto. Dash, assets y API se sirven desde el mismo origen.
+No hay compilación Node, aplicación React ni publicación estática separada.
 
-## Configuración inicial recomendada en Render
+| Proceso | Ejecución |
+| --- | --- |
+| Servicio web | Comando predeterminado de la imagen |
+| Migración | Comando explícito sobre la base configurada, antes de iniciar la versión que necesita el esquema |
+| Worker | Proceso separado con la CLI, solo cuando se configure la operación autorizada |
 
-Crear el servicio del hub desde este repositorio cuando se decida publicar, con `apps/api`
-como directorio raíz y `Dockerfile` relativo a ese directorio. El contexto de
-construcción también debe ser `apps/api`: el Dockerfile copia `pyproject.toml`,
-`uv.lock`, `README.md`, `app` y `migrations` desde allí. Conservar el `CMD` del
-contenedor, que escucha en `0.0.0.0` usando `PORT` si el proveedor lo define,
-o el puerto `8000` por defecto.
-[Configuración Docker de Render](https://render.com/docs/docker).
+PostgreSQL debe permanecer fuera del sistema de archivos efímero del contenedor
+web. Usar una base accesible desde los procesos de aplicación y worker; no copiar
+en un despliegue remoto la dirección loopback del Compose local.
 
-Crear PostgreSQL 18 en la misma región y usar su URL interna desde FastAPI.
-Configurar las siguientes variables en el servicio, nunca en la compilación
-de los assets:
+## Variables de una demostración pública
+
+Configurar variables durante la ejecución, no al construir assets. Como el hub
+no tiene login de aplicación, una demostración pública conserva exclusivamente
+muestras y las cuatro habilitaciones desactivadas:
 
 | Variable | Valor o criterio |
 | --- | --- |
-| `DATABASE_URL` | URL interna de PostgreSQL suministrada por el proveedor; conexión mediante Psycopg 3 |
-| `CORS_ORIGINS` | `[]` para el hub del mismo origen; añadir únicamente clientes externos autorizados |
-| `ALLOW_LIVE_READS` | `false` en la demostración pública sin login |
-| `NEXUS_EMAIL`, `NEXUS_PASSWORD` | Omitidas en la demostración; solo para un entorno privado con lecturas autorizadas |
+| `DATABASE_URL` | URL de PostgreSQL accesible desde el servicio, conservada como secreto del entorno |
+| `PORT` | Puerto entregado por la plataforma; si se omite, `8000` |
+| `CORS_ORIGINS` | `[]` para Dash y API en el mismo origen |
+| `ALLOW_LIVE_READS` | `false` |
+| `ALLOW_LOCAL_MANAGEMENT` | `false` |
+| `ALLOW_LIVE_WRITES` | `false` |
+| `AUTO_QUEUE_TRANSFERS` | `false` |
+| `NEXUS_EMAIL`, `NEXUS_PASSWORD` | Omitidas en la demostración pública |
+| `STARTRACK_API_KEY`, `STARTRACK_PASSWORD` | Omitidas en la demostración pública |
 
-Usar `postgresql+psycopg://` para indicar explícitamente el controlador de este
-proyecto. La API y Alembic también adaptan `postgres://` y `postgresql://` a
-ese controlador. Conservar usuario, contraseña, host, base y parámetros de conexión
-entregados por el proveedor; no usar la URL local del Compose en la nube.
+`postgresql+psycopg://` indica el controlador instalado. La aplicación y Alembic
+también normalizan `postgres://` y `postgresql://` a ese controlador sin cambiar
+usuario, contraseña, host, base o parámetros de conexión.
 
-Configurar `/health/ready` como comprobación de despliegue para verificar la
-conexión a la base. `/health/live` solo acredita que el proceso responde.
-Antes de publicar una nueva versión, ejecutar desde el contenedor:
+No poner secretos en URLs del navegador, código, capturas, registros ni variables
+`VITE_*`. CORS no controla por sí solo quién puede consultar una API pública.
+La gestión HTTP está limitada a peticiones locales con validación de origen:
+publicar un proxy no crea un sistema de permisos ni autoriza live.
+
+## Migración y persistencia
+
+Con las variables de conexión disponibles, ejecutar dentro de la imagen:
 
 ```sh
 .venv/bin/alembic upgrade head
+.venv/bin/alembic current
 ```
 
-Render permite un comando de predespliegue en servicios de pago; resulta útil
-para esa migración. Mantenerla como paso explícito, sin ejecutarla en cada
-arranque ni al construir la imagen. Las revisiones de esquema nuevas requieren
-respaldo y una estrategia de compatibilidad con la versión que sigue atendiendo
-peticiones. [Predespliegue de Render](https://render.com/docs/deploys#pre-deploy-command).
+La migración `0001_operations` crea movimientos, eventos y cortes. La cola reside
+en los movimientos y se reclama transaccionalmente antes de enviar al proveedor.
+No se ejecutan migraciones durante la construcción de la imagen ni en cada
+arranque del servicio. Los cambios futuros de esquema requieren planificar
+respaldo, recuperación y compatibilidad con los procesos que siguen activos.
 
-Dash y la API se sirven desde el mismo dominio mediante Uvicorn. No hay una
-compilación Node ni variables `VITE_*`. Verificar una consulta `fixture`, los
-callbacks, `/api/v1/hub` y una recarga de `/maquinaria` desde el dominio final.
-La antigua [guía de Cloudflare](deploy-cloudflare.md) queda archivada.
+El desarrollo conserva el proyecto Compose `econ-backend` y su volumen
+`econ-backend_postgres18_data`; no se recrean para aplicar una migración.
+La estructura del registro está en [PostgreSQL](database.md).
 
-## Evolución de la sincronización
+## Worker disponible para operación autorizada
 
-El endpoint actual hace lecturas acotadas bajo demanda. Cuando se implemente
-sincronización persistente, ejecutarla en un proceso separado de la API HTTP,
-con su propio comando, supervisión y permisos. Reutilizar la imagen Docker
-puede ser suficiente; no hace falta convertir el panel en un servidor nuevo.
-La cola, el planificador, la idempotencia y el historial todavía no existen y
-no se deben anunciar como desplegados.
+El worker usa los mismos servicios y la misma base que Dash/HTTP. En un entorno
+privado, después de configurar credenciales y habilitaciones según
+[la guía operativa](solucion-integracion.md#ejecutar-ciclos), el comando dentro de
+la imagen es:
 
-Conservar los límites y reintentos del proveedor aunque el contenedor pueda
-correr continuamente. Separar API y trabajador facilita controlar su consumo;
-elegir un contenedor no elimina límites de CPU, memoria, conexiones o red.
+```sh
+.venv/bin/python -m app.cli.sync_operations --mode live --watch --interval 120
+```
 
-El perímetro de datos sigue siendo una decisión independiente del hosting:
-sin login propio, la demostración pública usa únicamente fixtures. Para
-habilitar información privada, proteger también el acceso al origen de la API.
-La guía actual no modifica DNS, cuentas, secretos remotos ni planes contratados.
+Sin `--watch` ejecuta un solo ciclo. La CLI admite intervalos entre 60 y 3600
+segundos. Ejecutar un único worker: los límites externos pueden ser compartidos
+por IP, mientras el limitador local funciona por proceso.
+
+El proceso requiere habilitación de gestión local; las consultas remotas y la
+creación de tareas tienen controles independientes. Un envío incierto permanece
+en conciliación y no genera un segundo POST automático. La existencia del SDK,
+cola e historial no acredita todavía la creación autenticada en la cuenta
+Startrack, cuya validación sigue pendiente.
+
+No iniciar este worker live en una demostración pública de muestras. Las
+ampliaciones de [sincronización](sincronizacion-y-discrepancias.md) y
+[escala](arquitectura-escalable-flota.md) son propuestas, no procesos ya desplegados.
+
+## Comprobaciones de la versión publicada
+
+Configurar `/health/ready` para comprobar conexión con PostgreSQL.
+`/health/live` acredita únicamente que el proceso responde; ninguno valida
+credenciales ni conectividad de Prisma o Startrack.
+
+Revisar `/?mode=fixture`, `/solicitudes?mode=fixture`,
+`/operaciones?mode=fixture`, `/api/v1/hub?mode=fixture` y
+`/api/v1/operations?mode=fixture`. Confirmar que el registro está disponible tras
+la migración, que los callbacks funcionan y que recargar una ruta interna conserva
+estilos, modo y búsqueda. Las muestras muestran cinco equipos y dos solicitudes,
+con cobertura parcial, sin inventar tareas, GPS o recepciones.
+
+Antes de dimensionar una operación continua faltan mediciones de carga,
+retención, concurrencia, latencia y recuperación. La imagen no configura por
+sí sola respaldos, alta disponibilidad o capacidad para miles de vehículos.

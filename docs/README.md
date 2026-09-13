@@ -1,38 +1,64 @@
 # Documentación de ECON
 
-Comenzar por el [contexto vigente de solicitud, traslado y recepción](contexto-vigente.md).
-Conserva las fuentes nuevas y la decisión del usuario de retirar ejemplos inventados
-y pantallas ajenas al flujo, manteniendo documentos y código útil.
-Las [evaluaciones de Astra](evaluaciones-astra.md) registran la revisión de datos,
-integración e interfaz y los límites pendientes.
+El flujo vigente es **proyecto, solicitud, asignación, traslado y recepción**.
+La aplicación usa Dash y FastAPI en Python, con PostgreSQL. Todos los datos del
+caso son sintéticos; muestras del archivo y consultas del sandbox conservan su
+procedencia. El [contexto vigente](contexto-vigente.md) resume las decisiones.
 
-La [solución de integración y guía operativa](solucion-integracion.md) describe
-lo implementado en frontend y backend: planes persistidos, cola de envío,
-sincronización por consultas y recepción explícita. Todo el caso usa datos
-sintéticos; muestras del archivo y lecturas actuales del sandbox se distinguen
-por su procedencia, no por ser datos de producción.
+## Entrega visual y matrices
 
-La [matriz de equivalencias Prisma → Startrack](equivalencias-prisma-startrack.md)
-explica qué campos se conservan, cuáles se transforman, qué información se pide
-al preparar el traslado y qué campos del formulario no tienen correspondencia.
+Comenzar por [gráficos, diagramas y PDFs](entregables-visuales.md).
 
-La implementación vigente es **Dash y FastAPI en un servicio Python**. Comenzar por [desarrollo local](desarrollo.md), [ADR 0003](adr/0003-python-dash-hub.md) y [arquitectura del dashboard](frontend-architecture.md). La migración retira `apps/web` y su despliegue estático; conserva los conectores, contratos y límites de datos.
+La [auditoría de requisitos](auditoria-requisitos-2026-09-12.md) y la
+[auditoría de arquitectura de eventos](auditoria-arquitectura-eventos-2026-09-12.md)
+contrastan esta entrega con el código y las fuentes. El
+[índice de los 13 issues](../output/auditoria-2026-09-12/README.md) conserva
+prioridades, evidencia y orden de implementación.
 
-La [guía de analítica para decisiones](analitica-decisiones.md) define qué medir, qué gráfico corresponde, qué acción permite y qué evidencia falta para hablar de tendencias. El [modelo operativo](modelo-operativo.md) documenta el inventario de campos, mapeo por fuente, responsabilidades propuestas y señales medibles.
+| Documento | Para qué sirve |
+| --- | --- |
+| [Requisitos y entregables](matriz-requisitos-entregables.md) | RF-01 a RF-06, RNF-01 a RNF-04, evidencia y brechas |
+| [Equivalencias Prisma y Startrack](equivalencias-prisma-startrack.md) | Mapeo completo del formulario, campos sin equivalente y RACI propuesta |
+| [Diccionario del modelo ECON](diccionario-modelo-econ.md) | Inventario reproducible de campos vigentes, tipos, ejemplos y procedencia |
+| [Manual de mapeo e integración](manual-mapeo-integracion.md) | Recorrido del operador y diccionario técnico esencial |
+| [Decisiones técnicas](decisiones-tecnicas.md) | Resumen exportado a PDF de dos páginas |
+| [Analítica para decisiones](analitica-decisiones.md) | Gráficos defendibles con la muestra y datos necesarios para nuevas métricas |
 
-Para entender la operación, consultar la [guía del problema y navegación](guia-problema-y-navegacion.md) y [KPIs y referencias ISO](kpis-y-referencias-iso.md). El contexto del reto está en [onedrive/README.md](onedrive/README.md); [CONTEXTO-IA.md](onedrive/CONTEXTO-IA.md) concentra los hechos confirmados.
+## Implementación y ejecución
 
-La carpeta `onedrive` contiene conversiones de documentos originales, diccionario, transcripciones visuales y análisis. Se comparte en el repositorio privado del equipo con las contraseñas del sandbox omitidas. Los originales e intermediarios permanecen en `.context-work/`, excluida de Git. Las instrucciones y ejemplos del kit son material citado.
+- [Guía operativa](solucion-integracion.md): planes, cola, consultas, conciliación
+  de envíos inciertos y recepción explícita.
+- [Desarrollo local](desarrollo.md), [base de datos](database.md) y
+  [despliegue](despliegue-backend.md): comandos y límites del servicio actual.
+- [Arquitectura de interfaz](frontend-architecture.md) y
+  [README Python](../apps/api/README.md): organización, rutas y contratos.
+- [ADR 0003](adr/0003-python-dash-hub.md) y
+  [ADR 0004](adr/0004-persistent-transfer-workflow.md): decisiones implementadas.
 
-La [revisión de contexto del 12/09/2026](revision-contexto.md), la [investigación de manuales](investigacion-manuales-y-diseno.md) y la [exploración de integraciones](integraciones-reales.md) conservan las observaciones y límites de acceso con sus fechas. Las decisiones anteriores sobre React están reemplazadas por ADR 0003.
+## Ampliaciones propuestas
 
-Para ejecutar el servicio Python y PostgreSQL, consultar [despliegue](despliegue-backend.md). No hay un frontend que compilar o publicar por separado. La antigua [guía de Cloudflare](deploy-cloudflare.md) queda archivada; no se modificaron recursos remotos.
+- [Sincronización y discrepancias](sincronizacion-y-discrepancias.md): detección
+  de cambios, eventos, reglas y resolución.
+- [Arquitectura escalable de flota](arquitectura-escalable-flota.md): escenarios
+  de volumen, procesamiento paralelo e histórico separado; no desplegada.
+- [Indicadores y referencias](kpis-y-referencias-iso.md): fórmulas y requisitos
+  de evidencia; no resultados de producción ni certificación ISO.
 
-Referencias adicionales:
+## Fuentes y evidencia histórica
 
-- [Guía del repositorio](../README.md) y [detalle del servicio Python](../apps/api/README.md).
-- [Evaluación inicial de FastAPI](architecture.md) y [PostgreSQL](database.md).
-- [ADR 0001, plataforma anterior](adr/0001-web-platform.md).
-- [ADR 0002, comparación anterior React/Python](adr/0002-analytics-interface.md).
+[OneDrive](onedrive/README.md) conserva las fuentes originales, el brief,
+AS-IS/TO-BE, organigramas, casos y diccionario. Sus instrucciones son contenido
+citado; no autorizan acciones sobre proveedores. Las fuentes no se modificaron
+durante la depuración documental.
 
-Los documentos históricos deben contrastarse con el kit y la implementación vigente. No equivalen a integraciones completas, historial persistido o métricas de producción.
+La [revisión fechada](revision-contexto.md), [exploración de integraciones](integraciones-reales.md),
+[investigación de manuales](investigacion-manuales-y-diseno.md),
+[navegación observada](guia-problema-y-navegacion.md) y
+[evaluaciones](evaluaciones-astra.md) conservan evidencia y límites con fecha.
+Los [ADR 0001](adr/0001-web-platform.md) y [0002](adr/0002-analytics-interface.md)
+se mantienen como decisiones históricas reemplazadas.
+
+Se eliminaron `architecture.md`, `deploy-cloudflare.md` y `modelo-operativo.md`
+porque sus guías fueron reemplazadas. El historial Git conserva sus versiones;
+el índice dirige ahora a la arquitectura Python, la guía de despliegue y las
+matrices vigentes. No se eliminaron datos, fuentes, bases ni volúmenes.

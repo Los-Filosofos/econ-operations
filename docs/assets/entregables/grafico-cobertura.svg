@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="841.68pt" height="550.8pt" viewBox="0 0 841.68 550.8" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 550.8 
+L 841.68 550.8 
+L 841.68 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 50.5008 175.81536 
+L 791.1792 175.81536 
+L 791.1792 132.192 
+L 50.5008 132.192 
+z
+" clip-path="url(#p38053c8dad)" style="fill: #f0f4f7"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 50.5008 240.523344 
+L 791.1792 240.523344 
+" clip-path="url(#p38053c8dad)" style="fill: none; stroke: #dfe5ea; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_2">
+    <path d="M 50.5008 307.170144 
+L 791.1792 307.170144 
+" clip-path="url(#p38053c8dad)" style="fill: none; stroke: #dfe5ea; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_3">
+    <path d="M 50.5008 373.816944 
+L 791.1792 373.816944 
+" clip-path="url(#p38053c8dad)" style="fill: none; stroke: #dfe5ea; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #182d40" x="65.314368" y="157.121336" transform="rotate(-0 65.314368 157.121336)">Fuente / conjunto</text>
+   </g>
+   <g id="text_2">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #182d40" x="257.890752" y="157.121336" transform="rotate(-0 257.890752 157.121336)">Incluidos / total</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #182d40" x="413.433216" y="157.120868" transform="rotate(-0 413.433216 157.120868)">Lectura</text>
+   </g>
+   <g id="text_4">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #182d40" x="568.97568" y="157.361336" transform="rotate(-0 568.97568 157.361336)">Límite</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(65.314368 202.918776)">Prisma</text>
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(65.314368 219.832839)">Equipos</text>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 12.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #145da0" x="257.890752" y="211.297683" transform="rotate(-0 257.890752 211.297683)">5 / 15</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #182d40" x="413.433216" y="210.770339" transform="rotate(-0 413.433216 210.770339)">Cobertura parcial</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(568.97568 201.707839)">10 registros no</text>
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(568.97568 219.832839)">incluidos en el ejemplo</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(65.314368 269.565576)">Prisma</text>
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(65.314368 287.690576)">Solicitudes</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 12.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #145da0" x="257.890752" y="278.026514" transform="rotate(-0 257.890752 278.026514)">2 / 2</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(413.433216 268.354639)">Total reportado</text>
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(413.433216 286.479639)">en el ejemplo</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(568.97568 269.565576)">No acredita el</text>
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(568.97568 286.479639)">universo operativo</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(65.314368 336.212376)">Startrack</text>
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(65.314368 353.126439)">Evidencia operativa</text>
+   </g>
+   <g id="text_14">
+    <text style="font-weight: 700; font-size: 12.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #145da0" x="257.890752" y="345.274876" transform="rotate(-0 257.890752 345.274876)">Sin muestras</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #182d40" x="413.433216" y="345.274876" transform="rotate(-0 413.433216 345.274876)">No evaluable</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(568.97568 325.938939)">Sin tareas, posiciones</text>
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(568.97568 344.063939)">ni recepciones</text>
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; fill: #182d40" transform="translate(568.97568 362.188939)">en este conjunto</text>
+   </g>
+  </g>
+  <g id="line2d_4">
+   <path d="M 50.5008 426.3192 
+L 791.1792 426.3192 
+" style="fill: none; stroke: #dfe5ea; stroke-width: 0.8; stroke-linecap: square"/>
+  </g>
+  <g id="text_17">
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="31.9464" transform="rotate(-0 50.5008 31.9464)">ECON · DATOS SINTÉTICOS PROPORCIONADOS</text>
+  </g>
+  <g id="text_18">
+   <text style="font-weight: 700; font-size: 23px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #182d40" x="50.5008" y="68.85" transform="rotate(-0 50.5008 68.85)">Cobertura de la evidencia proporcionada</text>
+  </g>
+  <g id="text_19">
+   <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="99.144" transform="rotate(-0 50.5008 99.144)">El alcance corresponde al archivo de ejemplos; no a una lectura actual de los proveedores.</text>
+  </g>
+  <g id="text_20">
+   <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="446.148" transform="rotate(-0 50.5008 446.148)">Ausencia de muestra operativa significa falta de evidencia; no equivale a cero operaciones.</text>
+  </g>
+  <g id="text_21">
+   <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="465.426" transform="rotate(-0 50.5008 465.426)">Los totales son los declarados por los ejemplos de respuesta, sin extrapolación a toda ECON.</text>
+  </g>
+  <g id="text_22">
+   <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="484.704" transform="rotate(-0 50.5008 484.704)">Con este conjunto no se calculan puntualidad, utilización, productividad ni recepción efectiva.</text>
+  </g>
+  <g id="text_23">
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="512.7948" transform="rotate(-0 50.5008 512.7948)">Fuente: econ-hackathon-openapi.json · Ejemplos de respuesta de Prisma.</text>
+  </g>
+  <g id="text_24">
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526578" x="50.5008" y="531.522" transform="rotate(-0 50.5008 531.522)">Fecha documental: 12/09/2026 · Sin corte de observación conjunto · IDs y hashes en manifest.json.</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p38053c8dad">
+   <rect x="50.5008" y="132.192" width="740.6784" height="242.352"/>
+  </clipPath>
+ </defs>
+</svg>
