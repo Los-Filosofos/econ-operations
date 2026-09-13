@@ -2,7 +2,7 @@
   "use strict";
 
   const viewStates = new Map();
-  // Keep machine targets at roughly 44 px even on narrow screens; the canvas remains pannable.
+  // Zooming out is still available, but the initial mobile flow keeps exact node diameters.
   const MIN_SCALE = 0.62;
   const MAX_SCALE = 2.4;
 
@@ -43,12 +43,12 @@
       const fitScale = Math.min(
         (bounds.width - 56) / width,
         (bounds.height - 56) / height,
-        1.15
+        1
       );
-      const scale = clamp(fitScale, MIN_SCALE, MAX_SCALE);
       const firstProject = root.querySelector(".graph-node--place");
       const projectX = Number.parseFloat(firstProject?.style.left || "");
-      const mobileFlowStart = bounds.width < 600 && fitScale < MIN_SCALE && Number.isFinite(projectX);
+      const mobileFlowStart = bounds.width < 600 && fitScale < 1 && Number.isFinite(projectX);
+      const scale = mobileFlowStart ? 1 : clamp(fitScale, MIN_SCALE, MAX_SCALE);
       state = {
         scale,
         x: mobileFlowStart ? 68 - projectX * scale : (bounds.width - width * scale) / 2,
@@ -72,17 +72,36 @@
       draw();
     }
 
+    function reveal(placeKey) {
+      if (placeKey) root.dataset.expandedPlace = placeKey;
+      else root.removeAttribute("data-expanded-place");
+      root.querySelectorAll(".graph-node--machine").forEach((node) => {
+        const places = (node.dataset.places || "").split("|").filter(Boolean);
+        const visible = node.dataset.alwaysVisible === "true" || places.includes(placeKey);
+        node.classList.toggle("is-expanded", visible);
+        node.setAttribute("aria-hidden", visible ? "false" : "true");
+        node.tabIndex = visible ? 0 : -1;
+      });
+      root.querySelectorAll(".graph-edge").forEach((edge) => {
+        const visible =
+          edge.classList.contains("graph-edge--active") ||
+          (placeKey && (edge.dataset.source === placeKey || edge.dataset.target === placeKey));
+        edge.classList.toggle("is-expanded", Boolean(visible));
+        const control = edge.querySelector(".graph-edge-label");
+        if (control) control.tabIndex = visible ? 0 : -1;
+      });
+    }
+
     function select(nodeKey, returnFocus = false) {
       const connected = new Set(nodeKey ? [nodeKey] : []);
       const selectedNode = [...root.querySelectorAll(".graph-node")].find(
         (node) => node.dataset.nodeKey === nodeKey
       );
-      if (selectedNode) {
-        (selectedNode.dataset.members || "").split("|").filter(Boolean).forEach(
-          (member) => connected.add(member)
-        );
-        if (selectedNode.dataset.memberOf) connected.add(selectedNode.dataset.memberOf);
-      }
+      const placeKey =
+        selectedNode?.dataset.nodeKind === "place"
+          ? nodeKey
+          : (selectedNode?.dataset.places || "").split("|").find(Boolean);
+      reveal(placeKey || null);
       root.querySelectorAll(".graph-edge-label").forEach((control) => {
         control.setAttribute("aria-pressed", "false");
       });
@@ -126,6 +145,11 @@
       );
       if (!edge) return;
       const endpoints = new Set([edge.dataset.source, edge.dataset.target]);
+      const placeKeys = new Set(
+        [...root.querySelectorAll(".graph-node--place")].map((node) => node.dataset.nodeKey)
+      );
+      const placeKey = [...endpoints].find((key) => placeKeys.has(key));
+      reveal(placeKey || null);
       root.querySelectorAll(".graph-edge").forEach((candidate) => {
         const selected = candidate === edge;
         candidate.classList.toggle("is-connected", selected);
@@ -199,6 +223,13 @@
       }
       const node = event.target.closest(".graph-node");
       if (node) {
+        if (
+          node.dataset.nodeKind === "place" &&
+          root.dataset.selection === node.dataset.nodeKey
+        ) {
+          select(null, true);
+          return;
+        }
         select(node.dataset.nodeKey);
         return;
       }
@@ -231,6 +262,7 @@
     });
     resizeObserver.observe(viewport);
 
+    reveal(null);
     if (viewStates.has(key)) draw();
     else requestAnimationFrame(center);
   }

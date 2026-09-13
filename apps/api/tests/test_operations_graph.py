@@ -6,7 +6,11 @@ from pathlib import Path
 
 from plotly.utils import PlotlyJSONEncoder
 
-from app.dashboard.operations_graph import build_operations_graph, operations_graph_view
+from app.dashboard.operations_graph import (
+    _machine_detail,
+    build_operations_graph,
+    operations_graph_view,
+)
 from app.integrations.fixtures import fixture_records
 from app.models.hub import (
     AlertRecord,
@@ -83,7 +87,7 @@ def test_fixture_graph_has_one_project_five_unique_machines_and_one_exact_assign
     assert edge.target.endswith("39723f32-8bb5-4158-a415-2a3d49b0993b")
 
 
-def test_unassigned_machines_stay_visible_without_connections_or_invented_places():
+def test_unassigned_machines_are_not_grouped_or_connected_to_invented_places():
     graph = build_operations_graph(hub_fixture())
     connected = {edge.source for edge in graph.edges} | {edge.target for edge in graph.edges}
     unconnected_machines = [
@@ -92,12 +96,8 @@ def test_unassigned_machines_stay_visible_without_connections_or_invented_places
     assert len(unconnected_machines) == 4
     assert {node.subtype for node in graph.nodes if node.kind == "place"} == {"project"}
     assert all("base" not in node.key and "workshop" not in node.key for node in graph.nodes)
-    collection = next(node for node in graph.nodes if node.kind == "collection")
-    assert collection.label == "SIN ASIGNACIÓN"
-    assert set(collection.member_keys) == {node.key for node in unconnected_machines}
-    assert all(
-        edge.source != collection.key and edge.target != collection.key for edge in graph.edges
-    )
+    assert all(node.kind != "collection" for node in graph.nodes)
+    assert all(node.place_keys == [] for node in unconnected_machines)
 
 
 def test_layout_is_stable_when_source_lists_arrive_in_another_order():
@@ -218,14 +218,13 @@ def test_full_page_graph_has_local_assets_straight_edges_and_no_tables_or_metric
         "roller",
         "truck",
         "machinery",
-        "pool",
     ]:
         svg = (assets / f"graph-{name}.svg").read_text(encoding="utf-8")
         assert svg.startswith("<svg") and "<path" in svg
     css = (assets / "style.css").read_text(encoding="utf-8")
     script = (assets / "operations-graph.js").read_text(encoding="utf-8")
-    assert "width: 96px; height: 96px" in css
-    assert "width: 58px" in css and "height: 58px" in css
+    assert "width: 56px; height: 56px" in css
+    assert "width: 32px" in css and "height: 32px" in css
     assert 'font-family: "Roboto Mono"' in css
     assert "RobotoMono-wght.ttf" in css
     assert (assets / "RobotoMono-wght.ttf").stat().st_size > 100_000
@@ -237,11 +236,38 @@ def test_full_page_graph_has_local_assets_straight_edges_and_no_tables_or_metric
     assert "selectEdge" in script and "data-edge-selection" in script
 
 
-def test_unassigned_collection_and_connection_expose_context_without_inventing_a_base():
+def test_place_selection_reveals_only_related_machines_and_connection_context():
     payload = serialized(operations_graph_view(hub_fixture()))
-    assert "Sin asignación verificada" in payload
-    assert "Este nodo no representa una base, almacén o taller físico" in payload
-    assert "Disponibles" in payload
+    assert "graph-node--collection" not in payload
     assert "graph-edge-label" in payload
     assert "Evidencia de la relación" in payload
     assert "La línea representa correspondencia documental" in payload
+    assets = Path(__file__).parents[1] / "app" / "dashboard" / "assets"
+    script = (assets / "operations-graph.js").read_text(encoding="utf-8")
+    css = (assets / "style.css").read_text(encoding="utf-8")
+    assert "function reveal(placeKey)" in script
+    assert "data-expanded-place" in script and "data-always-visible" in payload
+    assert ".graph-node--machine {" in css and "visibility: hidden" in css
+    assert ".graph-node--machine.is-expanded" in css
+
+
+def test_machine_detail_counts_distinct_projects_from_exact_visible_evidence():
+    hub = hub_fixture()
+    request = next(request for request in hub.requests if request.machinery_id)
+    second = request.model_copy(
+        update={
+            "id": "nexus:request:historical",
+            "project_id": "project-history-id",
+            "project_name": "Proyecto histórico",
+            "provenance": request.provenance.model_copy(update={"source_id": "historical"}),
+        }
+    )
+    hub.requests.append(second)
+    graph = build_operations_graph(hub)
+    machine = next(node for node in graph.nodes if node.entity_id == request.machinery_id)
+    payload = serialized(_machine_detail(machine, hub, None, graph))
+    assert "Trazabilidad por proyecto" in payload
+    assert "Proyectos distintos en evidencia" in payload
+    assert '"children": "2"' in payload
+    assert request.project_id in payload and "project-history-id" in payload
+    assert "Una solicitud o asignación no prueba" in payload

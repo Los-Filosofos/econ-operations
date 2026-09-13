@@ -39,11 +39,12 @@ PostgreSQL.
 
 ## Recorrido
 
-- **Mapa de operaciones (inicio):** grafo a pantalla completa de proyectos,
-  maquinaria, asignaciones exactas y traslados confirmados. No muestra nodos
-  físicos ni relaciones que las fuentes no permitan identificar. Las unidades
-  sin asignación se agrupan visualmente —sin aristas— para consultar su estado;
-  esa agrupación no se presenta como una base física.
+- **Mapa de operaciones (inicio):** grafo a pantalla completa que inicia sólo
+  con lugares confirmados. Al seleccionar un proyecto despliega únicamente la
+  maquinaria relacionada por identificadores exactos; una unidad en traslado
+  permanece visible. No crea bases, talleres, agrupaciones ni relaciones que
+  las fuentes no permitan identificar. La maquinaria sin vínculo verificable
+  no se atribuye a una base ni se clasifica como disponible por inferencia.
 - **Solicitudes:** proyecto, tipo requerido, período, unidad asignada, traslado,
   destino, llegada, recepción y evidencia pendiente.
 - **Maquinaria:** inventario consultado, comparación de fuentes por unidad e
@@ -65,8 +66,9 @@ magnitudes y desviaciones escalas secuencial y divergente
 (`app/dashboard/assets/icons`), sin peticiones a terceros. La cookie de sesión es
 `Secure` por defecto: `SESSION_HTTPS_ONLY=false` solo para desarrollo local por HTTP.
 La portada usa un lienzo HTML accesible con Roboto Mono y siluetas SVG locales,
-aristas rectas, autoencuadre, desplazamiento y detalle contextual de nodos y
-conexiones; no añade una dependencia de grafos.
+lugares de 56 px, maquinaria de 32 px, aristas rectas, autoencuadre,
+desplazamiento y detalle contextual de nodos y conexiones; no añade una
+dependencia de grafos.
 
 El modo `fixture` contiene cinco máquinas y dos solicitudes extraídas del
 OpenAPI proporcionado, con sus IDs y valores originales; no incluye

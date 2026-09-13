@@ -39,8 +39,10 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
 - La portada es un grafo operativo a pantalla completa, sin cabecera, sidebar,
   buscador, métricas ni panel permanente. Proyectos y lugares identificados son
   nodos compactos; la maquinaria usa nodos menores y una única representación.
-  Las unidades sin asignación rodean un agrupador visual que no se interpreta
-  como base física. Las aristas nacen sólo de IDs y correspondencias verificadas.
+  Inicialmente sólo aparecen lugares confirmados; al seleccionar uno se revelan
+  las unidades vinculadas por IDs exactos, y los traslados activos permanecen
+  visibles. Una unidad sin vínculo no se atribuye a una base ni se considera
+  disponible por inferencia. Las aristas nacen sólo de IDs y correspondencias verificadas.
   El resto de rutas conserva su navegación, tablas y detalles operativos
   ([arquitectura](frontend-architecture.md)).
 - Interfaz con dash-mantine-components, iconos Tabler locales y AG Grid
@@ -141,9 +143,11 @@ hub; inicio de sesión, roles y administración de usuarios (`/login`,
 `/administracion`, `/api/v1/auth`, `/api/v1/users`); y grafo principal con
 posiciones deterministas, autoencuadre, selección de nodos y conexiones,
 zoom/pan, Roboto Mono local y SVG propios. La muestra actual permite dibujar
-PROY-014, cinco máquinas, una asignación exacta y una agrupación de cuatro
-unidades sin asignación; no contiene bases, talleres, ubicación física, tareas
-Startrack ni recepción.
+PROY-014 y, al seleccionarlo, CF-03 con una asignación exacta. Las otras cuatro
+unidades no tienen vínculo verificable y no se agrupan ni se atribuyen a una
+base. La muestra no contiene bases, talleres, ubicación física, tareas Startrack
+ni recepción. El detalle de CF-03 expone los proyectos distintos que aparecen en
+la evidencia visible, sin afirmar presencia física.
 
 Pendiente: validación autenticada de Startrack (clave, catálogos y codificación
 de listas en creación); cotejo individual de las 51 definiciones para RF-02;

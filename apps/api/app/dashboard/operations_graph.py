@@ -15,10 +15,8 @@ from app.models.hub import EquipmentRecord, HubResponse, Provenance, RequestReco
 from app.models.operations import MovementRecord
 from app.models.workflow import WorkflowOverview
 
-PLACE_RADIUS = 48
-MACHINE_RADIUS = 29
-COLLECTION_RADIUS = 42
-UNASSIGNED_KEY = "collection:unassigned"
+PLACE_RADIUS = 28
+MACHINE_RADIUS = 16
 MODE_LABELS = {"fixture": "Muestras proporcionadas", "live": "Sandbox actual · sintético"}
 READABLE_SOURCE_STATES = {"fixture", "connected", "partial"}
 ACTIVE_TRANSFER_ROLES = {"pending", "active", "in_progress", "in progress", "en curso"}
@@ -43,16 +41,11 @@ class GraphNode:
     )
     x: float = 0
     y: float = 0
-    member_keys: list[str] = field(default_factory=list)
-    member_of: str | None = None
+    place_keys: list[str] = field(default_factory=list)
 
     @property
     def radius(self) -> int:
-        if self.kind == "place":
-            return PLACE_RADIUS
-        if self.kind == "collection":
-            return COLLECTION_RADIUS
-        return MACHINE_RADIUS
+        return PLACE_RADIUS if self.kind == "place" else MACHINE_RADIUS
 
 
 @dataclass
@@ -261,12 +254,16 @@ def build_operations_graph(hub: HubResponse) -> OperationsGraph:
 
     project_nodes = sorted(projects.values(), key=lambda value: value.entity_id)
     machine_nodes = sorted(machines.values(), key=lambda value: value.entity_id)
-    width = max(1120, 880 + max(0, len(project_nodes) - 1) * 180)
-    height = max(680, 340 + max(1, len(project_nodes)) * 180)
-    center_y = height / 2
+    columns = max(1, min(3, len(project_nodes)))
+    rows = max(1, (len(project_nodes) + columns - 1) // columns)
+    width = max(900, columns * 300)
+    height = max(560, rows * 240)
+    column_gap = width / columns
+    row_gap = height / rows
     for index, node in enumerate(project_nodes):
-        node.x = 210
-        node.y = center_y + (index - (len(project_nodes) - 1) / 2) * 180
+        row, column = divmod(index, columns)
+        node.x = column_gap * (column + 0.5)
+        node.y = row_gap * (row + 0.5)
         request_count = sum(isinstance(record, RequestRecord) for record in node.project_records)
         node.subtitle = (
             f"{request_count} SOLICITUD{'ES' if request_count != 1 else ''}"
@@ -280,60 +277,26 @@ def build_operations_graph(hub: HubResponse) -> OperationsGraph:
     grouped: dict[str, list[GraphNode]] = {node.key: [] for node in project_nodes}
     unassigned: list[GraphNode] = []
     for node in machine_nodes:
-        target = min(targets.get(node.key, []), default=None)
+        node.place_keys = sorted(targets.get(node.key, []))
+        target = min(node.place_keys, default=None)
         if target in grouped:
             grouped[target].append(node)
         else:
             unassigned.append(node)
 
-    max_group_rows = 1
     for project in project_nodes:
         group = sorted(grouped[project.key], key=lambda value: value.entity_id)
-        max_group_rows = max(max_group_rows, (len(group) + 2) // 3)
+        offsets = ((145, 0), (112, -66), (112, 66), (205, -66), (205, 66), (230, 0))
         for index, node in enumerate(group):
-            row, column = divmod(index, 3)
-            node.x = 495 + column * 132
-            node.y = project.y + (row - (len(group) - 1) / 6) * 104
-
-    collection_nodes: list[GraphNode] = []
-    if unassigned:
-        center_x = width - 215
-        collection = GraphNode(
-            key=UNASSIGNED_KEY,
-            kind="collection",
-            subtype="pool",
-            entity_id="unassigned",
-            source_id=None,
-            label="SIN ASIGNACIÓN",
-            subtitle=f"{len(unassigned)} UNIDAD{'ES' if len(unassigned) != 1 else ''}",
-            status="Agrupación visual; no es una ubicación física",
-            source="Derivado de la ausencia de una asignación verificable en esta lectura",
-            age="Conserva la fecha individual de cada unidad",
-            member_keys=[node.key for node in unassigned],
-            x=center_x,
-            y=center_y,
-        )
-        collection_nodes.append(collection)
-        ring = (
-            (0, -112),
-            (112, 0),
-            (0, 112),
-            (-112, 0),
-            (82, -82),
-            (82, 82),
-            (-82, 82),
-            (-82, -82),
-        )
-        for index, node in enumerate(unassigned):
-            lap, position = divmod(index, len(ring))
-            dx, dy = ring[position]
-            factor = 1 + lap * 0.58
-            node.x = center_x + dx * factor
-            node.y = center_y + dy * factor
-            node.member_of = collection.key
-        height = max(height, int(center_y + 180 + max(0, (len(unassigned) - 1) // 8) * 110))
+            lap, position = divmod(index, len(offsets))
+            dx, dy = offsets[position]
+            node.x = min(width - 28, project.x + dx + lap * 42)
+            node.y = min(height - 28, max(28, project.y + dy))
+    for index, node in enumerate(unassigned):
+        node.x = width - 20 - (index % 5) * 38
+        node.y = height - 20 - (index // 5) * 38
     return OperationsGraph(
-        nodes=[*project_nodes, *collection_nodes, *machine_nodes],
+        nodes=[*project_nodes, *machine_nodes],
         edges=sorted(edges.values(), key=lambda value: value.key),
         width=width,
         height=height,
@@ -464,63 +427,6 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
     ]
 
 
-def _collection_detail(node: GraphNode, graph: OperationsGraph):
-    members = [candidate for candidate in graph.nodes if candidate.key in node.member_keys]
-    available = [member for member in members if member.status.strip().upper() == "DISPONIBLE"]
-    other = [member for member in members if member not in available]
-
-    def member_list(values: list[GraphNode]):
-        return (
-            html.Ul(
-                [
-                    html.Li(
-                        [
-                            html.Strong(member.label),
-                            html.Span(f" · {member.status}"),
-                            html.Br(),
-                            html.Span(
-                                f"{member.equipment.equipment_class or 'Tipo no informado'} · "
-                                f"{member.source_id or member.entity_id}"
-                                if member.equipment
-                                else member.entity_id
-                            ),
-                            html.Br(),
-                            html.Span(member.age),
-                        ]
-                    )
-                    for member in values
-                ]
-            )
-            if values
-            else html.P("Ninguna en esta lectura.")
-        )
-
-    return [
-        html.P("Agrupación operativa", className="graph-detail-kicker"),
-        html.H2("Sin asignación verificada"),
-        html.P(
-            "Reúne visualmente unidades que no tienen una relación exacta con un proyecto "
-            "en la lectura actual.",
-            className="graph-detail-subtitle",
-        ),
-        _facts(
-            [
-                ("Unidades", len(members)),
-                ("Disponibles", len(available)),
-                ("Otros estados", len(other)),
-                ("Ubicación física", "No proporcionada"),
-            ]
-        ),
-        html.Section([html.H3("Disponibles"), member_list(available)]),
-        html.Section([html.H3("Otros estados"), member_list(other)]) if other else None,
-        html.P(
-            "Este nodo no representa una base, almacén o taller físico. Cuando el origen "
-            "exponga un ID y tipo de lugar verificables, podrá mostrarse como ubicación real.",
-            className="graph-detail-warning",
-        ),
-    ]
-
-
 def _duration_label(raw: Any) -> str | None:
     try:
         seconds = int(float(str(raw)))
@@ -602,15 +508,6 @@ def _machine_detail(
 ):
     item = node.equipment
     requests = [request for request in hub.requests if request.machinery_id == node.entity_id]
-    project_ids = {
-        value
-        for value in [
-            item.project_id if item else None,
-            *(request.project_id for request in requests),
-            *(transfer.destination_project_id for transfer in (item.transfers if item else [])),
-        ]
-        if value
-    }
     movements = [
         movement
         for movement in (workflow.movements if workflow else [])
@@ -618,6 +515,30 @@ def _machine_detail(
     ]
     transfers = item.transfers if item else []
     alerts = [alert for alert in hub.alerts if alert.equipment_id == node.entity_id]
+    project_evidence: dict[str, list[str]] = {}
+
+    def add_project(project_id: str | None, evidence: str):
+        if project_id:
+            project_evidence.setdefault(project_id, []).append(evidence)
+
+    if item:
+        add_project(item.project_id, "Asignación administrativa de Prisma")
+    for request in requests:
+        add_project(
+            request.project_id,
+            f"Solicitud {request.provenance.source_id or request.id} · {request.status}",
+        )
+    for transfer in transfers:
+        add_project(
+            transfer.destination_project_id,
+            f"Tarea Startrack {transfer.code or transfer.id} · {transfer.status}",
+        )
+    for movement in movements:
+        add_project(
+            movement.project_source_id,
+            f"Movimiento {movement.movement_reference} · {movement.state}",
+        )
+    project_ids = set(project_evidence)
     missing = []
     if item is None:
         missing.append("El registro de la maquinaria no fue devuelto en esta lectura acotada.")
@@ -650,6 +571,7 @@ def _machine_detail(
                 ("Fuente", node.source),
                 ("Observación", node.age),
                 ("Proyecto conocido", ", ".join(sorted(project_ids)) or None),
+                ("Proyectos distintos en evidencia", len(project_ids)),
                 (
                     "Período de asignación",
                     (
@@ -666,6 +588,36 @@ def _machine_detail(
             ]
         ),
     ]
+    if project_evidence:
+        detail.append(
+            html.Section(
+                [
+                    html.H3("Trazabilidad por proyecto"),
+                    html.Ul(
+                        [
+                            html.Li(
+                                [
+                                    html.Strong(project_id),
+                                    html.Ul(
+                                        [
+                                            html.Li(value)
+                                            for value in dict.fromkeys(project_evidence[project_id])
+                                        ]
+                                    ),
+                                ]
+                            )
+                            for project_id in sorted(project_evidence)
+                        ]
+                    ),
+                    html.P(
+                        "El conteo cubre sólo la evidencia visible y relaciona la unidad "
+                        "con proyectos por ID. Una solicitud o asignación no prueba que la "
+                        "máquina haya estado físicamente allí.",
+                        className="graph-detail-note",
+                    ),
+                ]
+            )
+        )
     if item and item.operators is not None:
         detail.append(
             html.Section(
@@ -804,12 +756,11 @@ def _machine_detail(
 def _detail(
     node: GraphNode, hub: HubResponse, workflow: WorkflowOverview | None, graph: OperationsGraph
 ):
-    if node.kind == "place":
-        content = _project_detail(node, graph)
-    elif node.kind == "collection":
-        content = _collection_detail(node, graph)
-    else:
-        content = _machine_detail(node, hub, workflow, graph)
+    content = (
+        _project_detail(node, graph)
+        if node.kind == "place"
+        else _machine_detail(node, hub, workflow, graph)
+    )
     return html.Aside(
         [
             html.Button(
@@ -879,8 +830,8 @@ def _node(node: GraphNode):
             "aria-describedby": tooltip_id,
             "data-node-key": node.key,
             "data-node-kind": node.kind,
-            "data-members": "|".join(node.member_keys),
-            "data-member-of": node.member_of or "",
+            "data-places": "|".join(node.place_keys),
+            "data-always-visible": "true" if transfer_active else "false",
         },
     )
 
@@ -1098,6 +1049,12 @@ def operations_graph_view(hub: HubResponse, workflow: WorkflowOverview | None = 
             hub,
             "Sin entidades verificables",
             "La lectura no devolvió proyectos ni maquinaria con identidad preservada.",
+        )
+    if not any(node.kind == "place" for node in graph.nodes):
+        return graph_status(
+            hub,
+            "Sin lugares verificables",
+            "La maquinaria sin asignación o ubicación confirmada no se agrupa en una base.",
         )
     nodes = {node.key: node for node in graph.nodes}
     identities = "|".join(node.key for node in graph.nodes)

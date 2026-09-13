@@ -10,8 +10,5 @@ La vista selecciona `excavator`, `loader`, `roller` o `truck` únicamente cuando
 lugares: sólo se renderizan cuando el modelo normalizado aporta esa identidad y
 clasificación.
 
-`graph-pool.svg` identifica una agrupación visual de unidades sin asignación
-verificada. No representa una base ni una ubicación física y no crea aristas.
-
 La portada usa Roboto Mono Variable, distribuida localmente bajo SIL Open Font
 License 1.1. El texto completo está en `RobotoMono-OFL.txt`.

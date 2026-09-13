@@ -43,12 +43,14 @@ alcance mientras el grafo está montado. Las demás rutas recuperan el shell nor
 
 ## Presentación y paleta
 
-La portada es un lienzo carbón sin cards, tablas, leyenda extensa ni paneles
-permanentes. Los proyectos tienen diámetro de 96 px y la maquinaria de 58 px;
-las posiciones se derivan de IDs ordenados y permanecen estables al actualizar.
-Las unidades sin asignación verificable rodean una agrupación visual de 84 px:
-no es una base física, no crea relaciones y su detalle enumera las disponibles.
-Los nodos usan botones HTML enfocados por teclado y siluetas SVG locales. Las
+La portada es un lienzo carbón mate sin cards, tablas, leyenda extensa, brillos
+ni paneles permanentes. Inicia sólo con lugares confirmados. Todos los lugares
+tienen diámetro de 56 px y la maquinaria de 32 px; las posiciones se derivan de
+IDs ordenados y permanecen estables al actualizar. Seleccionar un lugar revela
+únicamente las unidades relacionadas por IDs exactos; una unidad en traslado
+activo permanece visible. Una unidad sin relación verificable no se muestra bajo
+una base ni se clasifica como disponible por inferencia. Los nodos usan botones
+HTML enfocados por teclado y siluetas SVG locales. Las
 aristas son segmentos CSS rectos y su etiqueta abre la evidencia de conexión:
 asignación fina; traslado confirmado dirigido; una tarea explícitamente activa
 usa azul y movimiento discreto. Ámbar identifica mantenimiento y rojo una
@@ -171,9 +173,16 @@ El grafo recibe exclusivamente `HubResponse` y `WorkflowOverview`. Proyectos se
 deduplican por `project_id`; maquinaria por su ID normalizado; solicitudes se
 unen por `maquinaria_id` exacto. Los traslados sólo promueven una arista cuando
 la proyección de evidencia ya validó asignación, entorno y período. Un equipo sin
-asignación sigue visible y desconectado. Una geocerca sin tipo físico confirmado
-no se presenta como base o taller. La ubicación, mantenimiento, tarea, presencia
-GPS y recepción permanecen hechos separados.
+asignación no se agrega a un lugar inventado. Las bases y talleres requieren una
+identidad y clasificación física verificables que el modelo normalizado actual
+todavía no aporta. Una geocerca sin tipo físico confirmado no se presenta como
+base o taller. La ubicación, mantenimiento, tarea, presencia GPS y recepción
+permanecen hechos separados.
+
+El detalle de maquinaria cuenta proyectos distintos usando únicamente IDs que
+aparecen en asignaciones, solicitudes, traslados o movimientos persistidos
+visibles. Es trazabilidad documental de la lectura, no prueba de presencia
+física ni una historia completa cuando la cobertura es parcial.
 
 ## Accesibilidad
 
