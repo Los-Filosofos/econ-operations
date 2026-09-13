@@ -34,10 +34,12 @@ del router HTTP a un servicio común. Dash no llama a su propia API ni duplica
 catálogos de mantenimiento. La interfaz incluye navegación, búsqueda, filtros,
 gráficos, estados de fuentes y evidencia.
 
-Se retiran `apps/web`, npm/Vite/Cloudflare y el job web de CI. Antes se conservó
-una copia local con todos los cambios pendientes en
-`.context-work/react-before-dash-20260912/`, excluida de Git. El historial Git
-conserva las versiones anteriores ya versionadas.
+Se retiraron `apps/web`, npm/Vite/Cloudflare y el job web de CI. Por solicitud
+del usuario, también se eliminaron la copia local de React, las copias de trabajo
+del frontend anterior y de integración, y el entorno Python antiguo de la raíz.
+La aplicación vigente y su entorno están en `apps/api`; el historial Git conserva
+las versiones anteriores ya versionadas. Se mantienen las bases de datos, la
+configuración privada y los documentos fuente.
 
 - Un entorno uv y un contenedor sirven interfaz y API; no hay build de Vite.
 - Cloudflare Static Assets deja de ser el destino de la aplicación dinámica.

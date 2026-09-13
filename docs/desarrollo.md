@@ -26,6 +26,13 @@ La copia conserva los `.env` existentes. Compose conserva `econ-backend`, el
 volumen `econ-backend_postgres18_data` y PostgreSQL en `127.0.0.1:54329`.
 Las migraciones se ejecutan explícitamente, no al arrancar.
 
+En `DATABASE_URL`, usar `127.0.0.1` para ese PostgreSQL local, como indica
+`.env.example`. En Windows, `localhost` puede intentar primero IPv6 (`::1`),
+pero Compose escucha solo en IPv4: cada conexión nueva puede esperar el timeout
+antes de conectarse. Si un `.env` existente usa `localhost:54329`, sustituir
+solo ese host, conservando credenciales, base, puerto y demás opciones. No
+aplicar este ajuste a bases remotas ni cambiar el volumen de Compose.
+
 Usar `scripts/dev.sh 8051` o `scripts/dev.ps1 -Port 8051` para otro puerto.
 Sin scripts:
 
@@ -104,9 +111,11 @@ explican en la [guía de integración](solucion-integracion.md).
 7. Revisar móvil y teclado. Las tablas anchas tienen desplazamiento horizontal
    y paginación; no se ocultan columnas de negocio.
 
-Navegar o filtrar la presentación reutiliza el corte de la sesión; Actualizar
-o cambiar origen/búsqueda consulta otra vez. No hay polling automático ni
-DataFrames globales modificables. El navegador no autoriza los conectores.
+Navegar (también desde enlaces de las tablas) o filtrar la presentación reutiliza
+el corte del navegador. Cambiar origen/búsqueda, completar una acción o usar
+«Volver a leer ahora» consulta otra vez. El sondeo cada 15 segundos lee solo
+la versión del registro; recarga datos únicamente si cambió. No hay DataFrames
+globales modificables. El navegador no autoriza los conectores.
 
 ## Verificaciones
 

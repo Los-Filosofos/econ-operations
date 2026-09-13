@@ -51,12 +51,7 @@ PostgreSQL.
 
 ## Recorrido
 
-- **Mapa de operaciones (inicio):** grafo a pantalla completa que inicia sólo
-  con lugares confirmados. Al seleccionar un proyecto despliega únicamente la
-  maquinaria relacionada por identificadores exactos; una unidad en traslado
-  permanece visible. No crea bases, talleres, agrupaciones ni relaciones que
-  las fuentes no permitan identificar. La maquinaria sin vínculo verificable
-  no se atribuye a una base ni se clasifica como disponible por inferencia.
+- **Resumen (inicio):** decisiones y evidencia con el menú y la cabecera habituales.
 - **Solicitudes:** proyecto, tipo requerido, período, unidad asignada, traslado,
   destino, llegada, recepción y evidencia pendiente. El detalle de una solicitud
   pendiente sin unidad lista las **unidades candidatas** por reglas explícitas
@@ -100,11 +95,6 @@ magnitudes y desviaciones escalas secuencial y divergente
 ([arquitectura](docs/frontend-architecture.md)). Los iconos Tabler son locales
 (`app/dashboard/assets/icons`), sin peticiones a terceros. La cookie de sesión es
 `Secure` por defecto: `SESSION_HTTPS_ONLY=false` solo para desarrollo local por HTTP.
-La portada usa un lienzo HTML accesible con Roboto Mono y siluetas SVG locales,
-lugares de 80 px, maquinaria de 48 px, aristas rectas, autoencuadre,
-desplazamiento y detalle contextual de nodos y conexiones. Al seleccionar una
-entidad, el lienzo ocupa 68% y el detalle 32% en escritorio; no añade una
-dependencia de grafos.
 
 El modo `fixture` contiene cinco máquinas y dos solicitudes extraídas del
 OpenAPI proporcionado, con sus IDs y valores originales; no incluye
@@ -135,12 +125,8 @@ y la PENDIENTE es `nexus:request:0cbbbd77-4593-4791-9be5-afd46b06c888`.
    por código, activo, nombre o proyecto. El jurado elige cualquiera; el guion
    sigue con CF-03. Con `live` habilitado en el servidor la misma tabla lista lo
    leído de Prisma, con la cobertura de páginas declarada.
-2. **Grafo de portada de la unidad elegida.** `/?mode=fixture`: el lienzo
-   inicia con los lugares confirmados (PROY-014); seleccionar el proyecto revela
-   CF-03 unida por `project_id` y `maquinaria_id` exactos, y el panel de detalle
-   (68/32 en escritorio) muestra hechos, procedencia y faltantes. Las otras
-   cuatro unidades no se atribuyen a ninguna base. Enter abre el detalle,
-   Escape lo cierra; `+`, `-` y `0` controlan el zoom.
+2. **Resumen de decisiones.** `/?mode=fixture`: asuntos por solicitud, evidencia
+   disponible y acceso al detalle desde la interfaz habitual de ECON.
 3. **Consulta unificada de la unidad** ([RF-04](docs/matriz-requisitos-entregables.md#matriz-de-trazabilidad)).
    `/maquinaria/{id}?mode=fixture`: estado administrativo de Prisma
    (`OBSOLETA`), mantenimiento (sin falla activa), ventana de asignación 11–14/09,
@@ -307,5 +293,7 @@ sirve interfaz y API juntas y documenta `SYNC_INTERVAL_SECONDS` y
 [Backlog](https://github.com/Los-Filosofos/econ-operations/issues) ·
 [OneDrive](docs/onedrive/README.md).
 
-Los originales con accesos permanecen en `.context-work/`, excluida de Git.
+`.context-work/`, excluida de Git, conserva solo el acceso local y los logs del
+servidor de desarrollo. Los originales y temporales antiguos se retiraron por
+solicitud del usuario; las fuentes convertidas permanecen en `docs/onedrive/`.
 Commits y PR en inglés; producto y documentación operativa en español.

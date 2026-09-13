@@ -14,7 +14,7 @@ from app.api.users import UserCreate, UserUpdate, create_user, list_users, updat
 from app.core.auth import Permission, Role, can
 from app.dashboard.analytics import instant
 from app.dashboard.auth_views import ROLE_LABELS, current_user
-from app.dashboard.components import heading, icon, notice, section, state_text
+from app.dashboard.components import accordion, disclosure, heading, icon, notice
 from app.models.users import User
 
 ROLE_OPTIONS = [{"value": role.value, "label": ROLE_LABELS[role]} for role in Role]
@@ -118,28 +118,29 @@ def users_table(users: list) -> dmc.TableScrollContainer:
     rows = [
         dmc.TableTr(
             [
-                dmc.TableTd(user.full_name),
-                dmc.TableTd(user.email),
+                dmc.TableTd(
+                    [
+                        html.Span(
+                            user.full_name,
+                            title="Creado: "
+                            + instant(
+                                user.created_at
+                                if user.created_at.tzinfo
+                                else user.created_at.replace(tzinfo=UTC)
+                            ),
+                        ),
+                        dmc.Text(user.email, size="xs", c="dimmed"),
+                    ]
+                ),
                 dmc.TableTd(ROLE_LABELS.get(user.role, user.role)),
+                dmc.TableTd("Activo" if user.is_active else "Inactivo"),
                 dmc.TableTd(
-                    state_text("Activo", "active")
-                    if user.is_active
-                    else state_text("Inactivo", "neutral")
-                ),
-                dmc.TableTd(
-                    instant(
-                        user.created_at
-                        if user.created_at.tzinfo
-                        else user.created_at.replace(tzinfo=UTC)
-                    )
-                ),
-                dmc.TableTd(
-                    dmc.ActionIcon(
-                        icon("pencil", 16),
+                    dmc.Button(
+                        "Editar",
                         id={"type": "user-edit", "user": user.id},
                         n_clicks=0,
                         variant="subtle",
-                        color="gray",
+                        size="compact-sm",
                         **{"aria-label": f"Editar a {user.full_name}"},
                     )
                 ),
@@ -153,17 +154,16 @@ def users_table(users: list) -> dmc.TableScrollContainer:
                 dmc.TableCaption("Usuarios registrados", className="sr-only"),
                 dmc.TableThead(
                     dmc.TableTr(
-                        [
-                            dmc.TableTh(label)
-                            for label in ["Nombre", "Correo", "Rol", "Activo", "Creado", ""]
-                        ]
+                        [dmc.TableTh(label) for label in ["Usuario", "Rol", "Estado", "Acción"]]
                     )
                 ),
                 dmc.TableTbody(rows),
             ],
             highlightOnHover=True,
+            verticalSpacing="xs",
+            fz="sm",
         ),
-        minWidth=640,
+        minWidth=500,
         type="native",
         **{"aria-label": "Usuarios registrados"},
     )
@@ -171,12 +171,12 @@ def users_table(users: list) -> dmc.TableScrollContainer:
 
 def admin_layout():
     return [
-        heading("Administración", "Cuentas, roles y estado de acceso de cada usuario."),
+        heading("Usuarios"),
         dcc.Store(id="admin-result", storage_type="memory"),
         dcc.Store(id="user-edit-id", storage_type="memory"),
         html.Div(id="admin-feedback", **{"aria-live": "polite"}),
-        section("Usuarios", html.Div(id="admin-users")),
-        section("Nuevo usuario", new_user_form()),
+        html.Div(id="admin-users"),
+        accordion(disclosure("Crear usuario", new_user_form())),
         user_modal(),
     ]
 

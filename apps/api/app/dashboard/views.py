@@ -1,6 +1,5 @@
 """Pages of the hub: registry, navigation, lists, details and sources."""
 
-from collections import Counter
 from urllib.parse import unquote
 
 import dash_mantine_components as dmc
@@ -18,7 +17,7 @@ from app.dashboard.analytics import (
 from app.dashboard.auth_views import current_user
 from app.dashboard.components import (
     accordion,
-    back_link,
+    breadcrumbs,
     disclosure,
     empty,
     facts,
@@ -36,13 +35,12 @@ from app.dashboard.components import (
     state_text,
 )
 from app.dashboard.context import QueryContext
+from app.dashboard.coverage_analytics import coverage_figure, coverage_rows
 from app.dashboard.decision_analytics import (
     graph,
     matching_current_movements,
     request_states,
     requests_in_scope,
-    short_date,
-    states_figure,
     usage_figure,
     usage_timeline,
 )
@@ -57,14 +55,14 @@ from app.dashboard.evidence_views import (
     request_timeline,
     source_comparison,
 )
-from app.dashboard.indicator_views import indicator_insights, indicators_page
+from app.dashboard.indicator_views import indicators_page
 from app.dashboard.integration_views import integration_page
-from app.dashboard.operations_graph import graph_status, operations_graph_view
+from app.dashboard.inventory_analytics import inventory_status_panel
 from app.dashboard.suggestion_views import conflicts_section, suggestions_section
+from app.dashboard.theme import state_color
 from app.dashboard.workflow_views import (
     STATES,
     matching_movements,
-    receipt_label,
     remaining_evidence,
     request_workflow,
     workflow_page,
@@ -74,7 +72,7 @@ from app.models.hub import EquipmentRecord, HubResponse, RequestRecord
 
 MODES = {"fixture": "Muestras proporcionadas", "live": "Sandbox actual (sintético)"}
 # Only the lists let `q` narrow what is shown; every other page keeps the origin as text.
-SEARCHABLE = frozenset({"/", "/decisiones", "/solicitudes", "/maquinaria", "/operaciones"})
+SEARCHABLE = frozenset({"/solicitudes", "/maquinaria", "/operaciones"})
 RELATIONS = {
     "confirmed": "Vínculo confirmado",
     "candidate": "Vínculo por revisar",
@@ -102,7 +100,7 @@ PLATFORMS = {"nexus": "https://econ-key.maic.ai", "startrack": "https://staging.
 
 
 def current_section(path: str) -> str | None:
-    if path in {"/", "/resumen"}:
+    if path in {"/", "/resumen", "/decisiones"}:
         return "/"
     return next(
         (
@@ -127,23 +125,31 @@ def visible_pages():
 def navigation(path: str, context: QueryContext):
     """Navigation links for the sidebar and the mobile drawer; one section is current."""
     selected = current_section(path)
-    return [
-        dmc.NavLink(
-            label=page["label"],
-            leftSection=icon(page["icon"]),
-            href=context.href(page["path"]),
-            active=selected == page["path"],
-            className="nav-link" + (" nav-utility" if page.get("secondary") else ""),
-            **({"aria-current": "page"} if selected == page["path"] else {}),
+    pages = visible_pages()
+    links = []
+    for secondary, label in [(False, "Operación"), (True, "Sistema")]:
+        group = [page for page in pages if bool(page.get("secondary")) == secondary]
+        if not group:
+            continue
+        links.append(dmc.Text(label, size="xs", fw=600, className="nav-group-label"))
+        links.extend(
+            dmc.NavLink(
+                label=page["label"],
+                leftSection=icon(page["icon"]),
+                href=QueryContext(mode=context.mode).href(page["path"]),
+                active=selected == page["path"],
+                className="nav-link" + (" nav-utility" if secondary else ""),
+                **({"aria-current": "page"} if selected == page["path"] else {}),
+            )
+            for page in group
         )
-        for page in visible_pages()
-    ]
+    return links
 
 
 def searchable(path: str | None) -> bool:
     """Whether this page shows the full query bar; details and utilities never do."""
     normalized = (path or "/").rstrip("/") or "/"
-    return normalized in SEARCHABLE or normalized == "/resumen"
+    return normalized in SEARCHABLE
 
 
 def origin_link(context: QueryContext, path: str):
@@ -160,13 +166,58 @@ def origin_link(context: QueryContext, path: str):
 def origin_line(context: QueryContext, path: str):
     """Scope line for pages without the query bar: origin as text plus one way to change it."""
     return dmc.Group(
-        [dmc.Text(MODES[context.mode], size="xs", fw=500), origin_link(context, path)],
+        [
+            dmc.Text(
+                "Muestra documental" if context.mode == "fixture" else "Sandbox sintético",
+                size="xs",
+            ),
+            reading_menu(context, path),
+        ],
         gap="md",
+        justify="space-between",
         className="scope-line",
     )
 
 
+def reading_menu(context: QueryContext, path: str, *details):
+    """Source details and real navigation links behind a keyboard-operable trigger."""
+    return dmc.Menu(
+        [
+            dmc.MenuTarget(
+                dmc.Button(
+                    "Datos de la lectura",
+                    variant="subtle",
+                    size="compact-sm",
+                    rightSection=icon("chevron-down", 14),
+                    **{"aria-label": "Ver origen y cobertura de la lectura"},
+                )
+            ),
+            dmc.MenuDropdown(
+                dmc.Stack(
+                    [
+                        dmc.Text(MODES[context.mode], size="sm", fw=600),
+                        *details,
+                        origin_link(context, path),
+                        link(
+                            "Ver fuentes y cobertura",
+                            QueryContext(mode=context.mode).href("/fuentes"),
+                            size="sm",
+                        ),
+                    ],
+                    gap="sm",
+                    p="sm",
+                )
+            ),
+        ],
+        width=300,
+        position="bottom-end",
+        withinPortal=False,
+        keepMounted=True,
+    )
+
+
 def scope(hub: HubResponse, context: QueryContext | None = None, workflow=None, path=None):
+    context = context or QueryContext(mode=hub.mode)
     count = f"{hub.scope.requests_returned} solicitudes"
     if context is not None and context.filter != "all":
         selected = len(requests_in_scope(hub, context, workflow))
@@ -177,16 +228,25 @@ def scope(hub: HubResponse, context: QueryContext | None = None, workflow=None, 
         else f"{hub.scope.equipment_returned} equipos · total desconocido"
     )
     coverage = "Cobertura completa" if hub.scope.complete else "Cobertura parcial"
+    cutoff = instant(hub.data_as_of) if hub.data_as_of else "Sin corte de observación"
     return dmc.Group(
         [
-            dmc.Text(MODES[hub.mode], size="xs", fw=500),
-            dmc.Text(count, size="xs", c="dimmed"),
-            dmc.Text(coverage, size="xs", c="dimmed"),
-            dmc.Text(equipment, size="xs", c="dimmed"),
-            link("Fuentes y cobertura", (context or QueryContext()).href("/fuentes"), size="xs"),
-            origin_link(context, path) if context is not None and not searchable(path) else None,
+            dmc.Text(
+                f"{'Muestra documental' if hub.mode == 'fixture' else 'Sandbox sintético'} · "
+                f"{coverage.lower()}",
+                size="xs",
+                className="scope-summary",
+            ),
+            reading_menu(
+                context,
+                path or "/",
+                dmc.Text(f"{count} · {equipment}", size="sm"),
+                dmc.Text(coverage, size="sm"),
+                dmc.Text(cutoff, size="xs", c="dimmed"),
+            ),
         ],
         gap="md",
+        justify="space-between",
         className="scope-line",
     )
 
@@ -217,7 +277,16 @@ def unavailable(hub: HubResponse, context: QueryContext, subject: str):
 
 def state_legend(values: list[str]):
     return dmc.Group(
-        [state_text(value) for value in dict.fromkeys(values)],
+        [
+            dmc.Group(
+                [
+                    dmc.Box(w=18, h=3, bg=state_color(value), **{"aria-hidden": "true"}),
+                    state_text(value),
+                ],
+                gap="xs",
+            )
+            for value in dict.fromkeys(values)
+        ],
         gap="lg",
         my="xs",
         **{"aria-label": "Leyenda de estados"},
@@ -225,54 +294,54 @@ def state_legend(values: list[str]):
 
 
 def decision_cards(hub, context, workflow):
-    """Each decision reads as an action: what, about which request and unit, on what
-    evidence and dates, and where to review it."""
-    cards = []
-    for item in decision_items(hub, context, workflow):
-        request = item.request
-        states = [state_text(request.status)]
-        if item.equipment is not None:
-            states.append(state_text(item.equipment.machinery_status))
-        cards.append(
-            dmc.Paper(
-                dmc.Grid(
-                    [
-                        dmc.GridCol(
-                            [
-                                dmc.Text("Acción", size="xs", c="dimmed"),
-                                dmc.Title(item.title, order=3, size="h5"),
-                                dmc.Text(item.subject, size="sm", mt=4),
-                                dmc.Group(states, gap="md", mt=6),
-                            ],
-                            span={"base": 12, "md": 4},
-                        ),
-                        dmc.GridCol(
-                            [
-                                dmc.Text("Evidencia", size="xs", c="dimmed"),
-                                dmc.Text(item.evidence, size="sm", mb="sm"),
-                                facts(item.dated_facts, cols=2),
-                            ],
-                            span={"base": 12, "md": 6},
-                        ),
-                        dmc.GridCol(
-                            link(
-                                dmc.Group([item.action, icon("arrow-right", 15)], gap=4),
-                                item.href,
-                                fw=500,
-                            ),
-                            span={"base": 12, "md": 2},
-                        ),
-                    ],
-                    gutter="md",
-                ),
-                withBorder=True,
-                p="md",
-                className="decision-card",
-            )
-        )
-    if not cards:
-        return hint("No se identificaron asuntos por revisar con la evidencia de esta consulta.")
-    return dmc.Stack(cards, gap="sm")
+    """The complete decision queue, with evidence beside the action it supports."""
+    rows = [
+        {
+            "subject": markdown_link(item.title, context.request_href(item.request.id)),
+            "project": item.request.project_name or "Sin proyecto",
+            "equipment": equipment_label(item.equipment)
+            if item.equipment is not None
+            else "Sin unidad",
+            "evidence": item.evidence.split(". ", 1)[0].removesuffix("."),
+            "evidence_detail": item.evidence,
+            "action": markdown_link(item.action, item.href),
+        }
+        for item in decision_items(hub, context, workflow)
+    ]
+    return grid(
+        "decision-actions-grid",
+        rows,
+        [
+            ("subject", "Asunto"),
+            ("project", "Proyecto"),
+            ("equipment", "Unidad"),
+            ("evidence", "Motivo de revisión"),
+            ("action", "Acción"),
+        ],
+        markdown_fields={"subject", "action"},
+        column_overrides={
+            "subject": {
+                "width": 230,
+                "minWidth": 180,
+                "flex": 1,
+                "wrapText": True,
+                "autoHeight": True,
+                "cellStyle": {"whiteSpace": "normal"},
+            },
+            "project": {"minWidth": 200, "flex": 1, "wrapText": True, "autoHeight": True},
+            "equipment": {"width": 125, "minWidth": 125, "flex": 0, "filter": False},
+            "evidence": {
+                "width": 250,
+                "minWidth": 190,
+                "flex": 1,
+                "wrapText": True,
+                "autoHeight": True,
+                "cellStyle": {"whiteSpace": "normal"},
+                "tooltipField": "evidence_detail",
+            },
+            "action": {"width": 155, "minWidth": 155, "flex": 0, "filter": False},
+        },
+    )
 
 
 def registry_hint(workflow):
@@ -292,151 +361,96 @@ def registry_hint(workflow):
 
 
 def decisions(hub: HubResponse, context: QueryContext, workflow=None):
-    """One action per request with its evidence and dates, plus what the indicators say."""
-    content = [
-        heading(
-            "Qué requiere atención",
-            "Una acción por solicitud, con su evidencia y sus fechas de origen, y lo que dicen "
-            "los indicadores de esta misma lectura.",
-        )
-    ]
+    """Source periods with assignment context, then the evidence-backed work queue."""
+    context = QueryContext(mode=context.mode)
+    content = [heading("Operación")]
     if context.mode != hub.mode or not readable(hub):
-        return [*content, unavailable(hub, context, "Decisiones")]
+        return [*content, unavailable(hub, context, "Operación")]
     requests = requests_in_scope(hub, context, workflow)
-    if context.filter in FILTER_LABELS:
-        content.append(hint(f"Filtro aplicado: {FILTER_LABELS[context.filter]}."))
-    content.append(
-        section(
-            "Acciones por solicitud",
-            decision_cards(hub, context, workflow)
-            if requests
-            else empty(
-                "Sin solicitudes para representar",
-                "Amplía la búsqueda o cambia el filtro de solicitudes.",
-            ),
-            registry_hint(workflow),
-            **{"aria-label": "Acciones por solicitud"},
-        )
-    )
-    content.append(indicator_insights(hub, context, workflow))
-    if not requests:
-        return content
-    source = next(source for source in hub.sources if source.id == "nexus")
-    cutoff = (
-        f"Corte de lectura: {instant(hub.data_as_of)} (El Salvador)."
-        if hub.data_as_of is not None
-        else f"Fecha documental: {day(source.observed_on)}; sin instante común de observación."
-        if source.observed_on is not None
-        else "Sin instante común de observación."
-    )
-    total = (
-        f"Total de solicitudes informado por el origen: {hub.scope.requests_total}, "
-        "antes de la búsqueda local."
-        if hub.scope.requests_total is not None
-        else "El origen no informa un total de solicitudes."
-    )
-    content.append(
-        hint(
-            f"Revisiones basadas en la evidencia disponible; no indican atraso. "
-            f"{'Muestras del archivo' if hub.mode == 'fixture' else 'Lectura del sandbox'} · "
-            f"Datos sintéticos. Solicitudes en esta vista: {len(requests)}; devueltas por la "
-            f"consulta: {len(hub.requests)}. {total} {cutoff} "
-            + ("Cobertura integrada parcial." if not hub.scope.complete else ""),
-            mt="md",
-        )
-    )
     timeline = usage_timeline(requests)
-    period_note = (
-        f"Solicitudes con período representable: {len(timeline.periods)} de {len(requests)}. "
-        "Inicio y fin incluidos; no son plazos de entrega."
-    )
-    if timeline.periods:
-        start = min(period.starts_on for period in timeline.periods)
-        end = max(period.ends_on for period in timeline.periods)
-        period_note = f"{short_date(start)} – {short_date(end, year=True)}. {period_note}"
-    excluded_rows = [
+    states = request_states(requests)
+    agenda_chart = usage_figure(timeline)
+    rows = [
         [
             link(
-                item.request.provenance.source_id or item.request.id,
-                context.request_href(item.request.id),
+                period.request.project_name or "Sin proyecto",
+                context.request_href(period.request.id),
             ),
+            period.request.machinery_type or "Sin tipo",
+            period.request.status,
+            period.request.starts_on,
+            period.request.ends_on,
+            "Representado",
+        ]
+        for period in timeline.periods
+    ]
+    rows.extend(
+        [
+            link(
+                item.request.project_name or "Sin proyecto", context.request_href(item.request.id)
+            ),
+            item.request.machinery_type or "Sin tipo",
+            item.request.status,
             item.request.starts_on or "Sin informar",
             item.request.ends_on or "Sin informar",
             item.reason,
         ]
         for item in timeline.excluded
-    ]
+    )
     content.append(
         section(
-            "Período de uso solicitado",
-            hint(period_note),
-            [
-                graph("decision-request-usage", usage_figure(timeline)),
-                state_legend([period.request.status for period in timeline.periods]),
-            ]
+            "Agenda de uso y asignación",
+            hint("Fechas de uso solicitadas; no son plazos de entrega."),
+            state_legend([request.status for request in requests]),
+            graph("decision-request-usage", agenda_chart)
             if timeline.periods
-            else hint("No hay períodos con inicio y fin válidos para representar."),
+            else hint(
+                "Sin solicitudes en esta lectura."
+                if not requests
+                else "Sin períodos válidos para representar en esta lectura."
+            ),
             hint(
-                f"{len(timeline.excluded)} solicitud(es) no representadas por fechas incompletas, "
-                "ambiguas o invertidas. Consulta el detalle en la tabla.",
-                role="status",
+                f"{len(timeline.excluded)} solicitudes con fechas no representables.", role="status"
             )
             if timeline.excluded
             else None,
-            accordion(
-                disclosure(
-                    "Ver datos de períodos",
-                    simple_table(
-                        ["Solicitud", "Proyecto", "Inicio solicitado", "Fin solicitado"],
-                        [
-                            [
-                                link(
-                                    period.request.provenance.source_id or period.request.id,
-                                    context.request_href(period.request.id),
-                                ),
-                                period.request.project_name
-                                or period.request.project_id
-                                or "Sin proyecto",
-                                period.request.starts_on,
-                                period.request.ends_on,
-                            ]
-                            for period in timeline.periods
-                        ],
-                        caption="Períodos originales de uso de las solicitudes representadas",
-                    ),
-                    dmc.Title("Solicitudes no representadas", order=3, size="h6", mt="md")
-                    if excluded_rows
-                    else None,
-                    simple_table(
-                        ["Solicitud", "Inicio original", "Fin original", "Motivo"],
-                        excluded_rows,
-                        caption="Solicitudes excluidas del gráfico y motivo de exclusión",
-                    )
-                    if excluded_rows
-                    else None,
-                    hint(
-                        "Fechas con hora y zona se representan por su día en El Salvador. "
-                        "La tabla conserva los valores originales."
-                    ),
-                ),
-                disclosure(
-                    "Ver distribución por estado de solicitud",
-                    hint(f"Solicitudes de esta vista por estado administrativo: {len(requests)}."),
-                    graph("decision-request-states", states_figure(request_states(requests))),
-                    accordion(
-                        disclosure(
-                            "Ver datos de estados",
-                            simple_table(
-                                ["Estado original", "Solicitudes"],
-                                [[state, count] for state, count in request_states(requests)],
-                                caption="Solicitudes por estado administrativo original",
-                            ),
-                        )
-                    ),
-                ),
-            ),
-            **{"aria-label": "Períodos de uso solicitados"},
+            className="page-section agenda-panel",
         )
+    )
+    content.append(
+        section(
+            "Acciones por solicitud",
+            decision_cards(hub, context, workflow),
+            registry_hint(workflow),
+        )
+    )
+    content.append(
+        accordion(
+            disclosure(
+                "Datos de la agenda",
+                simple_table(
+                    ["Estado de solicitud", "Solicitudes"],
+                    [[state, count] for state, count in states],
+                    caption="Conteos por estado original de las solicitudes de esta lectura",
+                ),
+                simple_table(
+                    [
+                        "Proyecto / solicitud",
+                        "Tipo",
+                        "Estado",
+                        "Inicio",
+                        "Fin",
+                        "Representación",
+                    ],
+                    rows,
+                    caption="Períodos originales de uso y motivos de exclusión del gráfico",
+                ),
+                hint(
+                    "Las fechas con hora se representan por su día en El Salvador. "
+                    "La tabla conserva los valores originales."
+                ),
+            )
+        ),
     )
     return content
 
@@ -446,9 +460,8 @@ def indicators(hub: HubResponse, context: QueryContext, workflow=None):
     if context.mode != hub.mode or not readable(hub):
         return [
             heading(
-                "Indicadores y SLA",
-                "Qué dicen las lecturas de hoy, por fila y sin promedios, y el SLA propuesto "
-                "para cada pregunta.",
+                "Indicadores",
+                "Tiempos medidos y casos que requieren revisión.",
             ),
             unavailable(hub, context, "Indicadores"),
         ]
@@ -456,14 +469,8 @@ def indicators(hub: HubResponse, context: QueryContext, workflow=None):
 
 
 def overview(hub: HubResponse, context: QueryContext, workflow=None):
-    """Primary full-viewport graph; query context never changes source relationships."""
-    if hub.mode != context.mode:
-        return graph_status(
-            hub,
-            "Origen no disponible",
-            "La lectura recibida no corresponde al origen solicitado.",
-        )
-    return operations_graph_view(hub, workflow)
+    """Start with operational decisions inside the regular application shell."""
+    return decisions(hub, context, workflow)
 
 
 def period_label(request: RequestRecord) -> str:
@@ -474,40 +481,41 @@ def requests(hub: HubResponse, context: QueryContext, workflow=None):
     content = [
         heading(
             "Solicitudes de maquinaria",
-            "Del proyecto y la unidad asignada al traslado, la llegada y la recepción.",
+            "Asignación, período y avance de cada solicitud.",
         ),
         filter_tabs(context, REQUEST_FILTERS, "Filtros de solicitudes"),
     ]
     if not readable(hub):
         return [*content, unavailable(hub, context, "Solicitudes")]
+    next_steps = {item.request.id: item for item in decision_items(hub, context, workflow)}
     rows = []
     for request in requests_in_scope(hub, context, workflow):
         operation = request_operation(hub, request)
         item, tasks = operation.equipment, operation.transfers
         movements = matching_current_movements(hub, request, workflow)
-        states = Counter(movement.status or STATES[movement.state] for movement in movements)
-        transfer = " · ".join(
-            f"{state} ({count})" if count > 1 else state for state, count in states.items()
-        ) or " · ".join(dict.fromkeys(task.status for task in tasks))
-        arrived = sum(
-            any(event.kind == "arrival" for event in movement.events) for movement in movements
+        states = list(
+            dict.fromkeys(movement.status or STATES[movement.state] for movement in movements)
         )
-        if arrived:
-            transfer += " · Llegada observada" + (
-                f" ({arrived}/{len(movements)})" if len(movements) > 1 else ""
-            )
+        if not states:
+            states = list(dict.fromkeys(task.status for task in tasks if task.status))
+        transfer = (
+            states[0] if len(states) == 1 else "Varios estados" if states else "Sin tarea vinculada"
+        )
         received = sum(movement.receipt is not None for movement in movements)
         receipt = (
-            receipt_label(movements[0])
-            if len(movements) == 1
-            else f"{received} de {len(movements)} con constancia"
+            "Registrada"
+            if received == 1 and len(movements) == 1
+            else f"{received} registradas"
             if received
             else "Sin constancia"
         )
         unknown = operation_read_message(workflow)
-        if unknown:
-            transfer = f"{transfer} · {unknown}" if transfer else unknown
-            receipt = unknown
+        if unknown or hub.mode == "fixture":
+            if not states:
+                transfer = "No evaluable" if hub.mode == "fixture" else "Sin confirmar"
+            if not received:
+                receipt = "No evaluable" if hub.mode == "fixture" else "Sin confirmar"
+        next_step = next_steps.get(request.id)
         unit = (
             equipment_label(item)
             if item
@@ -515,13 +523,19 @@ def requests(hub: HubResponse, context: QueryContext, workflow=None):
         )
         rows.append(
             {
+                "action": markdown_link(
+                    next_step.action if next_step else "Ver solicitud",
+                    next_step.href if next_step else context.request_href(request.id),
+                ),
                 "project": markdown_link(
                     request.project_name or "Proyecto sin nombre", context.request_href(request.id)
                 ),
-                "equipment": f"{request.machinery_type or 'Tipo sin informar'} · {unit}",
+                "equipment": unit
+                if item
+                else f"{request.machinery_type or 'Tipo sin informar'} · {unit}",
                 "period": period_label(request),
                 "status": request.status,
-                "transfer": transfer or "Sin traslado vinculado",
+                "transfer": transfer,
                 "receipt": receipt,
             }
         )
@@ -530,25 +544,30 @@ def requests(hub: HubResponse, context: QueryContext, workflow=None):
             "requests-grid",
             rows,
             [
-                ("project", "Proyecto · solicitud"),
-                ("equipment", "Maquinaria"),
-                ("period", "Período solicitado"),
-                ("status", "Estado de solicitud"),
+                ("project", "Proyecto"),
+                ("equipment", "Unidad"),
+                ("period", "Período"),
+                ("status", "Solicitud"),
                 ("transfer", "Traslado"),
                 ("receipt", "Recepción"),
+                ("action", "Acción"),
             ],
             state_field="status",
+            markdown_fields={"project", "action"},
+            column_overrides={
+                "project": {"width": 140, "minWidth": 120, "flex": 1},
+                "equipment": {"width": 90, "minWidth": 80, "flex": 0},
+                "period": {"width": 145, "minWidth": 135, "flex": 0},
+                "status": {"width": 95, "minWidth": 85, "flex": 0},
+                "transfer": {"width": 105, "minWidth": 90, "flex": 0},
+                "receipt": {"width": 105, "minWidth": 90, "flex": 0},
+                "action": {"width": 130, "minWidth": 120, "flex": 0},
+            },
         )
         if rows
         else empty(
             "Sin solicitudes en esta consulta",
             "No se recibió una solicitud para este origen, búsqueda y filtro.",
-        )
-    )
-    content.append(
-        hint(
-            "Abre una solicitud para revisar la cadena completa. Una tarea completada o una "
-            "entrada a geocerca no acredita recepción física."
         )
     )
     assigned_ids = {request.machinery_id for request in hub.requests}
@@ -585,8 +604,7 @@ def equipment_inventory(hub: HubResponse, context: QueryContext, workflow=None):
     content = [
         heading(
             "Maquinaria",
-            "Consulta una unidad para comparar su estado en Prisma, el seguimiento "
-            "de Startrack y la evidencia de recepción.",
+            "Asignación y condición de las unidades leídas.",
         ),
         filter_tabs(context, EQUIPMENT_FILTERS, "Filtros de maquinaria"),
     ]
@@ -597,13 +615,6 @@ def equipment_inventory(hub: HubResponse, context: QueryContext, workflow=None):
         equipment = [item for item in equipment if item.maintenance_failure_id]
     elif context.filter == "unlinked":
         equipment = [item for item in equipment if item.relation_status != "confirmed"]
-    content.append(
-        hint(
-            f"{len(equipment)} de {hub.scope.equipment_returned} unidades en esta consulta. "
-            "El estado administrativo no confirma disponibilidad física. "
-            "Las tareas y ubicaciones se muestran con su propia fecha en el detalle."
-        )
-    )
     if not equipment:
         return [
             *content,
@@ -628,7 +639,7 @@ def equipment_inventory(hub: HubResponse, context: QueryContext, workflow=None):
         elif item.maintenance_is_stopped is True:
             maintenance = "Paro registrado; sin ID de falla"
         else:
-            maintenance = "Sin falla activa registrada; disponibilidad no verificada"
+            maintenance = "Sin falla activa registrada"
         rows.append(
             {
                 "equipment": markdown_link(
@@ -637,20 +648,15 @@ def equipment_inventory(hub: HubResponse, context: QueryContext, workflow=None):
                 "project": project_label(item),
                 "administration": item.machinery_status,
                 "maintenance": maintenance,
-                "tracking": (
-                    f"{len(item.transfers)} tareas vinculadas · Revisar fecha y estado"
-                    if item.transfers and item.relation_status == "confirmed"
-                    else "Sin evidencia vinculada en esta lectura"
-                ),
-                "location": (
-                    f"{item.location.label} · {instant(item.location.observed_at)}"
-                    if item.location
-                    else "Sin ubicación fechada de la maquinaria"
-                ),
             }
         )
     return [
         *content,
+        inventory_status_panel(
+            equipment,
+            read_total=len(hub.equipment),
+            source_total=hub.scope.equipment_total,
+        ),
         grid(
             "equipment-table",
             rows,
@@ -659,8 +665,6 @@ def equipment_inventory(hub: HubResponse, context: QueryContext, workflow=None):
                 ("project", "Proyecto en Prisma"),
                 ("administration", "Estado administrativo"),
                 ("maintenance", "Mantenimiento"),
-                ("tracking", "Seguimiento Startrack"),
-                ("location", "Ubicación de maquinaria"),
             ],
             state_field="administration",
         ),
@@ -714,10 +718,14 @@ def task_record(task, item: EquipmentRecord):
 
 def request_detail(hub: HubResponse, context: QueryContext, identifier: str, workflow=None):
     request = next((item for item in hub.requests if item.id == identifier), None)
-    back = back_link("Volver a solicitudes", context.href("/solicitudes", filter=context.filter))
+    trail = breadcrumbs(
+        "Solicitudes",
+        context.href("/solicitudes", filter=context.filter),
+        request.machinery_type if request and request.machinery_type else "Detalle",
+    )
     if request is None:
         return [
-            back,
+            trail,
             empty(
                 "Solicitud fuera de la consulta",
                 "Comprueba el origen y limpia la búsqueda para ampliar el alcance.",
@@ -727,6 +735,14 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
     item = operation.equipment
     movements = matching_movements(workflow, request)
     current_movements = matching_current_movements(hub, request, workflow)
+    next_step = next(
+        (
+            decision
+            for decision in decision_items(hub, QueryContext(mode=context.mode), workflow)
+            if decision.request.id == request.id
+        ),
+        None,
+    )
     unknown = operation_read_message(workflow)
     request_alerts = [
         alert
@@ -750,7 +766,7 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
         "no permiten elegirla automáticamente.",
     )
     return [
-        back,
+        trail,
         heading(
             f"Solicitud de {request.machinery_type}"
             if request.machinery_type
@@ -796,45 +812,67 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
                 )
             ),
         ),
+        section(
+            next_step.title,
+            hint(next_step.evidence),
+            link(next_step.action, next_step.href)
+            if next_step.href != context.request_href(request.id)
+            else None,
+        )
+        if next_step
+        else None,
+        *request_workflow(workflow, context, request, item),
         suggestions_section(hub, request, workflow, context),
         conflicts_section(hub, request, workflow, context),
-        interpretation_section(item, current_movements) if item else None,
-        accordion(disclosure(unit_title, *(machine_evidence(item) if item else [unit_missing]))),
-        *request_workflow(workflow, context, request, item),
+        accordion(
+            disclosure(
+                unit_title,
+                interpretation_section(item, current_movements) if item else None,
+                *(machine_evidence(item) if item else [unit_missing]),
+            )
+        ),
         *(
             []
             if movements
             else [
-                section(
-                    "Traslado de Startrack",
-                    *(
-                        [task_record(task, item) for task in operation.transfers]
-                        or [
-                            empty(
-                                unknown or "Sin traslado vinculado a esta solicitud",
-                                "La consulta de operaciones no permite determinar "
-                                "los movimientos vinculados."
-                                if unknown
-                                else "Falta una tarea con correspondencia de solicitud y "
-                                "maquinaria validada en los registros consultados. Los "
-                                "nombres no confirman esa relación.",
-                            )
-                        ]
-                    ),
-                ),
-                section(
-                    "Llegada y recepción",
-                    facts(
-                        [
-                            ("Llegada al destino", unknown or "Sin evidencia de llegada vinculada"),
-                            ("Recepción física", unknown or "Sin constancia de recepción"),
-                        ]
-                    ),
-                    hint(
-                        "El estado de una tarea y la ubicación del GPS son hechos distintos. "
-                        "Una entrada a geocerca no confirma que el proyecto haya recibido "
-                        "la maquinaria."
-                    ),
+                accordion(
+                    disclosure(
+                        "Seguimiento y recepción",
+                        section(
+                            "Traslado de Startrack",
+                            *(
+                                [task_record(task, item) for task in operation.transfers]
+                                or [
+                                    empty(
+                                        unknown or "Sin traslado vinculado a esta solicitud",
+                                        "La consulta de operaciones no permite determinar "
+                                        "los movimientos vinculados."
+                                        if unknown
+                                        else "Falta una tarea con correspondencia de solicitud y "
+                                        "maquinaria validada en los registros consultados. Los "
+                                        "nombres no confirman esa relación.",
+                                    )
+                                ]
+                            ),
+                        ),
+                        section(
+                            "Llegada y recepción",
+                            facts(
+                                [
+                                    (
+                                        "Llegada al destino",
+                                        unknown or "Sin evidencia de llegada vinculada",
+                                    ),
+                                    ("Recepción física", unknown or "Sin constancia de recepción"),
+                                ]
+                            ),
+                            hint(
+                                "La tarea y la ubicación del GPS son hechos distintos. "
+                                "Una entrada a geocerca no confirma que el proyecto haya recibido "
+                                "la maquinaria."
+                            ),
+                        ),
+                    )
                 ),
             ]
         ),
@@ -859,16 +897,18 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
             request_timeline(request, movements, context),
             mt="md",
         ),
-        section(
-            "Condiciones que requieren revisión",
-            simple_table(
-                ["Condición", "Descripción", "Área de revisión", "Evidencia"],
-                [
-                    [alert.title, alert.description, alert.owner, ", ".join(alert.evidence)]
-                    for alert in request_alerts
-                ],
-                caption="Condiciones detectadas por las reglas de lectura",
-            ),
+        accordion(
+            disclosure(
+                "Detalle de condiciones detectadas",
+                simple_table(
+                    ["Condición", "Descripción", "Área de revisión", "Evidencia"],
+                    [
+                        [alert.title, alert.description, alert.owner, ", ".join(alert.evidence)]
+                        for alert in request_alerts
+                    ],
+                    caption="Condiciones detectadas por las reglas de lectura",
+                ),
+            )
         )
         if request_alerts
         else None,
@@ -877,10 +917,14 @@ def request_detail(hub: HubResponse, context: QueryContext, identifier: str, wor
 
 def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str, workflow=None):
     item = next((item for item in hub.equipment if item.id == identifier), None)
-    back = back_link("Volver a maquinaria", context.href("/maquinaria", filter=context.filter))
+    trail = breadcrumbs(
+        "Maquinaria",
+        context.href("/maquinaria", filter=context.filter),
+        equipment_label(item) if item else "Detalle",
+    )
     if item is None:
         return [
-            back,
+            trail,
             empty(
                 "Equipo fuera de la consulta",
                 "Comprueba el origen y limpia la búsqueda para ampliar el alcance.",
@@ -889,11 +933,16 @@ def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str, w
     related = [request for request in hub.requests if request.machinery_id == item.id]
     movements = equipment_movements(hub, item, workflow)
     return [
-        back,
+        trail,
         heading(f"{equipment_label(item)} · {item.name}", "Evidencia de la maquinaria consultada."),
         interpretation_section(item, movements),
         conflicts_section(hub, item, workflow, context),
-        *source_comparison(item, movements, workflow, context, hub),
+        accordion(
+            disclosure(
+                "Comparar fuentes y evidencia",
+                *source_comparison(item, movements, workflow, context, hub),
+            )
+        ),
         section(
             "Solicitudes con esta unidad asignada",
             simple_table(
@@ -928,6 +977,7 @@ def equipment_detail(hub: HubResponse, context: QueryContext, identifier: str, w
 
 
 def sources(hub: HubResponse, context: QueryContext, workflow=None):
+    chart = coverage_figure(hub)
     totals = {
         key: value if value is not None else "total desconocido"
         for key, value in [
@@ -943,7 +993,7 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
                     state_text(
                         SOURCE_STATES[source.status],
                         "active"
-                        if source.status in {"fixture", "connected"}
+                        if source.status == "connected"
                         else "pending"
                         if source.status == "partial"
                         else "issue"
@@ -986,54 +1036,113 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
     return [
         heading(
             "Fuentes y cobertura",
-            "Procedencia de las solicitudes, unidades y tareas disponibles en esta consulta.",
-        ),
-        *records,
-        section(
-            "Registro de operaciones",
-            dmc.Text(
-                workflow.message if workflow else "Consultando el registro de movimientos…",
-                size="sm",
-            ),
-            rows_table(
-                [
-                    (
-                        "Última sincronización",
-                        instant(workflow.last_sync_at)
-                        if workflow and workflow.last_sync_at
-                        else "Sin sincronización registrada",
-                    ),
-                    (
-                        "Gestión de movimientos",
-                        "Habilitada para esta sesión"
-                        if workflow and workflow.management_enabled
-                        else "Solo consulta: el rol o el servidor no la habilitan",
-                    ),
-                    (
-                        "Envío a Startrack",
-                        "Habilitado para los movimientos autorizados"
-                        if workflow and workflow.sending_enabled
-                        else "Deshabilitado",
-                    ),
-                ]
-            ),
-            link("Revisar movimientos y evidencia", context.href("/operaciones")),
         ),
         section(
-            "Alcance de la lectura",
-            dmc.Text(
-                "Esta consulta de solicitudes y maquinaria tiene cobertura parcial. "
-                "El registro de movimientos conserva por separado tareas, visitas y "
-                "constancias vinculadas por ID."
-                if hub.mode == "live"
-                else hub.scope.description,
-                size="sm",
-            ),
+            "Cobertura de la consulta",
+            hint("Cada barra representa el total informado de su colección en Prisma."),
+            graph("source-coverage", chart)
+            if chart is not None
+            else hint("Fuente no disponible; no se puede medir la cobertura de esta lectura."),
             hint(
-                f"Solicitudes: {hub.scope.requests_returned} de {totals['requests']}. "
-                f"Maquinaria: {hub.scope.equipment_returned} de {totals['equipment']}. "
-                "La lectura y la observación de ubicación tienen fechas diferentes. "
-                "Una lectura reciente no actualiza una posición antigua."
+                "Startrack se revisa por separado: sin lectura confirmada "
+                "no hay un total de tareas."
+            ),
+            accordion(
+                disclosure(
+                    "Ver datos de cobertura",
+                    simple_table(
+                        ["Registro", "Leídos", "Total informado", "Fuera de la lectura"],
+                        [
+                            [
+                                label,
+                                loaded,
+                                total if total is not None else "Desconocido",
+                                total - loaded
+                                if total is not None and total >= loaded
+                                else "No determinable",
+                            ]
+                            for label, loaded, total in coverage_rows(hub)
+                        ],
+                        caption="Cobertura por colección; el total desconocido no es cero",
+                    ),
+                )
+            ),
+            className="page-section coverage-panel",
+        ),
+        simple_table(
+            ["Fuente", "Estado", "Última lectura", "Situación"],
+            [
+                [
+                    source.label,
+                    state_text(
+                        SOURCE_STATES[source.status],
+                        "active"
+                        if source.status == "connected"
+                        else "pending"
+                        if source.status == "partial"
+                        else "issue"
+                        if source.status == "error"
+                        else "neutral",
+                    ),
+                    instant(source.observed_at)
+                    if source.observed_at
+                    else f"Muestra del {day(source.observed_on)}"
+                    if source.observed_on
+                    else "Sin lectura confirmada",
+                    source.message,
+                ]
+                for source in hub.sources
+            ],
+            caption="Estado de las fuentes de esta lectura",
+        ),
+        accordion(
+            disclosure("Procedencia y acceso a las fuentes", *records),
+            disclosure(
+                "Registro de operaciones y permisos",
+                dmc.Text(
+                    workflow.message if workflow else "Consultando el registro de movimientos…",
+                    size="sm",
+                ),
+                rows_table(
+                    [
+                        (
+                            "Última sincronización",
+                            instant(workflow.last_sync_at)
+                            if workflow and workflow.last_sync_at
+                            else "Sin sincronización registrada",
+                        ),
+                        (
+                            "Gestión de movimientos",
+                            "Habilitada para esta sesión"
+                            if workflow and workflow.management_enabled
+                            else "Solo consulta: el rol o el servidor no la habilitan",
+                        ),
+                        (
+                            "Envío a Startrack",
+                            "Habilitado para los movimientos autorizados"
+                            if workflow and workflow.sending_enabled
+                            else "Deshabilitado",
+                        ),
+                    ]
+                ),
+                link("Revisar movimientos y evidencia", context.href("/operaciones")),
+            ),
+            disclosure(
+                "Criterios de cobertura",
+                dmc.Text(
+                    "Esta consulta de solicitudes y maquinaria tiene cobertura parcial. "
+                    "El registro de movimientos conserva por separado tareas, visitas y "
+                    "constancias vinculadas por ID."
+                    if hub.mode == "live"
+                    else hub.scope.description,
+                    size="sm",
+                ),
+                hint(
+                    f"Solicitudes: {hub.scope.requests_returned} de {totals['requests']}. "
+                    f"Maquinaria: {hub.scope.equipment_returned} de {totals['equipment']}. "
+                    "La lectura y la observación de ubicación tienen fechas diferentes. "
+                    "Una lectura reciente no actualiza una posición antigua."
+                ),
             ),
         ),
     ]
@@ -1042,7 +1151,6 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
 # Page registry: navigation order, icon and renderers. A later phase appends its own pages.
 PAGES = [
     {"path": "/", "label": "Resumen", "icon": "layout-dashboard", "render": overview},
-    {"path": "/decisiones", "label": "Decisiones", "icon": "checklist", "render": decisions},
     {
         "path": "/solicitudes",
         "label": "Solicitudes",
@@ -1060,7 +1168,7 @@ PAGES = [
     {"path": "/operaciones", "label": "Operaciones", "icon": "truck", "render": None},
     {
         "path": "/indicadores",
-        "label": "Indicadores y SLA",
+        "label": "Indicadores",
         "icon": "chart-bar",
         "render": indicators,
     },
@@ -1069,6 +1177,7 @@ PAGES = [
         "label": "Integración",
         "icon": "arrows-exchange",
         "render": integration_page,
+        "secondary": True,
     },
     {
         "path": "/fuentes",
@@ -1089,7 +1198,7 @@ PAGES = [
 
 
 def render_page(path: str, hub: HubResponse, context: QueryContext, workflow=None):
-    if path in {"/", "/resumen"}:
+    if path in {"/", "/resumen", "/decisiones"}:
         return overview(hub, context, workflow)
     if path == "/operaciones" or path.startswith("/operaciones/"):
         return workflow_page(path, workflow, context)
