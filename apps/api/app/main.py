@@ -44,18 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         application.state.engine = build_engine(settings.database_url)
         application.state.nexus = NexusConnector(settings)
-        application.state.startrack = StartrackClient(
-            StartrackReadConfig(
-                enabled=settings.allow_live_reads,
-                allow_writes=settings.allow_live_writes,
-                api_key=settings.startrack_api_key,
-                password=settings.startrack_password,
-                page_size=settings.startrack_page_size,
-                max_pages=settings.startrack_max_pages,
-                timeout_seconds=settings.startrack_timeout_seconds,
-                budget_seconds=settings.startrack_budget_seconds,
-            )
-        )
+        application.state.startrack = StartrackClient(StartrackReadConfig.from_settings(settings))
         application.state.workflow = WorkflowService(
             settings,
             application.state.engine,

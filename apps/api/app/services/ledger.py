@@ -9,9 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
 
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 from sqlalchemy import Engine, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -27,47 +28,67 @@ from app.models.operations import (
     SnapshotRecord,
     SourceSnapshot,
 )
-from app.services.transfers import TransferMapping, TransferPreparation, prepare_transfer
+from app.services.transfers import TransferMapping, compatible_evidence, prepare_transfer
 
 SAFE_REASON_CODES = frozenset(
-    {
-        "provider_rejected",
-        "provider_unavailable",
-        "provider_timeout",
-        "invalid_response",
-        "ambiguous_response",
-        "worker_interrupted",
-        "dispatch_blocked",
-        "mapping_conflict",
-        "source_changed",
-        "not_approved",
-        "unknown",
-    }
+    (
+        "provider_rejected provider_unavailable provider_timeout invalid_response "
+        "ambiguous_response worker_interrupted dispatch_blocked mapping_conflict "
+        "source_changed not_approved unknown"
+    ).split()
 )
 
 
 class LedgerError(Exception):
     """Safe domain error; never wrap provider bodies or database exceptions."""
 
+    message = "La operación del registro no es válida."
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or self.message)
+
 
 class MovementNotFound(LedgerError):
-    def __init__(self):
-        super().__init__("No se encontró el movimiento en el origen seleccionado.")
+    message = "No se encontró el movimiento en el origen seleccionado."
 
 
 class MovementConflict(LedgerError):
-    def __init__(self):
-        super().__init__("La referencia ya existe con otra correspondencia o contenido.")
+    message = "La referencia ya existe con otra correspondencia o contenido."
 
 
 class InvalidMovementTransition(LedgerError):
-    def __init__(self):
-        super().__init__("El estado actual no permite esta operación; no se repetirá el envío.")
+    message = "El estado actual no permite esta operación; no se repetirá el envío."
 
 
 class EvidenceMismatch(LedgerError):
-    def __init__(self):
-        super().__init__("La evidencia no coincide con el origen y entorno del movimiento.")
+    message = "La evidencia no coincide con el origen y entorno del movimiento."
+
+
+Fact = Annotated[str, StringConstraints(strict=True, max_length=2000)] | None
+
+
+class ObservationData(BaseModel):
+    """Only explicit, typed source facts are stored; provider error bodies never are."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    job_id: Fact = None
+    status: Fact = None
+    workflow_role: Fact = None
+    poi_id: Fact = None
+    tracked_asset_id: Fact = None
+    label: Fact = None
+    reference: Fact = None
+    event_time_raw: Fact = None
+    visit_id: Fact = None
+    start_date: Fact = None
+    changed_date: Fact = None
+    closed_date: Fact = None
+    last_status_change_date: Fact = None
+    objective: Fact = None
+    remote_id: Fact = None
+    latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
 
 
 def _now() -> datetime:
@@ -79,41 +100,78 @@ def _hash(value: Any) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def _stored_time(value: datetime | None) -> datetime | None:
-    # SQLite drops tzinfo from DateTime; all SQL datetime writes use UTC.
-    if value is None:
-        return None
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
-
-
 def _explicit_time(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise LedgerError("La fecha de evidencia requiere una zona horaria explícita.")
     return value.astimezone(UTC)
 
 
-def _text(value: str, maximum: int = 255) -> str:
+def _text(value: str | None, maximum: int = 255) -> str | None:
+    if value is None:
+        return None
     if not isinstance(value, str) or not value.strip() or len(value) > maximum:
         raise LedgerError("La evidencia requiere un texto explícito dentro del límite permitido.")
     return value.strip()
 
 
-def _mode(mode: DataMode) -> None:
-    if mode not in {"fixture", "live"}:
-        raise EvidenceMismatch()
-
-
 def _provenance_matches(mode: DataMode, provenance: Provenance) -> None:
-    _mode(mode)
-    if (mode == "live") != (provenance.evidence_kind == "live_read"):
+    if mode not in {"fixture", "live"} or (mode == "live") != (
+        provenance.evidence_kind == "live_read"
+    ):
         raise EvidenceMismatch()
     if mode == "live" and (provenance.environment != "sandbox" or not provenance.observed_at):
         raise EvidenceMismatch()
 
 
+def _fresh[T: BaseModel](model: T | None) -> T | None:
+    # Revalidate mutable or copy-updated models so callers cannot bypass domain rules.
+    return None if model is None else type(model).model_validate(model.model_dump())
+
+
+def _source_pair(
+    mode: DataMode, request: RequestRecord, equipment: EquipmentRecord | None
+) -> tuple[RequestRecord, EquipmentRecord | None]:
+    request, equipment = _fresh(request), _fresh(equipment)
+    _provenance_matches(mode, request.provenance)
+    if equipment is not None:
+        _provenance_matches(mode, equipment.provenance)
+        if not compatible_evidence(request.provenance, equipment.provenance, source=False):
+            raise EvidenceMismatch()
+    return request, equipment
+
+
 def _safe_reason(reason_code: str) -> str:
     # This boundary accepts codes, never arbitrary exception strings.
     return reason_code if reason_code in SAFE_REASON_CODES else "unknown"
+
+
+def _plan_values(
+    request: RequestRecord,
+    equipment: EquipmentRecord | None,
+    mapping: TransferMapping,
+    tracked_vehicle_id: str | None,
+) -> dict[str, Any]:
+    """Column values derived from current source evidence; identity covers mapping and payload."""
+    preparation = prepare_transfer(request, equipment, mapping)
+    payload = preparation.draft.payload() if preparation.draft else None
+    source_request = request.model_dump(mode="json")
+    source_equipment = equipment.model_dump(mode="json") if equipment else None
+    return {
+        "source_request": source_request,
+        "source_equipment": source_equipment,
+        "source_request_hash": _hash(source_request),
+        "source_equipment_hash": _hash(source_equipment) if source_equipment else None,
+        "payload": payload,
+        "preparation": preparation.model_dump(mode="json"),
+        "identity_hash": _hash(
+            {
+                "mapping": mapping.model_dump(mode="json"),
+                "payload": payload,
+                "tracked_vehicle_id": tracked_vehicle_id,
+            }
+        ),
+        "state": "draft" if payload else "blocked",
+    }
 
 
 class OperationsLedger:
@@ -124,7 +182,8 @@ class OperationsLedger:
 
     @staticmethod
     def _row(session: Session, movement_id: str, mode: DataMode) -> Movement:
-        _mode(mode)
+        if mode not in {"fixture", "live"}:
+            raise EvidenceMismatch()
         row = session.exec(
             select(Movement).where(Movement.id == movement_id, Movement.mode == mode)
         ).first()
@@ -152,52 +211,47 @@ class OperationsLedger:
             .where(OperationEvent.movement_id == row.id)
             .order_by(OperationEvent.recorded_at, OperationEvent.id)
         ).all()
-        data = row.model_dump(exclude={"identity_hash"})
-        for field in (
-            "created_at",
-            "updated_at",
-            "next_review_at",
-            "queued_at",
-            "sending_at",
-            "sent_at",
-        ):
-            data[field] = _stored_time(data.get(field))
-        data["events"] = [
-            MovementEventRecord(
-                **event.model_dump(
-                    exclude={
-                        "movement_id",
-                        "evidence_hash",
-                        "event_time",
-                        "observed_at",
-                        "recorded_at",
-                    }
-                ),
-                event_time=_stored_time(event.event_time),
-                observed_at=_stored_time(event.observed_at),
-                recorded_at=_stored_time(event.recorded_at),
-            )
-            for event in events
-        ]
-        return MovementRecord.model_validate(data)
+        return MovementRecord(
+            **row.model_dump(exclude={"identity_hash"}),
+            events=[MovementEventRecord.model_validate(event.model_dump()) for event in events],
+        )
+
+    def _records(self, query) -> list[MovementRecord]:
+        with Session(self.engine) as session:
+            return [self._record(session, row) for row in session.exec(query).all()]
+
+    def _apply(
+        self,
+        session: Session,
+        row: Movement,
+        statement,
+        error: type[LedgerError],
+        kind: str,
+        **event,
+    ) -> MovementRecord:
+        """Guarded single-row transition followed by its event, in one transaction."""
+        if session.execute(statement).rowcount != 1:
+            raise error()
+        session.refresh(row)
+        self._event(session, row, kind, **event)
+        session.commit()
+        return self._record(session, row)
+
+    @staticmethod
+    def _criteria(mode: DataMode, request_source_id: str | None) -> list:
+        if mode not in {"fixture", "live"}:
+            raise EvidenceMismatch()
+        criteria = [Movement.mode == mode]
+        if request_source_id is not None:
+            criteria.append(Movement.request_source_id == request_source_id)
+        return criteria
 
     def get(self, movement_id: str, mode: DataMode) -> MovementRecord:
         with Session(self.engine) as session:
             return self._record(session, self._row(session, movement_id, mode))
 
-    def count(
-        self,
-        mode: DataMode,
-        *,
-        environment: str | None = None,
-        request_source_id: str | None = None,
-    ) -> int:
-        _mode(mode)
-        query = select(func.count(Movement.id)).where(Movement.mode == mode)
-        if environment is not None:
-            query = query.where(Movement.environment == environment)
-        if request_source_id is not None:
-            query = query.where(Movement.request_source_id == request_source_id)
+    def count(self, mode: DataMode, *, request_source_id: str | None = None) -> int:
+        query = select(func.count(Movement.id)).where(*self._criteria(mode, request_source_id))
         with Session(self.engine) as session:
             return session.exec(query).one()
 
@@ -205,82 +259,57 @@ class OperationsLedger:
         self,
         mode: DataMode,
         *,
-        environment: str | None = None,
         request_source_id: str | None = None,
         offset: int = 0,
         limit: int = 100,
     ) -> list[MovementRecord]:
-        _mode(mode)
-        query = select(Movement).where(Movement.mode == mode)
-        if environment is not None:
-            query = query.where(Movement.environment == environment)
-        if request_source_id is not None:
-            query = query.where(Movement.request_source_id == request_source_id)
-        query = (
-            query.order_by(Movement.created_at.desc(), Movement.id)
+        return self._records(
+            select(Movement)
+            .where(*self._criteria(mode, request_source_id))
+            .order_by(Movement.created_at.desc(), Movement.id)
             .offset(max(0, offset))
             .limit(max(1, min(limit, 500)))
         )
-        with Session(self.engine) as session:
-            return [self._record(session, row) for row in session.exec(query).all()]
 
     def list_page(
         self,
         mode: DataMode,
         *,
-        environment: str | None = None,
         request_source_id: str | None = None,
         offset: int = 0,
         limit: int = 100,
     ) -> tuple[list[MovementRecord], int]:
-        total = self.count(
-            mode,
-            environment=environment,
-            request_source_id=request_source_id,
-        )
-        items = self.list(
-            mode,
-            environment=environment,
-            request_source_id=request_source_id,
-            offset=offset,
-            limit=limit,
-        )
-        return items, total
+        items = self.list(mode, request_source_id=request_source_id, offset=offset, limit=limit)
+        return items, self.count(mode, request_source_id=request_source_id)
 
     def select_for_review(
-        self,
-        mode: DataMode,
-        states: tuple[str, ...] | list[str],
-        *,
-        limit: int = 25,
+        self, mode: DataMode, states: tuple[str, ...] | list[str], *, limit: int = 25
     ) -> list[MovementRecord]:
-        _mode(mode)
-        bounded_limit = max(1, min(limit, 100))
-        query = (
+        return self._records(
             select(Movement)
-            .where(Movement.mode == mode, Movement.state.in_(states))
+            .where(*self._criteria(mode, None), Movement.state.in_(states))
             .order_by(Movement.next_review_at.asc(), Movement.created_at.asc(), Movement.id.asc())
-            .limit(bounded_limit)
+            .limit(max(1, min(limit, 100)))
         )
-        with Session(self.engine) as session:
-            return [self._record(session, row) for row in session.exec(query).all()]
 
-    def advance_review(
-        self,
-        movement_id: str,
-        mode: DataMode,
-        *,
-        delay_seconds: int = 0,
-    ) -> None:
-        _mode(mode)
-        next_time = _now() + timedelta(seconds=delay_seconds)
+    def advance_review(self, movement_id: str, mode: DataMode, *, delay_seconds: int = 0) -> None:
         with Session(self.engine) as session:
             session.execute(
                 update(Movement)
-                .where(Movement.id == movement_id, Movement.mode == mode)
-                .values(next_review_at=next_time)
+                .where(Movement.id == movement_id, *self._criteria(mode, None))
+                .values(next_review_at=_now() + timedelta(seconds=delay_seconds))
             )
             session.commit()
+
+    @staticmethod
+    def _existing(session: Session, mode: str, environment: str, reference: str) -> Movement | None:
+        return session.exec(
+            select(Movement).where(
+                Movement.mode == mode,
+                Movement.environment == environment,
+                Movement.movement_reference == reference,
+            )
+        ).first()
 
     def create(
         self,
@@ -288,37 +317,13 @@ class OperationsLedger:
         request: RequestRecord,
         equipment: EquipmentRecord | None,
         mapping: TransferMapping,
-        preparation: TransferPreparation | None = None,
         *,
         tracked_vehicle_id: str | None = None,
     ) -> MovementRecord:
-        # Revalidate mutable/copy-created models; caller-supplied preparation is
-        # informational only and cannot bypass the shared domain rules.
-        request = RequestRecord.model_validate(request.model_dump())
-        equipment = (
-            EquipmentRecord.model_validate(equipment.model_dump())
-            if equipment is not None
-            else None
-        )
-        mapping = TransferMapping.model_validate(mapping.model_dump())
-        _provenance_matches(mode, request.provenance)
-        if equipment is not None:
-            _provenance_matches(mode, equipment.provenance)
-            if (
-                request.provenance.environment != equipment.provenance.environment
-                or request.provenance.evidence_kind != equipment.provenance.evidence_kind
-                or request.provenance.is_synthetic != equipment.provenance.is_synthetic
-            ):
-                raise EvidenceMismatch()
-        actual_preparation = prepare_transfer(request, equipment, mapping)
-        payload = actual_preparation.draft.payload() if actual_preparation.draft else None
-        mapping_data = mapping.model_dump(mode="json")
-        tracked_vehicle_id = _text(tracked_vehicle_id) if tracked_vehicle_id is not None else None
-        identity_hash = _hash(
-            {"mapping": mapping_data, "payload": payload, "tracked_vehicle_id": tracked_vehicle_id}
-        )
-        source_request = request.model_dump(mode="json")
-        source_equipment = equipment.model_dump(mode="json") if equipment else None
+        request, equipment = _source_pair(mode, request, equipment)
+        mapping = _fresh(mapping)
+        tracked_vehicle_id = _text(tracked_vehicle_id)
+        values = _plan_values(request, equipment, mapping, tracked_vehicle_id)
         now = _now()
         row = Movement(
             id=str(uuid4()),
@@ -329,54 +334,29 @@ class OperationsLedger:
             machinery_source_id=_text(mapping.machinery_source_id),
             project_source_id=_text(mapping.project_source_id),
             tracked_vehicle_id=tracked_vehicle_id,
-            mapping=mapping_data,
-            source_request=source_request,
-            source_equipment=source_equipment,
-            source_request_hash=_hash(source_request),
-            source_equipment_hash=_hash(source_equipment) if source_equipment else None,
-            identity_hash=identity_hash,
-            payload=payload,
-            preparation=actual_preparation.model_dump(mode="json"),
-            state="draft" if payload else "blocked",
+            mapping=mapping.model_dump(mode="json"),
             created_at=now,
             updated_at=now,
             next_review_at=now,
+            **values,
         )
+        identity = (mode, row.environment, row.movement_reference, row.identity_hash)
+        event = {"request": values["source_request"], "equipment": values["source_equipment"]}
         with Session(self.engine) as session:
-            existing = session.exec(
-                select(Movement).where(
-                    Movement.mode == mode,
-                    Movement.environment == row.environment,
-                    Movement.movement_reference == row.movement_reference,
-                )
-            ).first()
-            if existing is not None:
-                if existing.identity_hash != identity_hash:
-                    raise MovementConflict()
-                return self._record(session, existing)
-            session.add(row)
-            try:
-                session.flush()
-                self._event(
-                    session,
-                    row,
-                    "created",
-                    data={"request": source_request, "equipment": source_equipment},
-                )
-                session.commit()
-            except IntegrityError:
-                session.rollback()
-                existing = session.exec(
-                    select(Movement).where(
-                        Movement.mode == mode,
-                        Movement.environment == row.environment,
-                        Movement.movement_reference == row.movement_reference,
-                    )
-                ).first()
-                if existing is None or existing.identity_hash != identity_hash:
-                    raise MovementConflict() from None
-                return self._record(session, existing)
-            return self._record(session, row)
+            existing = self._existing(session, *identity[:3])
+            if existing is None:
+                session.add(row)
+                try:
+                    session.flush()
+                    self._event(session, row, "created", data=event)
+                    session.commit()
+                    return self._record(session, row)
+                except IntegrityError:
+                    session.rollback()
+                    existing = self._existing(session, *identity[:3])
+            if existing is None or existing.identity_hash != identity[3]:
+                raise MovementConflict()
+            return self._record(session, existing)
 
     def revalidate(
         self,
@@ -384,83 +364,43 @@ class OperationsLedger:
         mode: DataMode,
         request: RequestRecord,
         equipment: EquipmentRecord | None,
-        preparation: TransferPreparation | None = None,
     ) -> MovementRecord:
         """Refresh unsent source evidence; retained events preserve earlier snapshots."""
-        request = RequestRecord.model_validate(request.model_dump())
-        equipment = (
-            EquipmentRecord.model_validate(equipment.model_dump())
-            if equipment is not None
-            else None
-        )
-        _provenance_matches(mode, request.provenance)
-        if equipment is not None:
-            _provenance_matches(mode, equipment.provenance)
+        request, equipment = _source_pair(mode, request, equipment)
         with Session(self.engine) as session:
             row = self._row(session, movement_id, mode)
             if row.state not in {"draft", "blocked"}:
                 raise InvalidMovementTransition()
-            original_provenance = Provenance.model_validate(row.source_request["provenance"])
+            original = Provenance.model_validate(row.source_request["provenance"])
             if (
                 request.provenance.source != "nexus"
                 or request.provenance.source_id != row.request_source_id
                 or request.provenance.environment != row.environment
-                or request.provenance.evidence_kind != original_provenance.evidence_kind
-                or request.provenance.is_synthetic != original_provenance.is_synthetic
+                or not compatible_evidence(request.provenance, original, source=False)
                 or request.project_id != row.project_source_id
             ):
                 raise EvidenceMismatch()
             if equipment is not None and (
                 equipment.provenance.source != "nexus"
                 or equipment.provenance.source_id != row.machinery_source_id
-                or equipment.provenance.environment != row.environment
-                or equipment.provenance.evidence_kind != request.provenance.evidence_kind
-                or equipment.provenance.is_synthetic != request.provenance.is_synthetic
             ):
                 raise EvidenceMismatch()
             mapping = TransferMapping.model_validate(row.mapping)
-            actual = prepare_transfer(request, equipment, mapping)
-            payload = actual.draft.payload() if actual.draft else None
-            request_data = request.model_dump(mode="json")
-            equipment_data = equipment.model_dump(mode="json") if equipment else None
-            values = {
-                "source_request": request_data,
-                "source_equipment": equipment_data,
-                "source_request_hash": _hash(request_data),
-                "source_equipment_hash": _hash(equipment_data) if equipment_data else None,
-                "preparation": actual.model_dump(mode="json"),
-                "payload": payload,
-                "identity_hash": _hash(
-                    {
-                        "mapping": row.mapping,
-                        "payload": payload,
-                        "tracked_vehicle_id": row.tracked_vehicle_id,
-                    }
-                ),
-                "state": "draft" if payload else "blocked",
-                "updated_at": _now(),
-                "next_review_at": _now(),
-            }
-            changed = session.execute(
+            values = _plan_values(request, equipment, mapping, row.tracked_vehicle_id)
+            return self._apply(
+                session,
+                row,
                 update(Movement)
                 .where(
                     Movement.id == row.id,
                     Movement.state.in_(["draft", "blocked"]),
                     Movement.updated_at == row.updated_at,
                 )
-                .values(**values)
-            ).rowcount
-            if changed != 1:
-                raise InvalidMovementTransition()
-            session.refresh(row)
-            self._event(
-                session,
-                row,
+                .values(updated_at=_now(), next_review_at=_now(), **values),
+                InvalidMovementTransition,
                 "revalidated",
-                data={"request": request_data, "equipment": equipment_data},
+                data={"request": values["source_request"], "equipment": values["source_equipment"]},
             )
-            session.commit()
-            return self._record(session, row)
 
     def queue(self, movement_id: str, mode: DataMode = "live") -> MovementRecord:
         if mode != "live":
@@ -474,17 +414,15 @@ class OperationsLedger:
             if row.state == "queued":
                 return self._record(session, row)
             now = _now()
-            changed = session.execute(
+            return self._apply(
+                session,
+                row,
                 update(Movement)
                 .where(Movement.id == movement_id, Movement.mode == mode, Movement.state == "draft")
-                .values(state="queued", queued_at=now, updated_at=now)
-            ).rowcount
-            if changed != 1:
-                raise InvalidMovementTransition()
-            session.refresh(row)
-            self._event(session, row, "queued")
-            session.commit()
-            return self._record(session, row)
+                .values(state="queued", queued_at=now, updated_at=now),
+                InvalidMovementTransition,
+                "queued",
+            )
 
     def claim(self, movement_id: str | None = None) -> MovementRecord | None:
         """Atomically claim at most one queued live movement, committing before return."""
@@ -547,8 +485,8 @@ class OperationsLedger:
             movement_id,
             "sent",
             job_id=_text(job_id),
-            status=_text(status) if status is not None else None,
-            workflow_role=_text(workflow_role) if workflow_role is not None else None,
+            status=_text(status),
+            workflow_role=_text(workflow_role),
             sent_at=_now(),
             reason_code=None,
         )
@@ -604,7 +542,7 @@ class OperationsLedger:
             receiver=_text(receiver),
             received_at=_explicit_time(received_at),
             reference=_text(reference),
-            note=_text(note, maximum=2000) if note is not None else None,
+            note=_text(note, maximum=2000),
             recorded_at=_now(),
         )
         data = receipt.model_dump(mode="json")
@@ -619,17 +557,17 @@ class OperationsLedger:
                 ):
                     raise MovementConflict()
                 return self._record(session, row)
-            changed = session.execute(
+            return self._apply(
+                session,
+                row,
                 update(Movement)
                 .where(Movement.id == movement_id, Movement.receipt.is_(None))
-                .values(receipt=data, updated_at=_now())
-            ).rowcount
-            if changed != 1:
-                raise MovementConflict()
-            session.refresh(row)
-            self._event(session, row, "receipt", event_time=receipt.received_at, data=data)
-            session.commit()
-            return self._record(session, row)
+                .values(receipt=data, updated_at=_now()),
+                MovementConflict,
+                "receipt",
+                event_time=receipt.received_at,
+                data=data,
+            )
 
     def record_observation(
         self,
@@ -645,47 +583,14 @@ class OperationsLedger:
     ) -> MovementRecord:
         if kind not in {"task_state", "arrival"}:
             raise LedgerError("El tipo de observación no está permitido.")
-        provenance = Provenance.model_validate(provenance.model_dump())
+        provenance = _fresh(provenance)
         _provenance_matches(mode, provenance)
         source_id = _text(source_id)
         observed_at = _explicit_time(observed_at)
         event_time = _explicit_time(event_time) if event_time else None
-        # Keep only explicit, typed source facts; never persist provider error bodies.
-        allowed = {
-            "job_id",
-            "status",
-            "workflow_role",
-            "poi_id",
-            "tracked_asset_id",
-            "latitude",
-            "longitude",
-            "label",
-            "reference",
-            "event_time_raw",
-            "visit_id",
-            "start_date",
-            "changed_date",
-            "closed_date",
-            "last_status_change_date",
-            "objective",
-            "remote_id",
-        }
-        if set(data) - allowed:
-            raise LedgerError("La observación contiene campos no admitidos como evidencia.")
-        for key, value in data.items():
-            if value is None:
-                continue
-            if key in {"latitude", "longitude"}:
-                if type(value) not in {int, float}:
-                    raise LedgerError("La observación contiene coordenadas no válidas.")
-                bound = 90 if key == "latitude" else 180
-                if not -bound <= value <= bound:
-                    raise LedgerError("La observación contiene coordenadas no válidas.")
-            elif not isinstance(value, str) or len(value) > 2000:
-                raise LedgerError("La observación contiene campos de evidencia no válidos.")
         try:
-            serialized_data = json.loads(json.dumps(data, ensure_ascii=False, allow_nan=False))
-        except (TypeError, ValueError):
+            data = ObservationData.model_validate(data).model_dump(exclude_unset=True)
+        except ValidationError:
             raise LedgerError("La observación contiene campos de evidencia no válidos.") from None
         with Session(self.engine) as session:
             row = self._row(session, movement_id, mode)
@@ -693,8 +598,7 @@ class OperationsLedger:
             if (
                 provenance.source != "startrack"
                 or provenance.environment != row.environment
-                or provenance.evidence_kind != request_provenance.evidence_kind
-                or provenance.is_synthetic != request_provenance.is_synthetic
+                or not compatible_evidence(provenance, request_provenance, source=False)
                 or provenance.observed_at != observed_at
                 or provenance.source_id != source_id
                 or (data.get("job_id") is not None and data["job_id"] != row.job_id)
@@ -710,21 +614,19 @@ class OperationsLedger:
                 or data.get("poi_id") != row.mapping["poi_id"]
             ):
                 raise EvidenceMismatch()
-            evidence = {
-                "kind": kind,
-                "source_id": source_id,
-                "event_time": event_time.isoformat() if event_time else None,
-                "data": serialized_data,
-                "provenance": provenance.model_dump(mode="json", exclude={"observed_at"}),
-            }
-            evidence_hash = _hash(evidence)
-            existing = session.exec(
-                select(OperationEvent).where(
-                    OperationEvent.movement_id == row.id,
-                    OperationEvent.evidence_hash == evidence_hash,
-                )
-            ).first()
-            if existing is not None:
+            evidence_hash = _hash(
+                {
+                    "kind": kind,
+                    "source_id": source_id,
+                    "event_time": event_time.isoformat() if event_time else None,
+                    "data": data,
+                    "provenance": provenance.model_dump(mode="json", exclude={"observed_at"}),
+                }
+            )
+            duplicate = select(OperationEvent.id).where(
+                OperationEvent.movement_id == row.id, OperationEvent.evidence_hash == evidence_hash
+            )
+            if session.exec(duplicate).first() is not None:
                 return self._record(session, row)
             self._event(
                 session,
@@ -734,7 +636,7 @@ class OperationsLedger:
                 evidence_hash=evidence_hash,
                 event_time=event_time,
                 observed_at=observed_at,
-                data=serialized_data,
+                data=data,
                 provenance=provenance.model_dump(mode="json"),
             )
             if kind == "task_state":
@@ -749,9 +651,7 @@ class OperationsLedger:
                     .order_by(OperationEvent.event_time.desc(), OperationEvent.observed_at.desc())
                     .limit(1)
                 ).first()
-                previous_time = (
-                    _stored_time(latest.event_time or latest.observed_at) if latest else None
-                )
+                previous_time = (latest.event_time or latest.observed_at) if latest else None
                 if previous_time is None or (event_time or observed_at) >= previous_time:
                     row.status = data.get("status", row.status)
                     row.workflow_role = data.get("workflow_role", row.workflow_role)
@@ -761,31 +661,22 @@ class OperationsLedger:
                 session.commit()
             except IntegrityError:
                 session.rollback()
-                if (
-                    session.exec(
-                        select(OperationEvent.id).where(
-                            OperationEvent.movement_id == row.id,
-                            OperationEvent.evidence_hash == evidence_hash,
-                        )
-                    ).first()
-                    is None
-                ):
+                if session.exec(duplicate).first() is None:
                     raise MovementConflict() from None
             return self._record(session, row)
 
     def record_snapshot(self, hub: HubResponse) -> SnapshotRecord:
         """Persist the bounded source response including coverage and original timestamps."""
-        hub = HubResponse.model_validate(hub.model_dump())
+        hub = _fresh(hub)
         for record in [*hub.requests, *hub.equipment]:
             _provenance_matches(hub.mode, record.provenance)
         for equipment in hub.equipment:
-            for transfer in equipment.transfers:
-                _provenance_matches(hub.mode, transfer.provenance)
-                if transfer.provenance.environment != equipment.provenance.environment:
-                    raise EvidenceMismatch()
+            nested = [transfer.provenance for transfer in equipment.transfers]
             if equipment.location is not None:
-                _provenance_matches(hub.mode, equipment.location.provenance)
-                if equipment.location.provenance.environment != equipment.provenance.environment:
+                nested.append(equipment.location.provenance)
+            for provenance in nested:
+                _provenance_matches(hub.mode, provenance)
+                if provenance.environment != equipment.provenance.environment:
                     raise EvidenceMismatch()
         content = hub.model_dump(mode="json")
         row = SourceSnapshot(
@@ -801,28 +692,11 @@ class OperationsLedger:
             session.add(row)
             session.commit()
             session.refresh(row)
-            data = row.model_dump()
-            for field in ("recorded_at", "generated_at", "data_as_of"):
-                data[field] = _stored_time(data[field])
-            return SnapshotRecord.model_validate(data)
-
-    def get_snapshot(self, snapshot_id: str, mode: DataMode) -> SnapshotRecord:
-        _mode(mode)
-        with Session(self.engine) as session:
-            row = session.exec(
-                select(SourceSnapshot).where(
-                    SourceSnapshot.id == snapshot_id, SourceSnapshot.mode == mode
-                )
-            ).first()
-            if row is None:
-                raise MovementNotFound()
-            data = row.model_dump()
-            for field in ("recorded_at", "generated_at", "data_as_of"):
-                data[field] = _stored_time(data[field])
-            return SnapshotRecord.model_validate(data)
+            return SnapshotRecord.model_validate(row.model_dump())
 
     def last_snapshot(self, mode: DataMode) -> SnapshotRecord | None:
-        _mode(mode)
+        if mode not in {"fixture", "live"}:
+            raise EvidenceMismatch()
         with Session(self.engine) as session:
             row = session.exec(
                 select(SourceSnapshot)
@@ -830,9 +704,4 @@ class OperationsLedger:
                 .order_by(SourceSnapshot.recorded_at.desc(), SourceSnapshot.id)
                 .limit(1)
             ).first()
-            if row is None:
-                return None
-            data = row.model_dump()
-            for field in ("recorded_at", "generated_at", "data_as_of"):
-                data[field] = _stored_time(data[field])
-            return SnapshotRecord.model_validate(data)
+            return SnapshotRecord.model_validate(row.model_dump()) if row else None

@@ -21,6 +21,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.12.0",
     "pytest>=9.1.1",
     "ruff>=0.16.7",
 ]
@@ -38,3 +39,8 @@ select = ["E", "F", "I", "UP", "B", "FAST"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+    "error::DeprecationWarning",
+    # Emitted inside starlette.testclient itself (third party), not by application code.
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]

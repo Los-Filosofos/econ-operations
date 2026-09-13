@@ -1,11 +1,16 @@
 """Prepare an explicit Prisma-to-Startrack mapping for review without writing remotely."""
 
-from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.integrations.startrack import Identifier, StartrackTaskDraft
+from app.integrations.startrack import (
+    TIME_PATTERN,
+    ExplicitDate,
+    Identifier,
+    StartrackTaskDraft,
+    UniqueIds,
+)
 from app.models.hub import EquipmentRecord, Provenance, RequestRecord
 
 
@@ -18,22 +23,11 @@ class TransferMapping(BaseModel):
     machinery_source_id: Identifier
     project_source_id: Identifier
     poi_id: Identifier
-    assigned_user_ids: tuple[Identifier, ...] = Field(min_length=1)
+    assigned_user_ids: UniqueIds = Field(min_length=1)
     movement_reference: Identifier
-    scheduled_date: date
-    scheduled_time: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$")
+    scheduled_date: ExplicitDate
+    scheduled_time: str | None = Field(default=None, pattern=TIME_PATTERN)
     job_type_id: Identifier | None = None
-
-    @field_validator("scheduled_date", mode="before")
-    @classmethod
-    def explicit_date_only(cls, value: object) -> object:
-        # Apply the draft boundary before Pydantic can coerce an epoch or timestamp.
-        return StartrackTaskDraft.explicit_date_only(value)
-
-    @field_validator("assigned_user_ids")
-    @classmethod
-    def unique_assignments(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        return StartrackTaskDraft.unique_assignments(value)
 
 
 class TransferPreparation(BaseModel):
@@ -48,6 +42,16 @@ class TransferPreparation(BaseModel):
     notes: list[str] = Field(default_factory=list)
     draft: StartrackTaskDraft | None = None
     remote_writes: Literal[False] = False
+
+
+def compatible_evidence(left: Provenance, right: Provenance, *, source: bool = True) -> bool:
+    """Same evidence class; identity is still compared by explicit source IDs elsewhere."""
+    return (
+        (not source or left.source == right.source)
+        and left.environment == right.environment
+        and left.evidence_kind == right.evidence_kind
+        and left.is_synthetic == right.is_synthetic
+    )
 
 
 def prepare_transfer(
@@ -92,12 +96,7 @@ def prepare_transfer(
     else:
         if not equipment.provenance.source_id:
             missing.append("ID original de maquinaria")
-        if (
-            request.provenance.source != equipment.provenance.source
-            or request.provenance.environment != equipment.provenance.environment
-            or request.provenance.evidence_kind != equipment.provenance.evidence_kind
-            or request.provenance.is_synthetic != equipment.provenance.is_synthetic
-        ):
+        if not compatible_evidence(request.provenance, equipment.provenance):
             blockers.append(
                 "Solicitud y unidad pertenecen a fuentes o clases de evidencia distintas."
             )
@@ -121,14 +120,12 @@ def prepare_transfer(
         notes.append(f"Estado administrativo de la unidad: {equipment.machinery_status}.")
 
     if mapping is None:
-        missing.extend(
-            [
-                "Correspondencia de proyecto con poi_id de destino",
-                "Usuarios asignables de Startrack confirmados",
-                "Referencia única del movimiento en la integración",
-                "Fecha programada de traslado",
-            ]
-        )
+        missing += [
+            "Correspondencia de proyecto con poi_id de destino",
+            "Usuarios asignables de Startrack confirmados",
+            "Referencia única del movimiento en la integración",
+            "Fecha programada de traslado",
+        ]
     else:
         if mapping.request_source_id != request.provenance.source_id:
             blockers.append("El mapeo referencia otra solicitud de origen.")

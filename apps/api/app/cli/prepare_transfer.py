@@ -50,18 +50,13 @@ def main(argv: list[str] | None = None) -> int:
         equipment, requests = fixture_records()
     except (OSError, ValueError, KeyError, TypeError):
         return _error("No fue posible leer las muestras locales entregadas.")
-    matching_requests = [
-        request
-        for request in requests
-        if request.provenance.source_id == arguments.request_source_id
-    ]
-    if len(matching_requests) != 1:
+    matching = [r for r in requests if r.provenance.source_id == arguments.request_source_id]
+    if len(matching) != 1:
         return _error("El ID debe identificar exactamente una solicitud en la muestra local.")
-    request = matching_requests[0]
-    matching_equipment = [item for item in equipment if item.id == request.machinery_id]
-    if len(matching_equipment) > 1:
+    request = matching[0]
+    machines = [item for item in equipment if item.id == request.machinery_id]
+    if len(machines) > 1:
         return _error("La unidad asignada tiene registros ambiguos en la muestra local.")
-
     mapping = None
     if arguments.mapping is not None:
         try:
@@ -70,10 +65,11 @@ def main(argv: list[str] | None = None) -> int:
             return _error(
                 "El mapeo debe ser un archivo JSON local válido con IDs y fecha explícitos."
             )
-    result = prepare_transfer(
-        request, matching_equipment[0] if matching_equipment else None, mapping
+    print(
+        prepare_transfer(request, machines[0] if machines else None, mapping).model_dump_json(
+            indent=2
+        )
     )
-    print(result.model_dump_json(indent=2))
     return 0
 
 

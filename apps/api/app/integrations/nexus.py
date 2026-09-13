@@ -1,20 +1,19 @@
 """Bounded reads of observed Nexus sandbox routes, with a private cookie session."""
 
 import json
-from dataclasses import dataclass
-from datetime import UTC, datetime
-from threading import Lock
-from time import monotonic
-from typing import Literal
+from collections.abc import Callable
+from datetime import datetime
 from uuid import UUID
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, ValidationError
 
 from app.core.config import Settings
+from app.integrations.http import MAX_RESPONSE_BYTES, BoundedClient
+from app.models.hub import EquipmentRecord, Provenance, RequestRecord
 
 NEXUS_ORIGIN = "https://econ-key.maic.ai"
-MAX_RESPONSE_BYTES = 1_000_000
+__all__ = ["MAX_RESPONSE_BYTES", "NexusConnector", "NexusReadError", "NexusSnapshot"]
 
 
 class NexusReadError(Exception):
@@ -61,50 +60,6 @@ class NexusRequest(BaseModel):
     operador_id: str | None = None
 
 
-class NexusProject(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    id: str
-    name: str
-    status: str | None = None
-    description: str | None = None
-    start_date: str | None = None
-    end_date: str | None = None
-    project_manager_user_id: str | None = None
-    manager_name: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-    archived_at: datetime | None = None
-
-
-class NexusOperator(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    id: str
-    nombre: str
-    cod_trabajador: str | None = None
-    is_active: StrictBool | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-class NexusReadResult[T: BaseModel](BaseModel):
-    items: list[T]
-    observed_at: datetime
-    total: int | None
-    complete: bool
-    source: Literal["nexus"] = "nexus"
-    environment: Literal["sandbox"] = "sandbox"
-    is_synthetic: Literal[True] = True
-
-
-class NexusProjectPage(BaseModel):
-    # The supplied project contract deliberately has no total.
-    items: list[NexusProject]
-    page: StrictInt = Field(ge=1)
-    limit: StrictInt = Field(ge=1)
-
-
 class NexusPage[T: BaseModel](BaseModel):
     items: list[T]
     total: StrictInt = Field(ge=0)
@@ -112,8 +67,7 @@ class NexusPage[T: BaseModel](BaseModel):
     limit: StrictInt = Field(ge=1)
 
 
-@dataclass
-class NexusSnapshot:
+class NexusSnapshot(BaseModel):
     equipment: list[NexusEquipment]
     requests: list[NexusRequest]
     equipment_total: int
@@ -121,22 +75,72 @@ class NexusSnapshot:
     complete: bool
 
 
-class NexusConnector:
-    def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None):
-        self.settings = settings
-        self._client = httpx.Client(
-            base_url=NEXUS_ORIGIN,
-            follow_redirects=False,
-            trust_env=False,
-            transport=transport,
-            headers={"Accept": "application/json", "User-Agent": "ECON-Hub/0.2"},
-        )
-        # Serialize reads and reauthentication in this process. No session tokens leave it.
-        self._lock = Lock()
-        self._authenticated = False
+ProvenanceFactory = Callable[[str, int, str], Provenance]
 
-    def close(self) -> None:
-        self._client.close()
+
+def to_records(
+    equipment: list[NexusEquipment],
+    requests: list[NexusRequest],
+    provenance: ProvenanceFactory,
+    relation_note: str,
+) -> tuple[list[EquipmentRecord], list[RequestRecord]]:
+    """Project source rows onto the read contract; requests link only by exact maquinaria_id."""
+    request_records = [
+        RequestRecord(
+            id=f"nexus:request:{item.id}",
+            project_id=item.project_id,
+            project_name=item.project_name,
+            machinery_id=f"nexus:equipment:{item.maquinaria_id}" if item.maquinaria_id else None,
+            status=item.status,
+            starts_on=item.fecha_inicio,
+            ends_on=item.fecha_fin,
+            machinery_type=item.tipo,
+            requested_by=item.requested_by_name,
+            requested_by_id=item.requested_by_user_id,
+            comments=item.comentarios,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            approved_at=item.approved_at,
+            approved_by_user_id=item.approved_by_user_id,
+            provenance=provenance("requests", index, item.id),
+        )
+        for index, item in enumerate(requests)
+    ]
+    equipment_records = [
+        EquipmentRecord(
+            id=f"nexus:equipment:{item.id}",
+            code=item.clave,
+            asset_number=item.no_activo,
+            name=item.nombre,
+            company=item.empresa,
+            equipment_class=item.clase_equipo,
+            project_id=item.project_id,
+            project_name=item.project_name,
+            machinery_status=item.estado,
+            maintenance_failure_id=item.active_failure_id,
+            maintenance_status=item.active_failure_status,
+            maintenance_is_stopped=item.active_failure_is_paro,
+            request_ids=[
+                r.id for r in request_records if r.machinery_id == f"nexus:equipment:{item.id}"
+            ],
+            relation_status="unlinked",
+            relation_note=relation_note,
+            provenance=provenance("equipment", index, item.id),
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )
+        for index, item in enumerate(equipment)
+    ]
+    return equipment_records, request_records
+
+
+class NexusConnector(BoundedClient):
+    error = NexusReadError
+
+    def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None):
+        super().__init__(NEXUS_ORIGIN, "Nexus", settings.nexus_timeout_seconds, transport)
+        self.settings = settings
+        self._authenticated = False
 
     @property
     def configured(self) -> bool:
@@ -147,36 +151,12 @@ class NexusConnector:
             and self.settings.nexus_password.get_secret_value()
         )
 
-    def _request(self, method: str, path: str, deadline: float, **kwargs) -> tuple[int, bytes]:
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            raise NexusReadError("La lectura superó el tiempo permitido.")
-        try:
-            with self._client.stream(
-                method,
-                path,
-                timeout=min(remaining, self.settings.nexus_timeout_seconds),
-                **kwargs,
-            ) as response:
-                body = bytearray()
-                for chunk in response.iter_bytes():
-                    if monotonic() > deadline:
-                        raise NexusReadError("La lectura superó el tiempo permitido.")
-                    if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
-                        raise NexusReadError("La respuesta excedió el tamaño de lectura permitido.")
-                    body.extend(chunk)
-                return response.status_code, bytes(body)
-        except httpx.HTTPError:
-            raise NexusReadError(
-                "No fue posible consultar Nexus dentro del tiempo permitido."
-            ) from None
-
     def _login(self, deadline: float) -> None:
         if not self.configured:
             raise NexusReadError("Faltan las credenciales de lectura de Nexus en el servidor.")
         self._authenticated = False
         self._client.cookies.clear()
-        status, body = self._request(
+        status, body = self._bounded(
             "POST",
             "/api/auth/login",
             deadline,
@@ -188,24 +168,21 @@ class NexusConnector:
         if status != 200:
             raise NexusReadError("Nexus rechazó la autenticación de la cuenta configurada.")
         try:
-            result = json.loads(body)
-            success = isinstance(result, dict) and result.get("success") is True
-        except (ValueError, UnicodeDecodeError):
+            success = json.loads(body).get("success") is True
+        except (ValueError, AttributeError):
             success = False
-        if not success or not any(
-            cookie.name == "auth-token" for cookie in self._client.cookies.jar
-        ):
+        if not success or not any(c.name == "auth-token" for c in self._client.cookies.jar):
             raise NexusReadError("Nexus no confirmó una sesión válida.")
         self._authenticated = True
 
     def _get(self, path: str, params: dict, deadline: float) -> bytes:
         if not self._authenticated:
             self._login(deadline)
-        status, body = self._request("GET", path, deadline, params=params)
+        status, body = self._bounded("GET", path, deadline, params=params)
         if status == 401:
             # Exactly one coordinated reauthentication and repeat of a safe read.
             self._login(deadline)
-            status, body = self._request("GET", path, deadline, params=params)
+            status, body = self._bounded("GET", path, deadline, params=params)
         if status == 401:
             self._authenticated = False
             raise NexusReadError("Nexus no autorizó la lectura después de reautenticar.")
@@ -223,7 +200,7 @@ class NexusConnector:
         records: list[T] = []
         seen: set[str] = set()
         total: int | None = None
-        stable_total = True
+        stable = True
         for page_number in range(1, self.settings.nexus_max_pages + 1):
             body = self._get(
                 path, {"page": page_number, "limit": self.settings.nexus_page_size}, deadline
@@ -238,122 +215,51 @@ class NexusConnector:
                 raise NexusReadError("Nexus devolvió una paginación inesperada.")
             if len(page.items) > self.settings.nexus_page_size:
                 raise NexusReadError("Nexus excedió el límite de registros solicitado.")
-            if total is not None and total != page.total:
-                stable_total = False
+            stable = stable and total in (None, page.total)
             total = page.total
             for item in page.items:
-                if item.id in seen:
-                    stable_total = False
-                    continue
-                seen.add(item.id)
-                records.append(item)
+                stable = stable and item.id not in seen
+                if item.id not in seen:
+                    seen.add(item.id)
+                    records.append(item)
             if not page.items or len(records) >= total:
                 break
-        return records, total or 0, stable_total and len(records) == total
+        return records, total or 0, stable and len(records) == total
 
     def read(self) -> NexusSnapshot:
-        deadline = monotonic() + self.settings.nexus_budget_seconds
-        if not self._lock.acquire(timeout=self.settings.nexus_budget_seconds):
-            raise NexusReadError("Ya hay una lectura de Nexus en curso; intente más tarde.")
-        try:
+        with self._exclusive(self.settings.nexus_budget_seconds) as deadline:
             equipment, equipment_total, equipment_complete = self._pages(
                 "/api/maquinaria/equipos", NexusEquipment, deadline
             )
             requests, requests_total, requests_complete = self._pages(
                 "/api/maquinaria/requests", NexusRequest, deadline
             )
-            return NexusSnapshot(
-                equipment,
-                requests,
-                equipment_total,
-                requests_total,
-                equipment_complete and requests_complete,
-            )
-        finally:
-            self._lock.release()
-
-    def read_projects(self) -> NexusReadResult[NexusProject]:
-        """Read bounded project pages; absence of a total never certifies full coverage."""
-        deadline = monotonic() + self.settings.nexus_budget_seconds
-        if not self._lock.acquire(timeout=self.settings.nexus_budget_seconds):
-            raise NexusReadError("Ya hay una lectura de Nexus en curso; intente más tarde.")
-        try:
-            items: list[NexusProject] = []
-            seen: set[str] = set()
-            for page_number in range(1, self.settings.nexus_max_pages + 1):
-                body = self._get(
-                    "/api/projects",
-                    {
-                        "page": page_number,
-                        "limit": self.settings.nexus_page_size,
-                        "activeOnly": "false",
-                    },
-                    deadline,
-                )
-                try:
-                    page = NexusProjectPage.model_validate_json(body)
-                except ValidationError:
-                    raise NexusReadError(
-                        "El formato de proyectos de Nexus cambió; el conector requiere revisión."
-                    ) from None
-                if (
-                    page.page != page_number
-                    or page.limit != self.settings.nexus_page_size
-                    or len(page.items) > self.settings.nexus_page_size
-                ):
-                    raise NexusReadError("Nexus devolvió una paginación inesperada de proyectos.")
-                duplicate = False
-                for item in page.items:
-                    if item.id in seen:
-                        duplicate = True
-                        continue
-                    seen.add(item.id)
-                    items.append(item)
-                if duplicate or len(page.items) < self.settings.nexus_page_size:
-                    break
-            return NexusReadResult[NexusProject](
-                items=items, observed_at=datetime.now(UTC), total=None, complete=False
-            )
-        finally:
-            self._lock.release()
-
-    def read_operators(self) -> NexusReadResult[NexusOperator]:
-        deadline = monotonic() + self.settings.nexus_budget_seconds
-        if not self._lock.acquire(timeout=self.settings.nexus_budget_seconds):
-            raise NexusReadError("Ya hay una lectura de Nexus en curso; intente más tarde.")
-        try:
-            items, total, complete = self._pages(
-                "/api/maquinaria/operadores", NexusOperator, deadline
-            )
-            return NexusReadResult[NexusOperator](
-                items=items, observed_at=datetime.now(UTC), total=total, complete=complete
-            )
-        finally:
-            self._lock.release()
+        return NexusSnapshot(
+            equipment=equipment,
+            requests=requests,
+            equipment_total=equipment_total,
+            requests_total=requests_total,
+            complete=equipment_complete and requests_complete,
+        )
 
     def _detail[T: BaseModel](self, path: str, identifier: str, model: type[T]) -> T:
         try:
-            if not isinstance(identifier, str) or len(identifier) != 36:
+            if len(identifier) != 36:
                 raise ValueError
             UUID(identifier)
-        except ValueError:
+        except (TypeError, ValueError):
             raise NexusReadError("La consulta requiere un UUID de origen válido.") from None
-        deadline = monotonic() + self.settings.nexus_budget_seconds
-        if not self._lock.acquire(timeout=self.settings.nexus_budget_seconds):
-            raise NexusReadError("Ya hay una lectura de Nexus en curso; intente más tarde.")
-        try:
+        with self._exclusive(self.settings.nexus_budget_seconds) as deadline:
             body = self._get(f"{path}/{identifier}", {}, deadline)
-            try:
-                item = model.model_validate_json(body)
-            except ValidationError:
-                raise NexusReadError(
-                    "El detalle de Nexus cambió; el conector requiere revisión."
-                ) from None
-            if item.id != identifier:
-                raise NexusReadError("Nexus devolvió un ID distinto al solicitado.")
-            return item
-        finally:
-            self._lock.release()
+        try:
+            item = model.model_validate_json(body)
+        except ValidationError:
+            raise NexusReadError(
+                "El detalle de Nexus cambió; el conector requiere revisión."
+            ) from None
+        if item.id != identifier:
+            raise NexusReadError("Nexus devolvió un ID distinto al solicitado.")
+        return item
 
     def get_request(self, request_id: str) -> NexusRequest:
         return self._detail("/api/maquinaria/requests", request_id, NexusRequest)

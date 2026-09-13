@@ -1,5 +1,4 @@
 import json
-from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -239,86 +238,11 @@ def test_timeout_and_total_read_budget_are_bounded():
         with pytest.raises(NexusReadError) as caught:
             connector.read()
         assert "private-test-value" not in str(caught.value)
-        with patch("app.integrations.nexus.monotonic", side_effect=[0, 30]):
+        with patch("app.integrations.http.monotonic", side_effect=[0, 30]):
             with pytest.raises(NexusReadError, match="tiempo permitido"):
                 connector.read()
     finally:
         connector.close()
-
-
-def test_optional_project_catalog_preserves_null_total_dates_and_exact_source_ids():
-    calls = []
-
-    def handler(request):
-        calls.append(request.url.path)
-        if request.method == "POST":
-            return login_response()
-        assert request.url.path == "/api/projects"
-        assert request.url.params["activeOnly"] == "false"
-        number = int(request.url.params["page"])
-        items = (
-            [
-                {
-                    "id": "project-0001",
-                    "name": "Proyecto",
-                    "status": None,
-                    "start_date": "2026-09-12",
-                    "end_date": None,
-                    "created_at": "2026-09-11T23:34:44.014294+00:00",
-                    "project_manager_user_id": None,
-                    "private_field": "not-retained",
-                }
-            ]
-            if number == 1
-            else []
-        )
-        return httpx.Response(200, json={"items": items, "page": number, "limit": 1})
-
-    before = datetime.now(UTC)
-    connector = NexusConnector(settings(), httpx.MockTransport(handler))
-    try:
-        result = connector.read_projects()
-    finally:
-        connector.close()
-    assert result.total is None and result.complete is False
-    assert result.items[0].id == "project-0001"
-    assert result.items[0].start_date == "2026-09-12" and result.items[0].end_date is None
-    assert result.items[0].created_at == datetime(2026, 9, 11, 23, 34, 44, 14294, tzinfo=UTC)
-    assert not hasattr(result.items[0], "private_field")
-    assert before <= result.observed_at <= datetime.now(UTC)
-    assert result.environment == "sandbox"
-    assert calls == ["/api/auth/login", "/api/projects", "/api/projects"]
-
-
-def test_optional_operator_catalog_preserves_nullable_code_without_name_join():
-    def handler(request):
-        if request.method == "POST":
-            return login_response()
-        assert request.url.path == "/api/maquinaria/operadores"
-        return httpx.Response(
-            200,
-            json={
-                "items": [
-                    {
-                        "id": "operator-1",
-                        "nombre": "Operador",
-                        "cod_trabajador": None,
-                        "is_active": None,
-                    }
-                ],
-                "total": 1,
-                "page": 1,
-                "limit": 1,
-            },
-        )
-
-    connector = NexusConnector(settings(), httpx.MockTransport(handler))
-    try:
-        result = connector.read_operators()
-    finally:
-        connector.close()
-    assert result.items[0].id == "operator-1" and result.items[0].cod_trabajador is None
-    assert result.items[0].is_active is None and result.complete and result.total == 1
 
 
 @pytest.mark.parametrize("kind", ["request", "equipment"])
@@ -397,28 +321,3 @@ def test_detail_id_mismatch_and_missing_upstream_are_explicit_errors():
     finally:
         connector.close()
     assert "private-test-value" not in str(caught.value)
-
-
-def test_projects_duplicate_pages_remain_partial_and_stop_at_bounds():
-    pages = []
-
-    def handler(request):
-        if request.method == "POST":
-            return login_response()
-        number = int(request.url.params["page"])
-        pages.append(number)
-        return httpx.Response(
-            200,
-            json={
-                "items": [{"id": "project-1", "name": "Proyecto"}],
-                "page": number,
-                "limit": 1,
-            },
-        )
-
-    connector = NexusConnector(settings(), httpx.MockTransport(handler))
-    try:
-        result = connector.read_projects()
-    finally:
-        connector.close()
-    assert pages == [1, 2] and len(result.items) == 1 and not result.complete

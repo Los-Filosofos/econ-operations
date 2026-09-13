@@ -1,7 +1,7 @@
 """Run explicitly enabled integration cycles; no schema changes or implicit retries."""
 
 import argparse
-from threading import Event
+from time import sleep
 
 from app.core.config import Settings
 from app.core.database import build_engine
@@ -21,20 +21,8 @@ def main() -> int:
     settings = Settings()
     engine = build_engine(settings.database_url)
     nexus = NexusConnector(settings)
-    startrack = StartrackClient(
-        StartrackReadConfig(
-            enabled=settings.allow_live_reads,
-            allow_writes=settings.allow_live_writes,
-            api_key=settings.startrack_api_key,
-            password=settings.startrack_password,
-            page_size=settings.startrack_page_size,
-            max_pages=settings.startrack_max_pages,
-            timeout_seconds=settings.startrack_timeout_seconds,
-            budget_seconds=settings.startrack_budget_seconds,
-        )
-    )
+    startrack = StartrackClient(StartrackReadConfig.from_settings(settings))
     service = WorkflowService(settings, engine, nexus, startrack)
-    stop = Event()
     try:
         while True:
             try:
@@ -47,7 +35,7 @@ def main() -> int:
                     return 1
             if not args.watch:
                 return 0
-            stop.wait(args.interval)
+            sleep(args.interval)
     except KeyboardInterrupt:
         return 0
     finally:
