@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     # Session login is required by default; AUTH_REQUIRED=false is a local development mode.
     auth_required: bool = True
     session_secret: SecretStr | None = Field(default=None, repr=False)
-    session_https_only: bool = False
+    # Secure cookie by default; SESSION_HTTPS_ONLY=false only for local development over HTTP.
+    session_https_only: bool = True
     session_max_age_seconds: int = Field(default=8 * 60 * 60, ge=60, le=30 * 24 * 60 * 60)
     allow_live_reads: bool = False
     allow_local_management: bool = False

@@ -1,11 +1,11 @@
 """Small Mantine building blocks. Every control carries a visible label and a real effect."""
 
 import re
+from pathlib import Path
 
 import dash_ag_grid as dag
 import dash_mantine_components as dmc
 from dash import html
-from dash_iconify import DashIconify
 
 from app.dashboard.analytics import day, instant
 from app.dashboard.theme import GRID_THEME, state_color, state_family
@@ -44,8 +44,18 @@ GRID_LOCALE = {
 }
 
 
+ICONS = Path(__file__).parent / "assets" / "icons"
+
+
 def icon(name: str, size: int = 18):
-    return DashIconify(icon=f"tabler:{name}", width=size, height=size)
+    """Tabler outline icon served from assets/icons; the mask keeps it in the text color."""
+    if not (ICONS / f"{name}.svg").is_file():
+        raise ValueError(f"Icono Tabler no vendorizado: {name}")
+    return html.Span(
+        className="ui-icon",
+        style={"--icon": f"url(/assets/icons/{name}.svg)", "width": size, "height": size},
+        **{"aria-hidden": "true"},
+    )
 
 
 def heading(title: str, description: str | None = None):

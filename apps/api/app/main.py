@@ -22,6 +22,21 @@ from app.integrations.nexus import NexusConnector
 from app.integrations.startrack import StartrackClient, StartrackReadConfig
 from app.services.workflow import WorkflowError, WorkflowService
 
+NO_STORE_PATHS = ("/_dash-update-component", "/_dash-layout", "/api/v1/")
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin",
+    "X-Frame-Options": "DENY",
+}
+# 'unsafe-eval': dash-ag-grid compiles {"function": ...} grid options and cellStyle
+# styleConditions with new Function; without it the tables render unstyled and unthemed.
+# 'unsafe-inline' styles: Mantine, Plotly and AG Grid set inline style attributes.
+CSP_TEMPLATE = (
+    "default-src 'self'; script-src 'self' 'unsafe-eval' {hashes}; "
+    "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; "
+    "object-src 'none'"
+)
 AUTH_TAGS = [
     {
         "name": "Autenticación",
@@ -35,6 +50,14 @@ AUTH_TAGS = [
     },
     {"name": "Usuarios", "description": "Administración de usuarios y roles (solo admin)."},
 ]
+
+
+def content_security_policy(application: FastAPI) -> str:
+    """CSP for HTML pages; the hashes cover Dash's inline renderer and clientside callbacks."""
+    if not hasattr(application.state, "csp"):
+        hashes = " ".join(application.state.dashboard.csp_hashes())
+        application.state.csp = CSP_TEMPLATE.format(hashes=hashes)
+    return application.state.csp
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -80,8 +103,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return decision
         with management_scope(decision):
             response = await call_next(request)
-        if request.url.path.startswith(("/_dash-", "/api/v1/")):
+        if request.url.path.startswith(NO_STORE_PATHS):
             response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @application.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.update(SECURITY_HEADERS)
+        if settings.session_https_only:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        if response.headers.get("content-type", "").startswith("text/html"):
+            response.headers["Content-Security-Policy"] = content_security_policy(application)
         return response
 
     @application.exception_handler(WorkflowError)

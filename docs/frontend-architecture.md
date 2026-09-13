@@ -1,8 +1,8 @@
 # Interfaz Dash y arquitectura del hub
 
 La interfaz y la API se ejecutan en **un servicio Python** en `apps/api`: Dash
-con componentes **dash-mantine-components 2.8** (Mantine v8), iconos Tabler por
-**dash-iconify**, tablas **AG Grid Community** (dash-ag-grid) y gráficos Plotly
+con componentes **dash-mantine-components 2.8** (Mantine v8), iconos Tabler locales
+(SVG vendorizados en `assets/icons`), tablas **AG Grid Community** (dash-ag-grid) y gráficos Plotly
 sobre FastAPI. SQLModel, Alembic y PostgreSQL conservan la operación. Las
 decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
 [ADR 0004](adr/0004-persistent-transfer-workflow.md) y
@@ -61,10 +61,9 @@ ejes fijos, leyenda por texto) y siempre tienen una tabla alternativa; ver
 verificadas a 1280 y 390 px en `docs/screenshots/`
 (`2026-09-13-<página>-<ancho>.png`).
 
-Los iconos son Tabler (`tabler:*`) cargados por el navegador desde
-`api.iconify.design`. Acompañan texto en navegación y acciones y nunca son el
-único portador de significado. **Límite:** en clientes sin salida a internet
-los iconos no se descargan; el texto y la operación se conservan.
+Los iconos son Tabler locales (`app/dashboard/assets/icons/*.svg`, licencia MIT),
+pintados con `mask-image` para heredar el color del texto. Acompañan texto en
+navegación y acciones y nunca son el único portador de significado.
 
 ## Servicios y módulos
 

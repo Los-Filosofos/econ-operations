@@ -87,22 +87,23 @@ def test_local_sample_plan_is_persistent_idempotent_and_cannot_be_sent(app):
 
 
 @pytest.mark.parametrize(
-    ("host", "client_host", "headers"),
+    ("host", "client_host", "headers", "expected"),
     [
-        ("http://localhost", "198.51.100.10", {}),
-        ("http://localhost", "198.51.100.10", {"X-Forwarded-For": "127.0.0.1"}),
-        ("http://evil.example", "127.0.0.1", {}),
-        ("http://localhost", "127.0.0.1", {"Origin": "https://evil.example"}),
-        ("http://localhost", "127.0.0.1", {"Sec-Fetch-Site": "cross-site"}),
+        ("http://localhost", "198.51.100.10", {}, 409),
+        ("http://localhost", "198.51.100.10", {"X-Forwarded-For": "127.0.0.1"}, 409),
+        ("http://evil.example", "127.0.0.1", {}, 409),
+        # Cross-origin writes are refused before any handler runs.
+        ("http://localhost", "127.0.0.1", {"Origin": "https://evil.example"}, 403),
+        ("http://localhost", "127.0.0.1", {"Sec-Fetch-Site": "cross-site"}, 403),
     ],
 )
 def test_request_flags_and_forwarded_headers_cannot_authorize_management(
-    app, host, client_host, headers
+    app, host, client_host, headers, expected
 ):
     with TestClient(app, base_url=host, client=(client_host, 5000)) as client:
         metadata.create_all(app.state.engine)
         denied = client.post("/api/v1/operations/plans", json=plan(), headers=headers)
-        assert denied.status_code == 409
+        assert denied.status_code == expected
         assert app.state.workflow.ledger.list("fixture") == []
 
 

@@ -10,7 +10,7 @@ decisiones que cambien la arquitectura en `docs/adr/`.
    o `docs/<short-description>`. Relacionar el trabajo con un issue existente.
 2. Mantener UI en `apps/api/app/dashboard`, negocio en `app/services` y HTTP
    en `app/api`. Actualizar el contrato Pydantic y sus consumidores juntos.
-3. Usar dash-mantine-components, dash-iconify y AG Grid Community, con los
+3. Usar dash-mantine-components, iconos Tabler locales y AG Grid Community, con los
    colores de `app/dashboard/theme.py` (el azul es marca, no estado). Añadir
    dependencias con `uv add --project apps/api <pkg>`; no editar `uv.lock` a
    mano. No copiar secretos ni originales privados desde `.context-work` a Git.

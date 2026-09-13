@@ -19,6 +19,7 @@ main:focus { outline: none; }
 .notice { margin: 12px 0; }
 .nav-utility { margin-top: 12px; }
 @media (max-width: 47.99em) { .mantine-AppShell-navbar { display: none; } }
+.ui-icon { display: inline-block; flex: none; background-color: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
 .state-dot { display: inline-block; flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; }
 .facts { font-variant-numeric: tabular-nums; }
 .disclosures .mantine-Accordion-control { font-size: 14px; }

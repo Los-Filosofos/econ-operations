@@ -38,7 +38,8 @@ PUBLIC_PATHS = (
 # Static paths never need the user loaded from SQL.
 STATIC_PATHS = ("/health/", "/assets/", "/_favicon.ico", "/_dash-component-suites/")
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-RECEIPT_PATH = re.compile(r"/api/v1/operations/[^/]+/receipt")
+RECEIPT_PATH = re.compile(r"/api/v1/operations/[^/]+/receipt/?")
+CROSS_ORIGIN_SITES = frozenset({"cross-site", "same-site"})
 
 
 class Role(StrEnum):
@@ -152,9 +153,23 @@ def _unauthenticated(request: Request) -> Response:
     return RedirectResponse(f"/login?next={quote(target, safe='')}", status_code=302)
 
 
+def cross_origin(request: Request) -> bool:
+    """A state-changing request from another origin, per Fetch metadata or the Origin header."""
+    if request.method in SAFE_METHODS and request.url.path != DASH_UPDATE_PATH:
+        return False
+    if request.headers.get("sec-fetch-site", "").lower() in CROSS_ORIGIN_SITES:
+        return True
+    origin = request.headers.get("origin")
+    return origin is not None and origin != f"{request.url.scheme}://{request.url.netloc}"
+
+
 def authorize_request(request: Request, settings: Settings) -> Response | bool:
     """Reject the request or return the management authority for it."""
     path = request.url.path
+    if cross_origin(request):
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN, content={"detail": "Origen no permitido"}
+        )
     user = None if path.startswith(STATIC_PATHS) else load_session_user(request)
     if user is not None:
         if not can(user.role, write_permission(request)):

@@ -1,6 +1,6 @@
 # ECON Python Hub
 
-Dash (dash-mantine-components, dash-iconify, Plotly, AG Grid Community) on FastAPI, with SQLModel + Alembic and PostgreSQL for the integration store. The hub endpoint remains a read projection; the separate operations service persists plans, source snapshots, a dispatch outbox and evidence. An explicit CLI worker performs bounded synchronization. All business data for this project is synthetic sandbox data; file samples and current provider reads remain separate evidence.
+Dash (dash-mantine-components, local Tabler icons, Plotly, AG Grid Community) on FastAPI, with SQLModel + Alembic and PostgreSQL for the integration store. The hub endpoint remains a read projection; the separate operations service persists plans, source snapshots, a dispatch outbox and evidence. An explicit CLI worker performs bounded synchronization. All business data for this project is synthetic sandbox data; file samples and current provider reads remain separate evidence.
 
 From the repository root:
 

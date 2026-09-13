@@ -49,7 +49,7 @@ proveedores desactivadas; el inicio de sesión es obligatorio:
 | `PORT` | Puerto entregado por la plataforma; si se omite, `8000` |
 | `AUTH_REQUIRED` | `true` (valor por defecto). `false` es solo para desarrollo local |
 | `SESSION_SECRET` | Obligatorio; sin él la aplicación no arranca. Generar con `python -c "import secrets; print(secrets.token_urlsafe(32))"` y guardarlo como secreto. Rotarlo cierra todas las sesiones |
-| `SESSION_HTTPS_ONLY` | `true` en cuanto el servicio se sirva tras TLS; la cookie no viaja por HTTP plano |
+| `SESSION_HTTPS_ONLY` | `true` por defecto (cookie `Secure` y cabecera HSTS); `false` solo para desarrollo local por HTTP plano |
 | `SESSION_MAX_AGE_SECONDS` | Caducidad de la sesión; `28800` (ocho horas) por defecto |
 | `ALLOW_LIVE_READS` | `false` |
 | `ALLOW_LOCAL_MANAGEMENT` | `false` (solo cuenta con `AUTH_REQUIRED=false`) |
@@ -143,8 +143,8 @@ Comprobar que `/` sin sesión redirige a `/login` y que `/api/v1/hub` responde
 `/api/v1/operations?mode=fixture`. Confirmar que el registro está disponible tras
 la migración, que los callbacks funcionan, que la cookie lleva `Secure` tras
 TLS y que recargar una ruta interna conserva estilos, modo y búsqueda. Los
-iconos Tabler se descargan de `api.iconify.design`; sin salida a internet
-desde el navegador se ve el texto sin icono. Las muestras muestran cinco equipos y dos solicitudes,
+iconos Tabler son locales (`assets/icons`); el navegador no necesita salida a
+internet. Las muestras muestran cinco equipos y dos solicitudes,
 con cobertura parcial, sin inventar tareas, GPS o recepciones.
 
 Antes de dimensionar una operación continua faltan mediciones de carga,

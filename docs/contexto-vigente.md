@@ -41,7 +41,7 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
   con Resumen, Solicitudes, Maquinaria, Operaciones y Fuentes (y Administración
   para `admin`); tablas de seis columnas con detalles desplegables. Gráficos
   elegidos con criterio de analista ([analítica](analitica-decisiones.md)).
-- Interfaz con dash-mantine-components, iconos Tabler (dash-iconify) y AG Grid
+- Interfaz con dash-mantine-components, iconos Tabler locales y AG Grid
   Community. El color codifica información, no decoración: el azul ECON es
   marca y acción; los estados usan una paleta cualitativa propia; magnitudes,
   escala secuencial; desviaciones frente a meta, escala divergente

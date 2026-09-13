@@ -54,8 +54,9 @@ La interfaz usa componentes Mantine (dash-mantine-components) con iconos
 Tabler, tablas AG Grid Community y gráficos Plotly. El azul ECON identifica la
 marca y las acciones; los estados usan una paleta cualitativa propia y las
 magnitudes y desviaciones escalas secuencial y divergente
-([arquitectura](docs/frontend-architecture.md)). Los iconos se descargan de
-`api.iconify.design`: sin internet en el cliente se ve el texto sin icono.
+([arquitectura](docs/frontend-architecture.md)). Los iconos Tabler son locales
+(`app/dashboard/assets/icons`), sin peticiones a terceros. La cookie de sesión es
+`Secure` por defecto: `SESSION_HTTPS_ONLY=false` solo para desarrollo local por HTTP.
 
 El modo `fixture` contiene cinco máquinas y dos solicitudes extraídas del
 OpenAPI proporcionado, con sus IDs y valores originales; no incluye
