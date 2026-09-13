@@ -1,96 +1,32 @@
 # Indicadores operativos y referencias ISO
 
-Este documento separa las reglas de revisión existentes, los indicadores
-propuestos y las referencias normativas consultadas el **12 de septiembre de
-2026**. La portada vigente y sus gráficos están definidos en
-[analítica de decisiones](analitica-decisiones.md). No hay KPIs globales de
-productividad, ahorro o cumplimiento calculados con la muestra disponible.
+Este documento fija dónde vive cada definición de indicador y conserva las
+referencias normativas consultadas el **12 de septiembre de 2026**. No repite
+fórmulas: las fichas, los SLA y los límites de agregación tienen una única
+fuente. No hay KPIs globales de productividad, ahorro o cumplimiento calculados
+con la muestra disponible (cinco equipos y dos solicitudes, sin tareas,
+ubicaciones ni recepciones).
 
-## RF-06: indicador documentado
+## Dónde vive cada definición
 
-El requisito pide documentar al menos un indicador que la integración haría
-visible; no exige inventar un resultado sin datos. La **definición única** de
-[tiempo fuera de geocerca sin justificación](entregables-visuales.md#rf-06-indicador-definido-sin-valor-inventado)
-(por equipo y período, en horas; cálculo, identidad, evidencia, cobertura y
-decisión) vive en el dossier visual y este documento no la repite para evitar
-fórmulas distintas entre entregables. La muestra no permite calcularlo: el
-resultado es **no evaluable**, no cero.
-
-Los indicadores que sí se calculan hoy con las lecturas existentes —tiempo de
-aprobación, antigüedad de la solicitud abierta, aprobadas sin tarea enviada,
-OCUPADA sin proyecto, asignación vencida, tarea completada sin recepción, falla
-activa y antigüedad de la evidencia— están definidos ficha por ficha en
-[indicadores calculables](indicadores-calculables.md) y publicados por
-`GET /api/v1/indicators`, por fila y sin promedios.
-
-## Qué puede mostrar la implementación
-
-La muestra suministrada contiene cinco equipos y dos solicitudes, sin tareas,
-ubicaciones ni recepciones. Es parcial y carece de un instante conjunto de
-observación. La portada muestra asuntos por solicitud y períodos de uso; no
-presenta tarjetas de conteos ni interpreta los períodos como compromisos de entrega.
-
-Las siguientes reglas existen en el servicio de lectura, aunque la muestra no
-aporta todas sus condiciones. Son señales para revisar registros, no KPIs globales:
-
-| Regla existente | Evidencia y límite |
-| --- | --- |
-| Solicitud pendiente cuyo inicio llegó al corte | Estado, fecha válida y corte conocido; no se evalúa con el reloj actual sobre muestras documentales sin corte |
-| Solicitud aprobada sin unidad | Aprobación e ID de maquinaria ausente; no confundir con una unidad que quedó fuera de la página consultada |
-| Equipo con falla activa | Referencia de falla; la decisión de paro se conserva por separado |
-| Paro y traslado pendiente | Paro explícito, tarea pendiente y vínculo confirmado; no se deduce de motor apagado o estado administrativo |
+| Qué | Fuente única | Qué contiene |
+| --- | --- | --- |
+| RF-06: tiempo fuera de geocerca sin justificación | [entregables visuales](entregables-visuales.md#rf-06-indicador-definido-sin-valor-inventado) | Unidad (horas por equipo y período), cálculo por unión de intervalos, datos necesarios, decisión y resultado **no evaluable** con la muestra, no cero |
+| Indicadores I1 a I8 de `GET /api/v1/indicators` y de la página `/indicadores` | [indicadores calculables](indicadores-calculables.md#fichas-de-los-indicadores-publicados) | Pregunta, grano, población, fórmula con los campos exactos del contrato, exclusiones, desconocidos, fechas, unidad y estado evaluable, parcial o no evaluable; por fila, sin promedios |
+| SLA propuestos S1 a S6 (aprobación, asignación, envío de tarea, recepción, atención de falla con paro, frescura de evidencia) | [fichas de SLA](indicadores-calculables.md#fichas-de-sla-propuestas-no-implementadas) | Fórmula por campo, unidad, umbral sugerido «a validar con ECON», cobertura hoy, cuándo no es evaluable y decisión que habilita |
+| Qué impide agregar y qué lecturas no implementadas habilitarían más | [indicadores calculables](indicadores-calculables.md#qué-impide-agregar-hoy) | Cohorte pequeña, `rejected_at` inexistente, sin instantes por transición de falla, sin corte conjunto en fixture; rutas `history`, `actividad`, `fallas`, `usage-trend` con sus campos |
+| Requisitos antes de publicar una medición nueva | [contexto vigente](contexto-vigente.md#límites-de-los-datos) | Pregunta y decisión, grano, IDs y vigencia, población y denominador, fechas con zona, estado, enlace a los registros |
+| Reglas de revisión de la lectura (`alerts` del hub) | [README del servicio](../apps/api/README.md#provided-samples-and-rule-limits) | Falla activa, paro con tarea pendiente confirmada, solicitud pendiente cuyo inicio llegó al corte, aprobada sin unidad; las que dependen de fecha exigen corte conocido |
 
 Un registro de operaciones no disponible no se transforma en cero movimientos.
-Las incidencias de envío requieren consultar evidencia y conciliar resultados
-inciertos. El backend ya conserva planes, cortes, eventos y recepción declarada;
-eso no asegura una serie temporal completa ni una integración autenticada
-validada con Startrack.
-
-## Mediciones propuestas
-
-| Medición | Cálculo propuesto | Condiciones pendientes |
-| --- | --- | --- |
-| Aprobadas sin unidad | Cantidad y porcentaje sobre las aprobadas del ámbito | Cobertura y catálogo validados; denominador cero significa sin casos evaluables |
-| Tiempo hasta aprobación | Hoy por fila: `approved_at − created_at` (`approval_time`); mediana y percentil 90 solo con cohorte suficiente | Horas con zona, cambios de decisión, `rejected_at` (no publicado) y cohorte; mostrar también las pendientes |
-| Cobertura solicitud–traslado | Solicitudes con vínculo validado sobre solicitudes que requieren traslado | Definir el denominador y comprobar recurso, destino, período y cardinalidad |
-| Antigüedad de posición | Corte menos instante del reporte del activo | Acceso API validado, unidad temporal, dispositivo vinculado y antigüedad aceptable |
-| Puntualidad de recepción | Recepciones validadas dentro del compromiso sobre traslados evaluables cuyo compromiso vence en el período | Compromiso de entrega, recepción, política de cancelación/reprogramación y cobertura |
-| Impacto del hub | Comparación del tiempo necesario para resolver una consulta operativa antes y durante un piloto | Casos comparables, muestra y condiciones registradas; sin porcentajes de ahorro supuestos |
-
-Las fichas de SLA propuestas (aprobación, asignación, envío de tarea,
-recepción, atención de falla con paro y frescura de evidencia) están en
-[indicadores calculables](indicadores-calculables.md#fichas-de-sla-propuestas-no-implementadas),
-con umbrales marcados «a validar con ECON».
-
-Los plazos de uso solicitado, programación de tarea y compromiso de entrega son
-datos diferentes. Una tarea completada o una visita GPS no sustituye la recepción.
-Para puntualidad, los pendientes vencidos con evidencia suficiente permanecen en
-la cohorte; los casos desconocidos se informan junto con la cobertura.
-
-## Condiciones de medición y decisión
-
-- Identificar organización, proyecto, población, unidad, fórmula, corte y fuente.
-  Conservar la fecha original y usar `America/El_Salvador` para el día de negocio.
-- Informar registros evaluados, excluidos y desconocidos. Una fuente caída,
-  lectura parcial o falta de permisos no produce un cero global.
-- Distinguir muestras del archivo y lecturas actuales del sandbox; ambos son
-  sintéticos. Los casos inventados para probar reglas quedan solo en tests.
-- Separar fecha del evento, observación y registro. Una sincronización reciente
-  no rejuvenece la posición ni reconstruye eventos intermedios ausentes.
-- Permitir llegar a los registros que sostienen la decisión. Responsables,
-  umbrales y metas requieren acuerdo de las áreas, sin rankings artificiales.
-
-La disponibilidad administrativa no acredita disponibilidad física o utilización.
-Motor apagado no equivale a paro; horómetro no equivale a horas productivas.
+Una tarea completada o una visita GPS no sustituye la recepción. La
+disponibilidad administrativa no acredita disponibilidad física ni utilización:
+motor apagado no equivale a paro y horómetro no equivale a horas productivas.
 MTTR necesita intervalos de reparación válidos y OEE requiere datos de
-disponibilidad, rendimiento y calidad que no aporta esta muestra.
-
-Los acuerdos pendientes corresponden a Logística, Proyectos y Mantenimiento:
+disponibilidad, rendimiento y calidad que ninguna lectura actual aporta. Los
+acuerdos pendientes corresponden a Logística, Proyectos y Mantenimiento:
 identidad del activo observado, vigencia de correspondencias, definición de
-`OBSOLETA`, restricciones, recepción y plazos exigibles. La
-[matriz de equivalencias](equivalencias-prisma-startrack.md) y el
-[manual de integración](manual-mapeo-integracion.md) describen el trabajo disponible;
-no hace falta reconstruir el conector ni la persistencia ya implementados.
+`OBSOLETA`, restricciones, recepción y plazos exigibles.
 
 ## Referencias ISO de la revisión del 12/09/2026
 
@@ -109,7 +45,7 @@ acreditadas de ECON.
 
 Esas aplicaciones son interpretaciones de diseño, no una lista literal de
 requisitos. Una evaluación formal debe confirmar la edición, enmiendas y alcance
-con el responsable de calidad. Ninguna referencia autoriza
-evaluar conductores con evidencia incompleta ni atribuir a ISO una meta de 95 %,
-98 % u otra cifra. La política actual mantiene credenciales en el servidor y
-acceso remoto deshabilitado por defecto.
+con el responsable de calidad. Ninguna referencia autoriza evaluar conductores
+con evidencia incompleta ni atribuir a ISO una meta de 95 %, 98 % u otra cifra.
+La política actual mantiene credenciales en el servidor y acceso remoto
+deshabilitado por defecto.

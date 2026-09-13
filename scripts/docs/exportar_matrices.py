@@ -1,14 +1,17 @@
-"""Export the reusable matrices of docs/equivalencias-prisma-startrack.md to CSV and XLSX.
+"""Export the reusable matrices of the deliverable documents to CSV and XLSX.
 
 The Markdown tables remain the editable source (RNF-02). This script copies them, table by
-table, to `output/matrices/<slug>.csv` (UTF-8 with header row), to one workbook
+table, from `docs/equivalencias-prisma-startrack.md` (mapping, glossary, form, RACI) and from
+`docs/matriz-requisitos-entregables.md` (requirement traceability) to
+`output/matrices/<slug>.csv` (UTF-8 with header row), to one workbook
 `output/matrices/matrices-econ.xlsx` (one sheet per table, no decorative formatting) and
-records SHA-256 digests of the source and of every output in `manifest.json` and
+records SHA-256 digests of every source and of every output in `manifest.json` and
 `MANIFEST.md`. It reads no other file, no settings and no provider.
 
-Standard library plus openpyxl; run it without touching the application lockfile:
+Standard library plus openpyxl 3.1.5, pinned in the `dev` group of `apps/api` and also usable
+without the application lockfile:
 
-    uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py
+    uv run --project apps/api python scripts/docs/exportar_matrices.py
     uv run --no-project --with openpyxl==3.1.5 python scripts/docs/exportar_matrices.py --check
 
 `--check` regenerates everything in memory (keeping the date stored in the manifest) and
@@ -27,11 +30,13 @@ import re
 import sys
 import zipfile
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path("docs/equivalencias-prisma-startrack.md")
+TRACEABILITY = Path("docs/matriz-requisitos-entregables.md")
+SOURCES: tuple[Path, ...] = (SOURCE, TRACEABILITY)
 OUTPUT_DIR = Path("output/matrices")
 WORKBOOK = OUTPUT_DIR / "matrices-econ.xlsx"
 MANIFEST_JSON = OUTPUT_DIR / "manifest.json"
@@ -52,9 +57,10 @@ class TableSpec:
     heading: str
     index: int = 0
     requirement: str = ""
+    source: Path = SOURCE
 
 
-# Headings are matched by exact text, never by line number, so the document can grow.
+# Headings are matched by exact text, never by line number, so the documents can grow.
 TABLES: tuple[TableSpec, ...] = (
     TableSpec(
         "clasificaciones",
@@ -148,6 +154,16 @@ TABLES: tuple[TableSpec, ...] = (
         "## Responsabilidades propuestas para confirmar",
         requirement="RF-03: matriz RACI propuesta, pendiente de validación empresarial",
     ),
+    TableSpec(
+        "trazabilidad-requisitos",
+        "Trazabilidad requisitos",
+        "## Matriz de trazabilidad",
+        requirement=(
+            "RNF-04: RF-01 a RF-06, RNF-01 a RNF-04 y entregables de §6/§9 con evidencia, "
+            "dónde lo ve el jurado, estado y brecha"
+        ),
+        source=TRACEABILITY,
+    ),
 )
 # The five form tables are also concatenated into one matrix with a section column.
 FORM_SLUGS = (
@@ -186,11 +202,7 @@ def plain(cell: str) -> str:
 
 
 def split_row(line: str) -> list[str]:
-    body = line.strip()
-    if body.startswith("|"):
-        body = body[1:]
-    if body.endswith("|"):
-        body = body[:-1]
+    body = line.strip().removeprefix("|").removesuffix("|")
     cells, current, escaped = [], [], False
     for char in body:
         if escaped:
@@ -211,12 +223,12 @@ def is_separator(line: str) -> bool:
     return re.match(r"^\|[\s:|-]+\|$", line.strip()) is not None
 
 
-def tables_after(lines: list[str], heading: str) -> list[list[str]]:
+def tables_after(lines: list[str], heading: str, source: Path) -> list[list[str]]:
     """All tables between `heading` and the next heading of any level."""
     try:
         start = lines.index(heading)
     except ValueError as error:
-        raise SystemExit(f"Encabezado no encontrado en {SOURCE}: {heading}") from error
+        raise SystemExit(f"Encabezado no encontrado en {source}: {heading}") from error
     blocks: list[list[str]] = []
     current: list[str] = []
     for line in lines[start + 1 :]:
@@ -247,11 +259,11 @@ def parse_table(spec: TableSpec, block: list[str]) -> Table:
     return Table(spec, header, rows, plain(spec.heading.lstrip("# ")))
 
 
-def extract(markdown: str) -> list[Table]:
-    lines = markdown.splitlines()
+def extract(documents: dict[Path, str]) -> list[Table]:
+    lines = {path: text.splitlines() for path, text in documents.items()}
     tables: list[Table] = []
     for spec in TABLES:
-        blocks = tables_after(lines, spec.heading)
+        blocks = tables_after(lines[spec.source], spec.heading, spec.source)
         if spec.index >= len(blocks):
             raise SystemExit(f"«{spec.heading}» no tiene la tabla número {spec.index + 1}.")
         tables.append(parse_table(spec, blocks[spec.index]))
@@ -294,7 +306,8 @@ def workbook_bytes(tables: list[Table], generated_on: date) -> bytes:
         for row in table.rows:
             sheet.append(row)
         sheet.freeze_panes = "A2"
-    stamp = datetime(generated_on.year, generated_on.month, generated_on.day)
+    # openpyxl serialises a naive timestamp as UTC midnight; the date is the only input.
+    stamp = datetime.combine(generated_on, time(0, 0))
     book.properties.creator = "ECON, generado por scripts/docs/exportar_matrices.py"
     book.properties.lastModifiedBy = None
     book.properties.created = stamp
@@ -316,20 +329,22 @@ def revision_note(markdown: str) -> str:
     """First sentence of the paragraph that starts with «Revisión:», without markup."""
     lines = markdown.splitlines()
     for number, line in enumerate(lines):
-        if line.startswith("Revisión:"):
+        if re.match(r"Revisión( documental)?:", line):
             paragraph = []
             for text in lines[number:]:
                 if not text.strip():
                     break
                 paragraph.append(text.strip())
-            match = re.match(r"Revisión:\s*(.*?\.)(\s|$)", plain(" ".join(paragraph)))
+            match = re.match(
+                r"Revisión(?: documental)?:\s*(.*?\.)(\s|$)", plain(" ".join(paragraph))
+            )
             return (match.group(1) if match else plain(" ".join(paragraph))).rstrip(".")
     return ""
 
 
-def build(markdown: str, generated_on: date) -> dict[str, bytes]:
+def build(documents: dict[Path, str], generated_on: date) -> dict[str, bytes]:
     """Every output file as bytes, keyed by path relative to the repository root."""
-    tables = extract(markdown)
+    tables = extract(documents)
     files: dict[str, bytes] = {}
     entries = []
     for table in tables:
@@ -339,6 +354,7 @@ def build(markdown: str, generated_on: date) -> dict[str, bytes]:
         entries.append(
             {
                 "slug": table.spec.slug,
+                "source": table.spec.source.as_posix(),
                 "heading": table.section,
                 "requirement": table.spec.requirement,
                 "csv": path.as_posix(),
@@ -351,20 +367,23 @@ def build(markdown: str, generated_on: date) -> dict[str, bytes]:
     xlsx = workbook_bytes(tables, generated_on)
     files[WORKBOOK.as_posix()] = xlsx
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generator": "scripts/docs/exportar_matrices.py",
         "reproduce": REPRODUCE,
         "check": f"{REPRODUCE} --check",
         "generated_on": generated_on.isoformat(),
-        "source": {
-            "path": SOURCE.as_posix(),
-            "sha256": sha256_bytes(markdown.encode("utf-8")),
-            "revision": revision_note(markdown),
-            "note": (
-                "Las tablas Markdown son el origen editable; CSV y XLSX son copias derivadas "
-                "sin datos añadidos. Formato quitado: énfasis, código y destinos de enlaces."
-            ),
-        },
+        "sources": [
+            {
+                "path": path.as_posix(),
+                "sha256": sha256_bytes(text.encode("utf-8")),
+                "revision": revision_note(text),
+            }
+            for path, text in documents.items()
+        ],
+        "note": (
+            "Las tablas Markdown son el origen editable; CSV y XLSX son copias derivadas "
+            "sin datos añadidos. Formato quitado: énfasis, código y destinos de enlaces."
+        ),
         "tables": entries,
         "workbook": {
             "path": WORKBOOK.as_posix(),
@@ -373,9 +392,13 @@ def build(markdown: str, generated_on: date) -> dict[str, bytes]:
             "sheets": [entry["sheet"] for entry in entries],
         },
         "scope_notes": [
-            "Solo se exportan tablas ya escritas en la matriz; no se inventan filas ni IDs.",
+            "Solo se exportan tablas ya escritas en los documentos; no se inventan filas ni IDs.",
             "La RACI es una propuesta pendiente de validación empresarial (RF-03).",
             "Una correspondencia documentada no acredita identidad de registros entre plataformas.",
+            (
+                "El estado de la trazabilidad (cumple, parcial, pendiente) describe evidencia "
+                "en el repositorio, no una calificación del jurado."
+            ),
         ],
     }
     files[MANIFEST_JSON.as_posix()] = (
@@ -386,36 +409,48 @@ def build(markdown: str, generated_on: date) -> dict[str, bytes]:
 
 
 def manifest_markdown(manifest: dict) -> str:
-    source = manifest["source"]
     workbook = manifest["workbook"]
     workbook_name = Path(workbook["path"]).name
     lines = [
         "# Matrices exportadas de ECON",
         "",
-        f"Generado el {manifest['generated_on']} por `{manifest['generator']}` desde",
-        f"[`{source['path']}`](../../{source['path']}) (SHA-256 `{source['sha256']}`).",
-        f"Revisión del origen: {source['revision'] or 'no indicada'}.",
+        f"Generado el {manifest['generated_on']} por `{manifest['generator']}` desde:",
         "",
-        "Las tablas Markdown siguen siendo el origen editable; estos archivos son copias",
-        "derivadas para reutilizar en hojas de cálculo (RNF-02). No añaden filas, IDs ni",
-        "valores. Reproducir y verificar:",
-        "",
-        "```sh",
-        manifest["reproduce"],
-        manifest["check"],
-        "```",
-        "",
-        f"Libro: [`{workbook_name}`]({workbook_name}) (SHA-256 `{workbook['sha256']}`,",
-        f"openpyxl {workbook['openpyxl']}, una hoja por tabla, sin formato decorativo).",
-        "",
-        "| Tabla | Sección de origen | Requisito | Filas | Columnas | SHA-256 del CSV |",
-        "| --- | --- | --- | --- | --- | --- |",
     ]
+    for source in manifest["sources"]:
+        lines.append(
+            f"- [`{source['path']}`](../../{source['path']}) (SHA-256 `{source['sha256']}`; "
+            f"revisión del origen: {source['revision'] or 'no indicada'})."
+        )
+    lines.extend(
+        [
+            "",
+            "Las tablas Markdown siguen siendo el origen editable; estos archivos son copias",
+            "derivadas para reutilizar en hojas de cálculo (RNF-02). No añaden filas, IDs ni",
+            "valores. Reproducir y verificar (`uv run --project apps/api python …` también",
+            "sirve: openpyxl 3.1.5 está en el grupo `dev` del proyecto):",
+            "",
+            "```sh",
+            manifest["reproduce"],
+            manifest["check"],
+            "```",
+            "",
+            f"Libro: [`{workbook_name}`]({workbook_name}) (SHA-256 `{workbook['sha256']}`,",
+            f"openpyxl {workbook['openpyxl']}, una hoja por tabla, sin formato decorativo).",
+            "",
+            (
+                "| Tabla | Documento y sección de origen | Requisito | Filas | Columnas | "
+                "SHA-256 del CSV |"
+            ),
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
     for entry in manifest["tables"]:
         name = Path(entry["csv"]).name
         lines.append(
-            f"| [`{name}`]({name}) | {entry['heading']} | {entry['requirement']} | "
-            f"{entry['rows']} | {len(entry['columns'])} | `{entry['sha256']}` |"
+            f"| [`{name}`]({name}) | `{Path(entry['source']).name}` › {entry['heading']} | "
+            f"{entry['requirement']} | {entry['rows']} | {len(entry['columns'])} | "
+            f"`{entry['sha256']}` |"
         )
     lines.extend(["", *(f"- {note}" for note in manifest["scope_notes"]), ""])
     return "\n".join(lines)
@@ -445,7 +480,7 @@ def check(files: dict[str, bytes]) -> int:
         if path.is_file() and relative not in listed:
             problems.append(f"no listado en el manifiesto: {relative}")
     if problems:
-        print("Matrices exportadas no coinciden con la matriz Markdown:", file=sys.stderr)
+        print("Matrices exportadas no coinciden con las tablas Markdown:", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         print(f"Regenerar con: {REPRODUCE}", file=sys.stderr)
@@ -460,10 +495,10 @@ def main() -> int:
         "--check", action="store_true", help="Compare the checked-in exports; write nothing"
     )
     args = parser.parse_args()
-    markdown = (ROOT / SOURCE).read_text(encoding="utf-8")
+    documents = {path: (ROOT / path).read_text(encoding="utf-8") for path in SOURCES}
     today = datetime.now(UTC).date()
     generated_on = (stored_generated_on() or today) if args.check else today
-    files = build(markdown, generated_on)
+    files = build(documents, generated_on)
     if args.check:
         return check(files)
     (ROOT / OUTPUT_DIR).mkdir(parents=True, exist_ok=True)

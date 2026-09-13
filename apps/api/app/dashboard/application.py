@@ -1,5 +1,6 @@
 """Dash on the existing FastAPI server, using the shared Python read service."""
 
+import json
 from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlencode
@@ -29,7 +30,7 @@ from app.dashboard.integration_views import (
     trace_panel,
 )
 from app.dashboard.operations_graph import graph_status
-from app.dashboard.theme import BRAND, MANTINE_THEME
+from app.dashboard.theme import BRAND, FAMILY_COLORS, MANTINE_THEME
 from app.dashboard.views import (
     MODES,
     REQUEST_FILTERS,
@@ -63,7 +64,10 @@ INDEX = """<!DOCTYPE html>
     <footer>{%config%}{%scripts%}{%renderer%}</footer>
   </body>
 </html>"""
-READ_ERROR = "No se pudo completar la consulta. Intenta actualizar de nuevo."
+READ_ERROR = "No se pudo completar la consulta. Se reintenta al volver a leer."
+WORKFLOW_READ_ERROR = (
+    "No se pudo consultar el registro de movimientos. Se reintenta al volver a leer."
+)
 INPUT_ERROR = (
     "Revisa los campos obligatorios y los IDs. Usa fecha AAAA-MM-DD y hora HH:MM; "
     "separa los IDs de usuarios con comas."
@@ -72,6 +76,139 @@ ACTION_ERROR = (
     "No se pudo completar la acción. Actualiza el registro para consultar su estado "
     "antes de repetirla."
 )
+# The page polls GET /api/v1/status this often and reloads data only when the registry
+# version changed (stale-while-revalidate: what is on screen stays until the new read lands).
+STATUS_POLL_SECONDS = 15
+RUNNING_INDICATOR = [(Output("refresh-indicator", "children"), "Actualizando…", "")]
+AGO_JS = """
+  const ago = (iso) => {
+    const t = Date.parse(iso || "");
+    if (!Number.isFinite(t)) { return "sin fecha"; }
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 45) { return "hace un momento"; }
+    const m = Math.round(s / 60);
+    if (m < 60) { return "hace " + m + " min"; }
+    const h = Math.round(m / 60);
+    if (h < 24) { return "hace " + h + " h"; }
+    const at = new Date(t);
+    return "el " + at.toLocaleDateString("es") + " " +
+      at.toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit"});
+  };
+  const modeOf = (search) => new URLSearchParams(search || "").get("mode") || "fixture";
+"""
+# Polls the status endpoint; pauses while the tab is hidden and polls at once when it returns.
+# `registry` is written only when a store of the current mode carries another version.
+STATUS_JS = (
+    """
+async function(ticks, search, snapshot, workflow) {
+  const noUpdate = window.dash_clientside.no_update;
+  if (!window.econVisibilityWatch) {
+    window.econVisibilityWatch = true;
+    document.addEventListener("visibilitychange", () => {
+      if (!document.getElementById("application-shell")) { return; }
+      const hidden = document.visibilityState === "hidden";
+      const props = {disabled: hidden};
+      if (!hidden) { props.n_intervals = (window.econPollTicks || 0) + 1; }
+      window.dash_clientside.set_props("status-poll", props);
+    });
+  }
+  window.econPollTicks = ticks || 0;
+  if (document.visibilityState === "hidden") { return [noUpdate, noUpdate]; }
+"""
+    + AGO_JS
+    + """
+  const mode = modeOf(search);
+  let status;
+  try {
+    const response = await fetch("/api/v1/status?mode=" + encodeURIComponent(mode), {
+      credentials: "same-origin", cache: "no-store", headers: {Accept: "application/json"},
+    });
+    if (response.status === 401) {
+      const next = window.location.pathname + window.location.search;
+      window.location.assign("/login?next=" + encodeURIComponent(next));
+      return [noUpdate, noUpdate];
+    }
+    if (!response.ok) { throw new Error(String(response.status)); }
+    status = await response.json();
+  } catch (error) {
+    status = {mode: mode, error: "Sin respuesta del servidor"};
+  }
+  status.checked_at = new Date().toISOString();
+  const version = status.registry_version;
+  const stale = (store) => Boolean(store) && typeof store === "object" &&
+    store.mode === mode && store.version !== version;
+  const registry = version && (stale(snapshot) || stale(workflow))
+    ? {mode: mode, version: version, at: Date.now()}
+    : noUpdate;
+  return [status, registry];
+}
+"""
+)
+# Header text and the details behind it, recomputed on every tick so "hace X min" moves.
+HEADER_JS = (
+    """
+function(ticks, snapshot, status, search) {
+  const labels = %s;
+  const colors = %s;
+"""
+    + AGO_JS
+    + """
+  const mode = modeOf(search);
+  const label = labels[mode] || mode;
+  const mine = Boolean(snapshot) && typeof snapshot === "object" && snapshot.mode === mode;
+  let text = "Leyendo el origen…";
+  let short = "leyendo…";
+  let state = "neutral";
+  if (mine && snapshot.hub && snapshot.hub.generated_at) {
+    short = ago(snapshot.hub.generated_at);
+    text = "Última lectura " + short;
+    state = "active";
+  } else if (mine && snapshot.error) {
+    text = "Última consulta sin respuesta";
+    short = "sin respuesta";
+    state = "issue";
+  }
+  const current = status && typeof status === "object" && status.mode === mode ? status : null;
+  let registry = "Registro del servidor sin comprobar todavía.";
+  let sync = "";
+  let poll = "Comprobación del registro cada %d s.";
+  if (current && current.error) {
+    registry = "Sin respuesta del servidor al comprobar el registro.";
+    poll = "Última comprobación fallida " + ago(current.checked_at) + ".";
+    state = "issue";
+  } else if (current) {
+    registry = current.registry_last_read_at
+      ? "Origen sincronizado " + ago(current.registry_last_read_at) + "."
+      : "Sin sincronización guardada para este origen.";
+    poll = "Registro comprobado " + ago(current.checked_at) + " · cada %d s.";
+    const cycle = current.sync || {};
+    if (mode !== "live") {
+      sync = "Origen local: los cambios provienen del registro de esta base.";
+    } else if (!cycle.enabled) {
+      sync = "Sincronización automática desactivada (SYNC_INTERVAL_SECONDS).";
+    } else {
+      const outcome = cycle.last_cycle_result === "ok" ? "correcta"
+        : cycle.last_cycle_result === "skipped" ? "omitida: otro proceso sincronizaba"
+        : cycle.last_cycle_result || "";
+      sync = "Sincronización automática cada " + cycle.interval_seconds + " s" +
+        (cycle.last_cycle_at
+          ? " · último ciclo " + ago(cycle.last_cycle_at) + " · " + outcome
+          : " · sin ciclo todavía") + ".";
+    }
+    if (cycle.in_progress) { sync += " Sincronizando ahora…"; }
+  }
+  return [text + " · " + label, short, {background: colors[state]}, registry, sync, poll];
+}
+"""
+)
+# The accessible fallback: an explicit re-read, forced regardless of the version.
+REREAD_JS = """
+function(clicks, search) {
+  if (!clicks) { return window.dash_clientside.no_update; }
+  const mode = new URLSearchParams(search || "").get("mode") || "fixture";
+  return {mode: mode, version: null, forced: true, at: Date.now()};
+}
+"""
 
 
 # Pattern ids: only the list pages mount the bar, and its callbacks still register.
@@ -133,6 +270,89 @@ def layout():
     )
 
 
+def read_status():
+    """Header status instead of a refresh button: when the data on screen was read, and a menu
+    with the server's synchronization state plus the accessible fallback "Volver a leer ahora"."""
+    detail = {"size": "xs", "c": "dimmed", "px": "sm", "py": 4, "maw": 300}
+    return dmc.Group(
+        [
+            html.Span(
+                id="refresh-indicator",
+                className="refresh-indicator",
+                role="status",
+                **{"aria-live": "polite"},
+            ),
+            dmc.Menu(
+                [
+                    dmc.MenuTarget(
+                        dmc.Button(
+                            [
+                                dmc.Text(
+                                    "Leyendo el origen…",
+                                    id="read-status-text",
+                                    span=True,
+                                    size="sm",
+                                    visibleFrom="sm",
+                                ),
+                                # Phones get the relative time only; the menu keeps the rest.
+                                dmc.Text(
+                                    "leyendo…",
+                                    id="read-status-short",
+                                    span=True,
+                                    size="sm",
+                                    hiddenFrom="sm",
+                                ),
+                            ],
+                            id="read-status",
+                            variant="subtle",
+                            color="gray",
+                            size="sm",
+                            className="read-status",
+                            leftSection=html.Span(
+                                id="read-status-dot",
+                                className="state-dot",
+                                style={"background": FAMILY_COLORS["neutral"]},
+                                **{"aria-hidden": "true"},
+                            ),
+                            rightSection=icon("chevron-down", 14),
+                            **{"aria-label": "Estado de la lectura de datos"},
+                        )
+                    ),
+                    dmc.MenuDropdown(
+                        [
+                            dmc.MenuLabel("Lectura de datos"),
+                            dmc.Text(id="registry-line", **detail),
+                            dmc.Text(id="sync-line", **detail),
+                            dmc.Text(id="poll-line", **detail),
+                            dmc.MenuDivider(),
+                            # Kept mounted while closed so the graph's own control can
+                            # trigger it (assets/operations-graph.js clicks #refresh).
+                            dmc.MenuItem(
+                                "Volver a leer ahora",
+                                id="refresh",
+                                n_clicks=0,
+                                leftSection=icon("refresh", 16),
+                            ),
+                        ]
+                    ),
+                ],
+                shadow="md",
+                width=320,
+                position="bottom-end",
+                # Rendered next to its trigger (no portal) with focusable items: Tab reaches
+                # "Volver a leer ahora" from the trigger, Escape closes and returns focus.
+                withinPortal=False,
+                keepMounted=True,
+                menuItemTabIndex=0,
+                closeOnEscape=True,
+                returnFocus=True,
+            ),
+        ],
+        gap="xs",
+        wrap="nowrap",
+    )
+
+
 def app_shell(auth_required: bool):
     header = dmc.AppShellHeader(
         dmc.Group(
@@ -156,15 +376,7 @@ def app_shell(auth_required: bool):
                 dmc.Group(
                     [
                         html.Div(header_user(current_user(), auth_required), id="header-user"),
-                        dmc.Button(
-                            dmc.Text("Actualizar", span=True, size="sm", visibleFrom="xs"),
-                            id="refresh",
-                            n_clicks=0,
-                            variant="default",
-                            size="sm",
-                            leftSection=icon("refresh", 16),
-                            **{"aria-label": "Actualizar"},
-                        ),
+                        read_status(),
                     ],
                     gap="xs",
                     ml="auto",
@@ -188,18 +400,20 @@ def app_shell(auth_required: bool):
     main = dmc.AppShellMain(
         dmc.Container(
             [
+                # Server status poll; the stores survive navigation, so a page change never
+                # re-reads while the registry version is unchanged.
+                dcc.Interval(id="status-poll", interval=STATUS_POLL_SECONDS * 1000, n_intervals=0),
+                dcc.Store(id="status", storage_type="memory"),
+                dcc.Store(id="registry", storage_type="memory"),
                 html.Div(id="query-controls"),
                 html.Div(id="scope"),
                 html.Div(id="workflow-feedback", **{"aria-live": "polite"}),
                 dcc.Loading(
                     [*stores, html.Main(id="content", tabIndex=-1)],
                     custom_spinner=dmc.Loader(color=BRAND, size="md"),
-                    target_components={
-                        "snapshot": "data",
-                        "workflow-snapshot": "data",
-                        "workflow-action-result": "data",
-                        "content": "children",
-                    },
+                    # Only an operator action hides the page; background reads keep the
+                    # previous data visible and announce "Actualizando…" in the header.
+                    target_components={"workflow-action-result": "data"},
                     delay_show=150,
                     overlay_style={"visibility": "hidden"},
                 ),
@@ -405,15 +619,64 @@ def create_dashboard(server: FastAPI) -> Dash:
             del params["filter"]
         return "?" + urlencode(params)
 
+    dashboard.clientside_callback(
+        STATUS_JS,
+        Output("status", "data"),
+        Output("registry", "data"),
+        Input("status-poll", "n_intervals"),
+        State("url", "search"),
+        State("snapshot", "data"),
+        State("workflow-snapshot", "data"),
+    )
+    dashboard.clientside_callback(
+        REREAD_JS,
+        Output("registry", "data", allow_duplicate=True),
+        Input("refresh", "n_clicks"),
+        State("url", "search"),
+        prevent_initial_call=True,
+    )
+    dashboard.clientside_callback(
+        HEADER_JS
+        % (
+            json.dumps(MODES, ensure_ascii=False),
+            json.dumps(FAMILY_COLORS),
+            STATUS_POLL_SECONDS,
+            STATUS_POLL_SECONDS,
+        ),
+        Output("read-status-text", "children"),
+        Output("read-status-short", "children"),
+        Output("read-status-dot", "style"),
+        Output("registry-line", "children"),
+        Output("sync-line", "children"),
+        Output("poll-line", "children"),
+        Input("status-poll", "n_intervals"),
+        Input("snapshot", "data"),
+        Input("status", "data"),
+        State("url", "search"),
+    )
+
+    def registry_version(mode: str) -> str | None:
+        """Version taken before a read, so a change during the read still shows as stale."""
+        try:
+            return server.state.workflow.registry_state(mode).version
+        except Exception:
+            return None
+
+    def stale_registry(registry, mode: str) -> bool:
+        """A poll writes `registry` only when a store of this mode carries another version;
+        the accessible fallback writes it with `forced`. Another mode's poll is ignored."""
+        return isinstance(registry, dict) and registry.get("mode") == mode
+
     @dashboard.callback(
         Output("snapshot", "data"),
         Input("url", "search"),
-        Input("refresh", "n_clicks"),
+        Input("registry", "data"),
         Input("url", "pathname"),
         Input("workflow-action-result", "data"),
         State("snapshot", "data"),
+        running=RUNNING_INDICATOR,
     )
-    async def load_snapshot(search, _refresh, path, action, previous):
+    async def load_snapshot(search, registry, path, action, previous):
         if anonymous():
             return no_update
         if ctx.triggered_id == "workflow-action-result" and (
@@ -432,6 +695,18 @@ def create_dashboard(server: FastAPI) -> Dash:
             and previous.get("hub") is not None
         ):
             return no_update
+        if ctx.triggered_id == "registry" and (
+            not stale_registry(registry, context.mode)
+            or (
+                not registry.get("forced")
+                and isinstance(previous, dict)
+                and previous.get("key") == context.read_key
+                and previous.get("version") == registry.get("version")
+            )
+        ):
+            return no_update
+        result = {"key": context.read_key, "mode": context.mode}
+        result["version"] = await run_in_threadpool(registry_version, context.mode)
         try:
             hub = await run_in_threadpool(
                 read_hub,
@@ -444,16 +719,17 @@ def create_dashboard(server: FastAPI) -> Dash:
             )
         except Exception:
             # Never return exceptions, upstream bodies, credentials or the previous success.
-            return {"key": context.read_key, "hub": None, "error": READ_ERROR}
-        return {"key": context.read_key, "hub": hub.model_dump(mode="json"), "error": None}
+            return {**result, "hub": None, "error": READ_ERROR}
+        return {**result, "hub": hub.model_dump(mode="json"), "error": None}
 
     @dashboard.callback(
         Output("workflow-snapshot", "data"),
         Input("url", "search"),
-        Input("refresh", "n_clicks"),
+        Input("registry", "data"),
         Input("workflow-action-result", "data"),
+        running=RUNNING_INDICATOR,
     )
-    async def load_workflow(search, _refresh, action):
+    async def load_workflow(search, registry, action):
         if anonymous():
             return no_update
         if (
@@ -467,15 +743,19 @@ def create_dashboard(server: FastAPI) -> Dash:
             context = parse_context(search)
         except ValueError:
             return {"mode": None, "overview": None}
+        if ctx.triggered_id == "registry" and not stale_registry(registry, context.mode):
+            return no_update
+        result = {"mode": context.mode}
+        result["version"] = await run_in_threadpool(registry_version, context.mode)
         try:
             overview = await run_in_threadpool(server.state.workflow.read, context.mode)
         except Exception:
             return {
-                "mode": context.mode,
+                **result,
                 "overview": None,
-                "error": "No se pudo consultar el registro de movimientos. Intenta actualizar.",
+                "error": WORKFLOW_READ_ERROR,
             }
-        return {"mode": context.mode, "overview": overview.model_dump(mode="json")}
+        return {**result, "overview": overview.model_dump(mode="json")}
 
     @dashboard.callback(
         Output("workflow-action-result", "data"),

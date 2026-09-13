@@ -55,6 +55,12 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
   marca y acción; los estados usan una paleta cualitativa propia; magnitudes,
   escala secuencial; desviaciones frente a meta, escala divergente
   ([arquitectura](frontend-architecture.md)).
+- Sin botón Actualizar: la interfaz sondea `GET /api/v1/status` cada 15 s y
+  recarga solo cuando cambia `registry_version`; el ritmo de sincronización con
+  los proveedores lo fija el servidor (`SYNC_INTERVAL_SECONDS`, solo live, con
+  el candado de ciclo de PostgreSQL). Además del grafo, solicitudes, maquinaria,
+  operaciones, fuentes y administración existen `/integracion` (traza),
+  `/indicadores` (fichas por fila) y `/decisiones` (asuntos, períodos y estados).
 - Credenciales solo en el servidor; lecturas y escrituras remotas deshabilitadas
   por defecto; no publicar acceso live sin protección.
 - La autenticación y los roles se administran en la aplicación
@@ -160,8 +166,15 @@ evidencia de llegada; comparación de intervalos con «no verificable» explíci
 indicadores por fila (`GET /api/v1/indicators`,
 [fichas](indicadores-calculables.md)) y sugerencias de unidad
 (`GET /api/v1/requests/{id}/suggestions`; recomendar no es asignar);
-matrices CSV/XLSX y diccionario RF-01 generados y verificados en
-`scripts/check.sh` y CI, con pruebas PostgreSQL ejecutadas en CI.
+matrices CSV/XLSX (incluida la [matriz de trazabilidad](matriz-requisitos-entregables.md#matriz-de-trazabilidad)
+de requisitos y entregables) y diccionario RF-01 generados y verificados en
+`scripts/check.sh` y CI, con pruebas PostgreSQL ejecutadas en CI; páginas
+`/indicadores` (fichas por fila) y `/decisiones` (un asunto por solicitud,
+períodos y estados); unidades candidatas en el detalle de la solicitud
+pendiente; `GET /api/v1/status` con refresco de la interfaz sin botón;
+sincronización automática opcional en el proceso web (`SYNC_INTERVAL_SECONDS`,
+solo live, `skipped` si otro proceso tiene el ciclo); paginación del registro
+en Operaciones.
 La portada es un grafo principal con
 posiciones deterministas, autoencuadre, selección de nodos y conexiones,
 zoom/pan, Roboto Mono local y SVG propios. La muestra actual permite dibujar

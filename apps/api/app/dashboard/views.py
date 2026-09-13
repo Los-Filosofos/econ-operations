@@ -4,7 +4,6 @@ from collections import Counter
 from urllib.parse import unquote
 
 import dash_mantine_components as dmc
-from dash import dcc
 
 from app.core.auth import Permission, can
 from app.dashboard.admin_views import admin_page
@@ -38,6 +37,7 @@ from app.dashboard.components import (
 )
 from app.dashboard.context import QueryContext
 from app.dashboard.decision_analytics import (
+    graph,
     matching_current_movements,
     request_states,
     requests_in_scope,
@@ -57,6 +57,7 @@ from app.dashboard.evidence_views import (
     request_timeline,
     source_comparison,
 )
+from app.dashboard.indicator_views import indicator_insights, indicators_page
 from app.dashboard.integration_views import integration_page
 from app.dashboard.operations_graph import graph_status, operations_graph_view
 from app.dashboard.workflow_views import (
@@ -72,7 +73,7 @@ from app.models.hub import EquipmentRecord, HubResponse, RequestRecord
 
 MODES = {"fixture": "Muestras proporcionadas", "live": "Sandbox actual (sintético)"}
 # Only the lists let `q` narrow what is shown; every other page keeps the origin as text.
-SEARCHABLE = frozenset({"/", "/solicitudes", "/maquinaria", "/operaciones"})
+SEARCHABLE = frozenset({"/", "/decisiones", "/solicitudes", "/maquinaria", "/operaciones"})
 RELATIONS = {
     "confirmed": "Vínculo confirmado",
     "candidate": "Vínculo por revisar",
@@ -222,50 +223,33 @@ def state_legend(values: list[str]):
     )
 
 
-def graph(identifier: str, chart):
-    return dcc.Graph(
-        id=identifier,
-        figure=chart,
-        responsive=True,
-        config={"displayModeBar": False, "responsive": True, "locale": "es"},
-        style={"height": f"{chart.layout.height}px"},
-    )
-
-
 def decision_cards(hub, context, workflow):
+    """Each decision reads as an action: what, about which request and unit, on what
+    evidence and dates, and where to review it."""
     cards = []
     for item in decision_items(hub, context, workflow):
         request = item.request
-        timeline = usage_timeline([request])
-        dates = (
-            f"{short_date(timeline.periods[0].starts_on)} – "
-            f"{short_date(timeline.periods[0].ends_on, year=True)}"
-            if timeline.periods
-            else "Período por verificar"
-        )
+        states = [state_text(request.status)]
+        if item.equipment is not None:
+            states.append(state_text(item.equipment.machinery_status))
         cards.append(
             dmc.Paper(
                 dmc.Grid(
                     [
                         dmc.GridCol(
                             [
-                                link(
-                                    request.project_name or "Proyecto sin identificar",
-                                    context.request_href(request.id),
-                                    fw=500,
-                                    c="dark",
-                                ),
-                                dmc.Text(request.machinery_type or "Tipo sin informar", size="xs"),
-                                dmc.Text(dates, size="xs", c="dimmed"),
-                                state_text(request.status),
+                                dmc.Text("Acción", size="xs", c="dimmed"),
+                                dmc.Title(item.title, order=3, size="h5"),
+                                dmc.Text(item.subject, size="sm", mt=4),
+                                dmc.Group(states, gap="md", mt=6),
                             ],
                             span={"base": 12, "md": 4},
                         ),
                         dmc.GridCol(
                             [
-                                dmc.Text("Qué requiere revisión", size="xs", c="dimmed"),
-                                dmc.Title(item.title, order=3, size="h5"),
-                                dmc.Text(item.evidence, size="sm", c="dimmed"),
+                                dmc.Text("Evidencia", size="xs", c="dimmed"),
+                                dmc.Text(item.evidence, size="sm", mb="sm"),
+                                facts(item.dated_facts, cols=2),
                             ],
                             span={"base": 12, "md": 6},
                         ),
@@ -290,43 +274,52 @@ def decision_cards(hub, context, workflow):
     return dmc.Stack(cards, gap="sm")
 
 
-def decision_overview(hub: HubResponse, context: QueryContext, workflow=None):
+def registry_hint(workflow):
+    if workflow is None or not workflow.available:
+        return hint(
+            "Registro de tareas sin confirmar. Consulta las operaciones antes de concluir "
+            "si un traslado está preparado o enviado.",
+            role="status",
+        )
+    if not workflow.complete:
+        return hint(
+            "Registro de movimientos parcial. Una tarea sin confirmar en esta vista puede "
+            "tener evidencia fuera de la ventana consultada.",
+            role="status",
+        )
+    return None
+
+
+def decisions(hub: HubResponse, context: QueryContext, workflow=None):
+    """One action per request with its evidence and dates, plus what the indicators say."""
     content = [
         heading(
             "Qué requiere atención",
-            "Decisiones sobre la asignación y el traslado de maquinaria a cada proyecto.",
+            "Una acción por solicitud, con su evidencia y sus fechas de origen, y lo que dicen "
+            "los indicadores de esta misma lectura.",
         )
     ]
     if context.mode != hub.mode or not readable(hub):
-        return [*content, unavailable(hub, context, "Resumen")]
+        return [*content, unavailable(hub, context, "Decisiones")]
     requests = requests_in_scope(hub, context, workflow)
     if context.filter in FILTER_LABELS:
         content.append(hint(f"Filtro aplicado: {FILTER_LABELS[context.filter]}."))
-    if not requests:
-        return [
-            *content,
-            empty(
+    content.append(
+        section(
+            "Acciones por solicitud",
+            decision_cards(hub, context, workflow)
+            if requests
+            else empty(
                 "Sin solicitudes para representar",
                 "Amplía la búsqueda o cambia el filtro de solicitudes.",
             ),
-        ]
-    content.append(decision_cards(hub, context, workflow))
-    if workflow is None or not workflow.available:
-        content.append(
-            hint(
-                "Registro de tareas sin confirmar. Consulta las operaciones antes de concluir "
-                "si un traslado está preparado o enviado.",
-                role="status",
-            )
+            registry_hint(workflow),
+            **{"aria-label": "Acciones por solicitud"},
         )
-    elif not workflow.complete:
-        content.append(
-            hint(
-                "Registro de movimientos parcial. Una tarea sin confirmar en esta vista puede "
-                "tener evidencia fuera de la ventana consultada.",
-                role="status",
-            )
-        )
+    )
+    content.append(indicator_insights(hub, context, workflow))
+    if not requests:
+        return content
     source = next(source for source in hub.sources if source.id == "nexus")
     cutoff = (
         f"Corte de lectura: {instant(hub.data_as_of)} (El Salvador)."
@@ -445,6 +438,20 @@ def decision_overview(hub: HubResponse, context: QueryContext, workflow=None):
         )
     )
     return content
+
+
+def indicators(hub: HubResponse, context: QueryContext, workflow=None):
+    """Indicators from the shared service over this very reading; guarded like every list."""
+    if context.mode != hub.mode or not readable(hub):
+        return [
+            heading(
+                "Indicadores y SLA",
+                "Qué dicen las lecturas de hoy, por fila y sin promedios, y el SLA propuesto "
+                "para cada pregunta.",
+            ),
+            unavailable(hub, context, "Indicadores"),
+        ]
+    return indicators_page(hub, context, workflow)
 
 
 def overview(hub: HubResponse, context: QueryContext, workflow=None):
@@ -1031,6 +1038,7 @@ def sources(hub: HubResponse, context: QueryContext, workflow=None):
 # Page registry: navigation order, icon and renderers. A later phase appends its own pages.
 PAGES = [
     {"path": "/", "label": "Resumen", "icon": "layout-dashboard", "render": overview},
+    {"path": "/decisiones", "label": "Decisiones", "icon": "checklist", "render": decisions},
     {
         "path": "/solicitudes",
         "label": "Solicitudes",
@@ -1046,6 +1054,12 @@ PAGES = [
         "detail": equipment_detail,
     },
     {"path": "/operaciones", "label": "Operaciones", "icon": "truck", "render": None},
+    {
+        "path": "/indicadores",
+        "label": "Indicadores y SLA",
+        "icon": "chart-bar",
+        "render": indicators,
+    },
     {
         "path": "/integracion",
         "label": "Integración",

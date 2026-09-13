@@ -245,3 +245,52 @@ def test_movement_unavailable_is_distinct_from_unknown_identifier(evidence):
     result = serialized(movement_detail(registry(available=False), QueryContext(), movement.id))
     assert "Registro de operaciones no disponible" in result
     assert "Movimiento fuera de este origen" not in result
+
+
+def test_request_timeline_and_receipt_cards_name_who_recorded_or_declared(evidence):
+    hub, request, machine, movement = evidence
+    movement.events = [
+        MovementEventRecord(
+            id="test-created",
+            kind="created",
+            event_time=AT,
+            observed_at=AT,
+            recorded_at=AT,
+            data={},
+            actor_kind="session",
+            actor_user_id="7",
+            actor_role="logistica",
+        ),
+        MovementEventRecord(
+            id="test-receipt",
+            kind="receipt",
+            event_time=AT,
+            observed_at=AT,
+            recorded_at=AT + timedelta(hours=1),
+            data={"reference": "test-constancia"},
+            actor_kind="session",
+            actor_user_id="9",
+            actor_role="gerencia_proyecto",
+        ),
+    ]
+    movement.receipt = ReceiptRecord(
+        receiver="Receptor de prueba",
+        received_at=AT,
+        reference="test-constancia",
+        recorded_at=AT + timedelta(hours=1),
+        declared_by_user_id="9",
+        declared_by_email="gerencia@example.com",
+        declared_by_role="gerencia_proyecto",
+    )
+    for content in [
+        request_detail(hub, QueryContext(), request.id, registry(movement)),
+        equipment_detail(hub, QueryContext(), machine.id, registry(movement)),
+    ]:
+        result = serialized(content)
+        assert "declarado por gerencia@example.com · Gerencia de Proyecto" in result or (
+            "Declarada por" in result and "gerencia@example.com · Gerencia de Proyecto" in result
+        )
+        assert "Receptor de prueba" in result
+    timeline = serialized(request_detail(hub, QueryContext(), request.id, registry(movement)))
+    assert "registrado por usuario 7 · Logística y Equipo" in timeline
+    assert "quién registró o declaró cada hecho" in timeline

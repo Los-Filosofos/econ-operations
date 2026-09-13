@@ -304,6 +304,33 @@ def test_closed_request_keeps_an_unresolved_dispatch_incident_in_the_agenda(hub)
     assert row.href == QueryContext().movement_href(record.id)
 
 
+def test_each_decision_names_its_subject_and_the_source_instants_behind_it(hub):
+    rows = decision_items(hub, QueryContext(), registry())
+    assigned = next(item for item in rows if item.request.status == "APROBADA")
+    assert assigned.subject == (
+        "Solicitud de Cargador frontal · PROY-014 - The Hub - Proyecto Xi - La Unión · Unidad CF-03"
+    )
+    assert dict(assigned.dated_facts) == {
+        "Solicitud creada": "11/09/2026 · 18:59",
+        "Aprobada": "11/09/2026 · 19:00",
+        "Período solicitado": "11/09/2026 — 14/09/2026",
+        "Asignación vigente en Prisma": "11/09/2026 — 14/09/2026",
+    }
+    pending = next(item for item in rows if item.request.status == "PENDIENTE")
+    assert pending.subject == (
+        "Solicitud de Cargador frontal · PROY-014 - The Hub - Proyecto Xi - La Unión"
+    )
+    facts = dict(pending.dated_facts)
+    assert facts["Aprobada"] == "Pendiente; sin approved_at"
+    assert facts["Período solicitado"] == "16/09/2026 — 18/09/2026"
+    assert "Asignación vigente en Prisma" not in facts
+    # An absent source instant stays visible as absent; the clock never fills it.
+    pending.request.created_at = None
+    pending.request.machinery_type = None
+    assert dict(pending.dated_facts)["Solicitud creada"] == "Sin fecha"
+    assert pending.subject.startswith("Solicitud de maquinaria · PROY-014")
+
+
 def test_scope_and_href_follow_context_without_cross_mode_or_source_fallback(hub):
     context = QueryContext(query="Prisma / Proyecto", filter="unassigned")
     rows = decision_items(hub, context, registry())

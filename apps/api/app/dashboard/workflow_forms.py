@@ -1,8 +1,30 @@
 """Accessible, explicit operator inputs for persisted movements."""
 
 import dash_mantine_components as dmc
+from dash import html
 
 from app.dashboard.components import accordion, disclosure, icon
+from app.services.ledger import SAFE_REASON_CODES
+
+# Operator-readable closing reasons; the ledger admits only these codes, never free text.
+RESOLUTION_REASONS = {
+    code: label
+    for code, label in [
+        ("operator_resolved", "Comprobado a mano: la tarea no existe en Startrack"),
+        ("provider_rejected", "El proveedor rechazó la creación"),
+        ("provider_unavailable", "El proveedor no estaba disponible"),
+        ("provider_timeout", "La creación agotó el tiempo de espera"),
+        ("invalid_response", "La respuesta del proveedor no fue válida"),
+        ("ambiguous_response", "La respuesta del proveedor fue ambigua"),
+        ("mapping_conflict", "Conflicto de correspondencias (destino, usuarios o referencia)"),
+        ("source_changed", "La solicitud o la unidad cambiaron en Prisma"),
+        ("not_approved", "La solicitud ya no está aprobada"),
+        ("worker_interrupted", "El proceso de envío se interrumpió"),
+        ("dispatch_blocked", "El envío quedó bloqueado antes de crear la tarea"),
+        ("unknown", "Motivo no determinado"),
+    ]
+    if code in SAFE_REASON_CODES
+}
 
 
 def field_id(name: str) -> dict[str, str]:
@@ -11,6 +33,11 @@ def field_id(name: str) -> dict[str, str]:
 
 def action_id(action: str, movement: str = "") -> dict[str, str]:
     return {"type": "workflow-action", "action": action, "movement": movement}
+
+
+def resolve_id(step: str, movement: str = "") -> dict[str, str]:
+    """Steps of the explicit resolution: open, reason, cancel, confirm and the modal itself."""
+    return {"type": "workflow-resolve", "step": step, "movement": movement}
 
 
 def field(name, label, *, value="", hint=None, required=True, readonly=False, placeholder=""):
@@ -156,4 +183,82 @@ def receipt_form(movement: str = "", *, enabled=False):
         ],
         gap="md",
         className="workflow-form",
+    )
+
+
+def resolve_form(movement: str = "", *, enabled=False):
+    """Explicit exit from an uncertain send: a modal confirms the code before the ledger acts.
+
+    Nothing is sent to Startrack and the creation POST is never repeated; the button only
+    opens the confirmation, and the confirmation only records a permitted reason code.
+    """
+    return html.Div(
+        [
+            dmc.Button(
+                "Resolver como fallido",
+                id=resolve_id("open", movement),
+                n_clicks=0,
+                disabled=not enabled,
+                variant="default",
+                leftSection=icon("alert-triangle", 16),
+            ),
+            dmc.Modal(
+                [
+                    dmc.Text(
+                        "Cierra este movimiento como fallido con el motivo elegido y libera la "
+                        "unidad para un nuevo plan. No consulta ni modifica Startrack y nunca "
+                        "repite el envío.",
+                        size="sm",
+                    ),
+                    dmc.Text(
+                        "Si la tarea sí existe en Startrack, no lo resuelvas: la sincronización "
+                        "la vincula por referencia y contenido.",
+                        size="sm",
+                        c="dimmed",
+                        mt="xs",
+                    ),
+                    dmc.Select(
+                        id=resolve_id("reason", movement),
+                        label="Motivo del cierre",
+                        description=(
+                            "Solo códigos permitidos por el registro; no admite texto libre."
+                        ),
+                        data=[
+                            {"value": code, "label": f"{label} ({code})"}
+                            for code, label in RESOLUTION_REASONS.items()
+                        ],
+                        value="operator_resolved",
+                        allowDeselect=False,
+                        required=True,
+                        withAsterisk=True,
+                        mt="md",
+                    ),
+                    dmc.Group(
+                        [
+                            dmc.Button(
+                                "Cancelar",
+                                id=resolve_id("cancel", movement),
+                                n_clicks=0,
+                                variant="default",
+                            ),
+                            dmc.Button(
+                                "Confirmar cierre como fallido",
+                                id=resolve_id("confirm", movement),
+                                n_clicks=0,
+                                color="red",
+                                leftSection=icon("alert-triangle", 16),
+                            ),
+                        ],
+                        justify="flex-end",
+                        mt="lg",
+                    ),
+                ],
+                id=resolve_id("modal", movement),
+                title="Resolver el movimiento como fallido",
+                opened=False,
+                centered=True,
+                closeButtonProps={"aria-label": "Cerrar sin resolver"},
+            ),
+        ],
+        className="resolve-form",
     )

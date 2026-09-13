@@ -96,3 +96,29 @@ def test_invalid_receipt_inputs_do_not_reach_recording_service(field, value, exp
     with pytest.raises(WorkflowInputError, match=expected):
         execute_action(service, "receipt", "live", {**receipt_fields(), field: value}, "test-id")
     service.record_receipt.assert_not_called()
+
+
+def test_resolution_reasons_are_exactly_the_ledger_codes_and_free_text_is_refused():
+    from app.dashboard.workflow_forms import RESOLUTION_REASONS, resolve_form, resolve_id
+    from app.dashboard.workflow_views import resolution_reason
+    from app.services.ledger import SAFE_REASON_CODES
+
+    assert set(RESOLUTION_REASONS) == set(SAFE_REASON_CODES)
+    assert next(iter(RESOLUTION_REASONS)) == "operator_resolved"
+    assert resolution_reason(" operator_resolved ") == "operator_resolved"
+    for value in (None, "", "free text", "private-input", 7):
+        with pytest.raises(WorkflowInputError, match="motivo permitido") as error:
+            resolution_reason(value)
+        assert "private" not in str(error.value)
+    form = resolve_form("test-movement", enabled=False)
+    button, modal = form.children
+    assert button.id == resolve_id("open", "test-movement") and button.disabled is True
+    assert modal.id == resolve_id("modal", "test-movement") and modal.opened is False
+    assert resolve_form("test-movement", enabled=True).children[0].disabled is False
+    select = next(
+        child
+        for child in modal.children
+        if getattr(child, "id", None) == resolve_id("reason", "test-movement")
+    )
+    assert {option["value"] for option in select.data} == set(SAFE_REASON_CODES)
+    assert select.value == "operator_resolved" and select.label

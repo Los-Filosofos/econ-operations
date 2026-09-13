@@ -55,6 +55,7 @@ proveedores desactivadas; el inicio de sesión es obligatorio:
 | `ALLOW_LOCAL_MANAGEMENT` | `false` (solo cuenta con `AUTH_REQUIRED=false`) |
 | `ALLOW_LIVE_WRITES` | `false` |
 | `AUTO_QUEUE_TRANSFERS` | `false` |
+| `SYNC_INTERVAL_SECONDS` | `0` (sincronización automática apagada; es el valor por defecto). Con un valor de `30` a `3600` **y** `ALLOW_LIVE_READS=true`, el proceso web ejecuta un ciclo live acotado por intervalo —el mismo `run_cycle` y el mismo candado de ciclo de PostgreSQL que el worker CLI— y publica su resultado en `GET /api/v1/status`; nunca corre en `fixture`. Un valor de 1 a 29 impide el arranque: el presupuesto de los proveedores es por IP |
 | `NEXUS_EMAIL`, `NEXUS_PASSWORD` | Omitidas en la demostración pública |
 | `STARTRACK_API_KEY`, `STARTRACK_PASSWORD` | Omitidas en la demostración pública |
 
@@ -94,9 +95,12 @@ Con las variables de conexión disponibles, ejecutar dentro de la imagen:
 ```
 
 `upgrade head` aplica `0001_operations` (movimientos, eventos y cortes),
-`0002_review_schedule` (revisión programada) y `0003_users` (usuarios y roles).
-La cola reside en los movimientos y se reclama transaccionalmente antes de
-enviar al proveedor.
+`0002_review_schedule` (revisión programada), `0003_users` (usuarios y roles) y
+`0004_guards` (`0004_movement_guards_actors_and_indexes.py`: actor de sesión en
+eventos y recepción, `tracked_vehicle_kind`, índices parciales
+`uq_operation_movements_inflight_machine` y `uq_operation_movements_job_identity`,
+y el trigger `operation_events_append_only`, solo en PostgreSQL). La cola reside
+en los movimientos y se reclama transaccionalmente antes de enviar al proveedor.
 No se ejecutan migraciones durante la construcción de la imagen ni en cada
 arranque del servicio. Los cambios futuros de esquema requieren planificar
 respaldo, recuperación y compatibilidad con los procesos que siguen activos.
@@ -120,6 +124,15 @@ Sin `--watch` ejecuta un solo ciclo. La CLI admite intervalos entre 60 y 3600
 segundos. Ejecutar un único worker: los límites externos pueden ser compartidos
 por IP, mientras el limitador local funciona por proceso.
 
+La alternativa sin proceso separado es `SYNC_INTERVAL_SECONDS` en el propio
+servicio web (`SyncScheduler` en `app/services/workflow.py`): un ciclo live
+acotado por intervalo, con el actor `cli_worker`, bajo el mismo candado
+`pg_try_advisory_lock`. Si otro proceso tiene el ciclo, el intento se registra
+como `skipped` en `GET /api/v1/status` y no espera; un fallo de proveedor o de
+registro se registra como `error:` con su mensaje público y el ciclo siguiente
+vuelve a intentarlo. No combinar el scheduler con un `--watch` en otro proceso
+sobre la misma IP: sigue rigiendo un solo worker por IP.
+
 El worker no tiene sesión de usuario: actúa con autoridad de proceso sobre la
 base configurada; las consultas remotas y la creación de tareas tienen
 controles independientes. Un envío incierto permanece
@@ -139,10 +152,18 @@ credenciales ni conectividad de Prisma o Startrack.
 
 Comprobar que `/` sin sesión redirige a `/login` y que `/api/v1/hub` responde
 `401`. Iniciar sesión y revisar `/?mode=fixture`, `/solicitudes?mode=fixture`,
-`/operaciones?mode=fixture`, `/administracion`, `/api/v1/hub?mode=fixture` y
-`/api/v1/operations?mode=fixture`. Confirmar que el registro está disponible tras
-la migración, que los callbacks funcionan, que la cookie lleva `Secure` tras
-TLS y que recargar una ruta interna conserva estilos, modo y búsqueda. Los
+`/operaciones?mode=fixture`, `/integracion?mode=fixture`,
+`/indicadores?mode=fixture`, `/decisiones?mode=fixture`, `/administracion`,
+`/api/v1/hub?mode=fixture`, `/api/v1/operations?mode=fixture`,
+`/api/v1/graph?mode=fixture`, `/api/v1/indicators?mode=fixture` y
+`/api/v1/status?mode=fixture` (debe devolver `registry_version` y
+`sync.enabled=false`; `503` significa que el registro SQL no responde). La
+interfaz sondea `/api/v1/status` cada 15 segundos y solo recarga datos cuando
+la versión cambia: un servidor sano no genera lecturas a proveedores por el
+mero hecho de tener pestañas abiertas. Confirmar que el registro está
+disponible tras la migración, que los callbacks funcionan, que la cookie lleva
+`Secure` tras TLS y que recargar una ruta interna conserva estilos, modo y
+búsqueda. Los
 iconos Tabler son locales (`assets/icons`); el navegador no necesita salida a
 internet. Las muestras muestran cinco equipos y dos solicitudes,
 con cobertura parcial, sin inventar tareas, GPS o recepciones.

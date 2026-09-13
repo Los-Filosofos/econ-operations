@@ -9,6 +9,7 @@ from plotly.utils import PlotlyJSONEncoder
 
 from app.core.config import Settings
 from app.dashboard.analytics import request_operation
+from app.dashboard.application import STATUS_POLL_SECONDS, app_shell
 from app.dashboard.context import QueryContext, parse_context
 from app.dashboard.views import (
     PAGES,
@@ -21,8 +22,10 @@ from app.dashboard.views import (
     searchable,
 )
 from app.main import create_app
+from app.models import metadata
 from app.models.hub import HubResponse, TransferRecord
 from app.models.workflow import WorkflowOverview
+from app.services.hub import read_hub
 
 
 @pytest.fixture
@@ -35,7 +38,14 @@ def client(tmp_path):
 
 
 def snapshot(
-    client, search="?mode=fixture", *, previous=None, changed="url.search", path="/", action=None
+    client,
+    search="?mode=fixture",
+    *,
+    previous=None,
+    changed="url.search",
+    path="/",
+    action=None,
+    registry=None,
 ):
     return client.post(
         "/_dash-update-component",
@@ -44,7 +54,7 @@ def snapshot(
             "outputs": {"id": "snapshot", "property": "data"},
             "inputs": [
                 {"id": "url", "property": "search", "value": search},
-                {"id": "refresh", "property": "n_clicks", "value": 1},
+                {"id": "registry", "property": "data", "value": registry},
                 {"id": "url", "property": "pathname", "value": path},
                 {"id": "workflow-action-result", "property": "data", "value": action},
             ],
@@ -54,9 +64,36 @@ def snapshot(
     )
 
 
+def workflow_snapshot(client, search="?mode=fixture", *, registry=None, changed="url.search"):
+    return client.post(
+        "/_dash-update-component",
+        json={
+            "output": "workflow-snapshot.data",
+            "outputs": {"id": "workflow-snapshot", "property": "data"},
+            "inputs": [
+                {"id": "url", "property": "search", "value": search},
+                {"id": "registry", "property": "data", "value": registry},
+                {"id": "workflow-action-result", "property": "data", "value": None},
+            ],
+            "state": [],
+            "changedPropIds": [changed],
+        },
+    )
+
+
 def data(response):
     assert response.status_code == 200, response.text
     return response.json()["response"]["snapshot"]["data"]
+
+
+def unchanged(response) -> bool:
+    """A callback that returned no_update answers 204 or an empty multi-output response."""
+    assert response.status_code in {200, 204}, response.text
+    return response.status_code == 204 or not response.json().get("response")
+
+
+def version(client, mode="fixture") -> str:
+    return client.get(f"/api/v1/status?mode={mode}").json()["registry_version"]
 
 
 def test_cold_start_includes_styles_before_any_layout_request(tmp_path):
@@ -103,13 +140,103 @@ def test_mode_change_never_reuses_fixture_or_enables_live(client):
     assert current["hub"]["sources"][0]["status"] == "disabled"
 
 
-def test_refresh_failure_discards_old_data_and_hides_internal_details(client):
+def test_reread_failure_discards_old_data_and_hides_internal_details(client):
     previous = data(snapshot(client))
+    changed = {"mode": "fixture", "version": "another-version", "at": 1}
     with patch("app.dashboard.application.read_hub", side_effect=RuntimeError("private-password")):
-        result = data(snapshot(client, previous=previous, changed="refresh.n_clicks"))
+        result = data(
+            snapshot(client, previous=previous, changed="registry.data", registry=changed)
+        )
     assert result["hub"] is None
     assert result["error"]
     assert "private-password" not in json.dumps(result)
+
+
+def test_header_polls_the_registry_instead_of_a_refresh_button():
+    shell = list(components(app_shell(False)))
+    kinds = {component.to_plotly_json()["type"] for component in shell}
+    buttons = [
+        component
+        for component in shell
+        if component.to_plotly_json()["type"] == "Button"
+        and "Actualizar" in json.dumps(component.children, cls=PlotlyJSONEncoder)
+    ]
+    assert not buttons, "the manual refresh button is gone"
+    poll = next(component for component in shell if getattr(component, "id", None) == "status-poll")
+    assert poll.to_plotly_json()["type"] == "Interval"
+    assert poll.interval == STATUS_POLL_SECONDS * 1000 == 15000
+    stores = {component.id for component in shell if component.to_plotly_json()["type"] == "Store"}
+    assert {"status", "registry", "snapshot", "workflow-snapshot"} <= stores
+    fallback = next(component for component in shell if getattr(component, "id", None) == "refresh")
+    assert fallback.to_plotly_json()["type"] == "MenuItem"
+    assert fallback.children == "Volver a leer ahora"
+    assert "Menu" in kinds
+    indicator = next(
+        component for component in shell if getattr(component, "id", None) == "refresh-indicator"
+    )
+    assert indicator.to_plotly_json()["props"]["aria-live"] == "polite"
+    status_text = next(
+        component for component in shell if getattr(component, "id", None) == "read-status-text"
+    )
+    assert status_text.children == "Leyendo el origen…"
+
+
+def test_load_callbacks_show_a_polite_indicator_while_they_run(client):
+    dependencies = client.get("/_dash-dependencies").json()
+    loads = {
+        dependency["output"]: dependency
+        for dependency in dependencies
+        if dependency["output"] in {"snapshot.data", "workflow-snapshot.data"}
+    }
+    assert set(loads) == {"snapshot.data", "workflow-snapshot.data"}
+    for dependency in loads.values():
+        assert dependency["running"]["running"] == {"refresh-indicator.children": "Actualizando…"}
+        assert "refresh.n_clicks" not in [
+            f"{item['id']}.{item['property']}" for item in dependency["inputs"]
+        ]
+        assert "registry.data" in [
+            f"{item['id']}.{item['property']}" for item in dependency["inputs"]
+        ]
+    clientside = [
+        dependency["output"] for dependency in dependencies if dependency.get("clientside_function")
+    ]
+    assert any("status.data" in output and "registry.data" in output for output in clientside)
+    assert any(output.startswith("registry.data@") for output in clientside), "manual re-read"
+
+
+def test_every_read_carries_the_registry_version_it_was_taken_at(client):
+    metadata.create_all(client.app.state.engine)
+    current = version(client)
+    assert data(snapshot(client))["version"] == current
+    workflow = workflow_snapshot(client).json()["response"]["workflow-snapshot"]["data"]
+    assert workflow["version"] == current and workflow["mode"] == "fixture"
+
+
+def test_an_unchanged_registry_version_never_reloads_and_a_changed_one_does(client):
+    metadata.create_all(client.app.state.engine)
+    previous = data(snapshot(client))
+    same = {"mode": "fixture", "version": previous["version"], "at": 1}
+    with patch("app.dashboard.application.read_hub") as read:
+        assert unchanged(
+            snapshot(client, previous=previous, changed="registry.data", registry=same)
+        )
+        # A poll for another mode says nothing about this page.
+        other_mode = {"mode": "live", "version": "different", "at": 2}
+        assert unchanged(
+            snapshot(client, previous=previous, changed="registry.data", registry=other_mode)
+        )
+        assert unchanged(workflow_snapshot(client, registry=other_mode, changed="registry.data"))
+    read.assert_not_called()
+    changed = {"mode": "fixture", "version": "different", "at": 3}
+    result = data(snapshot(client, previous=previous, changed="registry.data", registry=changed))
+    assert result["hub"] is not None and result["version"] == previous["version"]
+    reloaded = workflow_snapshot(client, registry=changed, changed="registry.data")
+    assert reloaded.json()["response"]["workflow-snapshot"]["data"]["mode"] == "fixture"
+    # "Volver a leer ahora" forces the read even when nothing changed.
+    forced = {"mode": "fixture", "version": None, "forced": True, "at": 4}
+    with patch("app.dashboard.application.read_hub", wraps=read_hub) as read:
+        assert data(snapshot(client, previous=previous, changed="registry.data", registry=forced))
+    read.assert_called_once()
 
 
 def test_display_filter_reuses_browser_read_without_calling_provider(client):
@@ -203,6 +330,8 @@ def components(value):
     [
         ("/", "/"),
         ("/resumen", "/"),
+        ("/decisiones", "/decisiones"),
+        ("/indicadores", "/indicadores"),
         ("/solicitudes", "/solicitudes"),
         ("/solicitudes/source-id", "/solicitudes"),
         ("/maquinaria/unit-id", "/maquinaria"),
@@ -403,7 +532,7 @@ def apply_query(client, *, clicks, submits=None, tabs=None, mode="fixture", quer
     return response.json().get("response", {}).get("url", {}).get("search")
 
 
-LIST_PAGES = ["/", "/resumen", "/solicitudes", "/maquinaria", "/operaciones"]
+LIST_PAGES = ["/", "/resumen", "/decisiones", "/solicitudes", "/maquinaria", "/operaciones"]
 QUIET_PAGES = [
     "/solicitudes/nexus%3Arequest%3Aany",
     "/maquinaria/nexus%3Aequipment%3Aany",
@@ -411,7 +540,60 @@ QUIET_PAGES = [
     "/fuentes",
     "/administracion",
     "/integracion",
+    "/indicadores",
 ]
+RENDER_OUTPUTS = [
+    ("content", "children"),
+    ("navigation", "children"),
+    ("mobile-navigation-links", "children"),
+    ("scope", "children"),
+]
+
+
+def rendered(client, path, hub, search="?mode=fixture"):
+    """The real render callback with the browser's stores, as the page receives them."""
+    names = [f"{identifier}.{prop}" for identifier, prop in RENDER_OUTPUTS]
+    targets = [{"id": identifier, "property": prop} for identifier, prop in RENDER_OUTPUTS]
+    response = client.post(
+        "/_dash-update-component",
+        json={
+            "output": ".." + "...".join(names) + "..",
+            "outputs": targets,
+            "inputs": [
+                {"id": "url", "property": "pathname", "value": path},
+                {"id": "url", "property": "search", "value": search},
+                {
+                    "id": "snapshot",
+                    "property": "data",
+                    "value": {"key": ["fixture", ""], "hub": hub, "error": None},
+                },
+                {"id": "workflow-snapshot", "property": "data", "value": None},
+            ],
+            "state": [],
+            "changedPropIds": ["url.pathname"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["response"]
+
+
+def test_decisions_and_indicators_render_through_the_dash_callback(client):
+    hub = client.get("/api/v1/hub?mode=fixture").json()
+    decisions = rendered(client, "/decisiones", hub)
+    page = json.dumps(decisions["content"]["children"], ensure_ascii=False)
+    assert "Qué requiere atención" in page and "Lo que dicen los indicadores" in page
+    assert "Resolver aprobación y asignación" in page
+    navigation = json.dumps(decisions["navigation"]["children"], ensure_ascii=False)
+    assert "/decisiones?mode=fixture" in navigation and "/indicadores?mode=fixture" in navigation
+    assert "checklist.svg" in navigation and "chart-bar.svg" in navigation
+    assert decisions["scope"]["children"] is not None
+
+    indicators = rendered(client, "/indicadores", hub)
+    page = json.dumps(indicators["content"]["children"], ensure_ascii=False)
+    assert "I1 · Tiempo de aprobación de la solicitud" in page
+    assert "Sin corte; antigüedades no evaluables" in page
+    assert "a validar con ECON" in page
+    assert indicators["scope"]["children"] is not None
 
 
 @pytest.mark.parametrize("path", LIST_PAGES)

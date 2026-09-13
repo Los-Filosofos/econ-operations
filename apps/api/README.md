@@ -2,7 +2,7 @@
 
 Dash (dash-mantine-components, local Tabler icons, Plotly, AG Grid Community) on FastAPI, with SQLModel + Alembic and PostgreSQL for the integration store. The hub endpoint remains a read projection; the separate operations service persists plans, source snapshots, a dispatch outbox and evidence. An explicit CLI worker performs bounded synchronization. All business data for this project is synthetic sandbox data; file samples and current provider reads remain separate evidence.
 
-The homepage (`/`) features an interactive, full-page operations graph with a warm charcoal palette, local SVG silhouettes, a 68/32 desktop canvas-to-detail split, keyboard-focused nodes, and verified relationship evidence. Dedicated pages include requests, machinery, operations workflow, integration trace (`/integracion`), and admin user management (`/administracion`).
+The homepage (`/`) features an interactive, full-page operations graph with a warm charcoal palette, local SVG silhouettes, a 68/32 desktop canvas-to-detail split, keyboard-focused nodes, and verified relationship evidence. Dedicated pages include requests (with candidate units for a pending request without unit), machinery, operations workflow (paginated registry), integration trace (`/integracion`), indicator sheets (`/indicadores`), decisions (`/decisiones`), sources and admin user management (`/administracion`). There is no refresh button: the page polls `GET /api/v1/status` every 15 s and reloads data only when `registry_version` changes.
 
 From the repository root:
 
@@ -19,10 +19,10 @@ uv run --directory apps/api python -m app.cli.create_user --email admin@example.
 Do not overwrite an existing `.env`; retain its database settings. Configuration loads `apps/api/.env` regardless of the working directory. `SESSION_SECRET` is mandatory: the application refuses to start without it unless `AUTH_REQUIRED=false` (development only). `create_user` prompts for the password (or reads it with `--password-stdin`); passwords are never command-line arguments. Open `http://localhost:8050` for Dash (sign in at `/login`) and `http://localhost:8050/docs` for the typed OpenAPI contract. Both use one server and the shared `app/services/hub.py` read service. UI code and local assets live in `app/dashboard`; the URL carries the origin, search and display filter. Snapshots are scoped to each browser in memory. See [the dashboard architecture](../../docs/frontend-architecture.md).
 
 ```sh
-./scripts/check.sh   # ruff check, ruff format --check, pytest (462 passing tests); --container builds the image
+./scripts/check.sh   # ruff check, ruff format --check, pytest, generar_diccionario.py --check, exportar_matrices.py --check; --container builds the image
 ```
 
-Tests set `AUTH_REQUIRED=false` through `conftest.py` (the auth tests enable it explicitly), use `httpx2` for Starlette 1.6's TestClient and fail on any `DeprecationWarning`. The health tests use temporary SQLite files; normal development uses the existing PostgreSQL Docker service. Schema migrations still run explicitly, never on server startup. `DATABASE_URL` accepts `postgres://`, `postgresql://` and `postgresql+psycopg://`: the first two select the installed psycopg driver without changing credentials, hostname, database or SSL options. Other explicit driver schemes are preserved. CI without a local `.env` must supply `DATABASE_URL` before importing the application.
+Tests set `AUTH_REQUIRED=false` through `conftest.py` (the auth tests enable it explicitly), use `httpx2` for Starlette 1.6's TestClient and fail on any `DeprecationWarning`. The health tests use temporary SQLite files; normal development uses the existing PostgreSQL Docker service. With `ECON_TEST_POSTGRES_URL` and `ECON_TEST_POSTGRES_MIGRATIONS_URL` set (CI starts `postgres:16`), `tests/test_postgres_*.py` also run: in-flight exclusivity, `SKIP LOCKED`, the append-only trigger, the cycle lock and the `0004_guards` migration round trip. Schema migrations still run explicitly, never on server startup. `DATABASE_URL` accepts `postgres://`, `postgresql://` and `postgresql+psycopg://`: the first two select the installed psycopg driver without changing credentials, hostname, database or SSL options. Other explicit driver schemes are preserved. CI without a local `.env` must supply `DATABASE_URL` before importing the application.
 
 ## Session and roles
 
@@ -100,15 +100,21 @@ An optional `--mapping` local JSON file supplies the explicit mapping for a revi
 source snapshots and a durable dispatch claim. Timestamps go through the
 `UTCDateTime` type in `models/operations.py`, so SQLite and PostgreSQL store
 and return aware UTC instants. Apply `alembic upgrade head` explicitly
-(`0001_operations`, `0002_review_schedule`, `0003_users`); startup never
+(`0001_operations`, `0002_review_schedule`, `0003_users`, `0004_guards`: session
+actor on events and receipts, `tracked_vehicle_kind`, partial unique indexes for
+one in-flight movement per machine and one `job_id` per environment, and the
+PostgreSQL-only append-only trigger on `operation_events`); startup never
 creates or drops tables.
 
-- `GET /api/v1/operations?mode=fixture`: movements and execution history.
+- `GET /api/v1/status?mode=fixture`: deterministic `registry_version`, last stored registry read, `hub_data_as_of` and the automatic synchronization state; polled by the page, never a provider call.
+- `GET /api/v1/graph`, `GET /api/v1/indicators`, `GET /api/v1/requests/{id}/suggestions`: typed read projections over the same bounded hub read plus one registry page (see the [Swagger walkthrough](../../docs/api-swagger.md)).
+- `GET /api/v1/operations?mode=fixture`: movements and execution history (`page`, `page_size` up to 500).
 - `GET /api/v1/operations/catalogs`: bounded sandbox mapping catalogs.
 - `POST /api/v1/operations/plans`: save a plan with explicit mapping and provenance.
 - `POST /api/v1/operations/{id}/queue`: refresh and validate before queueing a live plan.
 - `POST /api/v1/operations/sync`: one bounded synchronization and dispatch cycle.
 - `POST /api/v1/operations/{id}/receipt`: record a receiver, zoned instant and evidence reference.
+- `POST /api/v1/operations/{id}/resolve`: close a live `unknown` movement as `failed` with a closed reason code and the session actor; never repeats the POST.
 
 Management requires a session whose role holds `manage_transfers` (receipt:
 `declare_reception`); `WorkflowService` checks the permission per action. Only
@@ -119,7 +125,11 @@ All flags default to false. `AUTO_QUEUE_TRANSFERS` applies only to explicitly
 saved, currently approved and validated plans; it does not invent mappings.
 
 Run one cycle with `python -m app.cli.sync_operations --mode live`; add `--watch`
-for a 120-second interval. Run a single worker: provider report limits are shared
+for a 120-second interval. `SYNC_INTERVAL_SECONDS` (0 = off, otherwise 30–3600)
+runs the same bounded live cycle inside the web process under the PostgreSQL
+cycle lock (`SyncScheduler`), only with `ALLOW_LIVE_READS=true` and never for
+fixture; its last outcome (`ok`, `skipped`, `error: …`) is published by
+`GET /api/v1/status`. Run a single worker: provider report limits are shared
 per IP while the local limiter is per process. Outcomes with uncertain creation
 are reconciled by exact reference and payload fields without another POST.
 GPS presence and task completion never generate receipt. See the Spanish

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from app.dashboard.analytics import equipment_label, readable
+from app.dashboard.analytics import day, equipment_label, instant, readable
 from app.dashboard.context import QueryContext
 from app.dashboard.decision_analytics import matching_current_movements, requests_in_scope
 from app.models.hub import EquipmentRecord, HubResponse, RequestRecord
@@ -22,6 +22,43 @@ class DecisionItem:
     evidence: str
     action: str
     href: str
+
+    @property
+    def subject(self) -> str:
+        """What the action is about: the request and, when its record was read, the unit."""
+        request = self.request
+        parts = [
+            f"Solicitud de {request.machinery_type or 'maquinaria'}",
+            request.project_name or request.project_id or "Proyecto sin identificar",
+        ]
+        if self.equipment is not None:
+            parts.append(f"Unidad {equipment_label(self.equipment)}")
+        return " · ".join(parts)
+
+    @property
+    def dated_facts(self) -> list[tuple[str, str]]:
+        """Source instants behind the decision, named by their origin; never the clock."""
+        request = self.request
+        if request.approved_at is not None:
+            approved = instant(request.approved_at)
+        elif request.status.strip().upper() in PENDING:
+            approved = "Pendiente; sin approved_at"
+        else:
+            approved = "Sin approved_at"
+        facts = [
+            ("Solicitud creada", instant(request.created_at)),
+            ("Aprobada", approved),
+            ("Período solicitado", f"{day(request.starts_on)} — {day(request.ends_on)}"),
+        ]
+        unit = self.equipment
+        if unit is not None and (unit.assignment_starts_on or unit.assignment_ends_on):
+            facts.append(
+                (
+                    "Asignación vigente en Prisma",
+                    f"{day(unit.assignment_starts_on)} — {day(unit.assignment_ends_on)}",
+                )
+            )
+        return facts
 
 
 def _equipment(hub: HubResponse, request: RequestRecord) -> EquipmentRecord | None:
