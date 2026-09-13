@@ -1,7 +1,7 @@
 # Diccionario del modelo vigente de ECON
 
 Inventario generado del código local para **RF-01**, con revisión semántica del flujo.
-Cubre **27 modelos y 274 campos declarados** (incluidos campos heredados de entradas).
+Cubre **30 modelos y 300 campos declarados** (incluidos campos heredados de entradas).
 No representa las 51 definiciones del diccionario de proveedores ni acredita un mapeo completo.
 
 Las tablas usan JSONPath relativo a cada modelo (`$` es su raíz). Los objetos anidados
@@ -42,11 +42,11 @@ archivo coincida con las declaraciones y anotaciones del generador.
 | Fuente del código | SHA-256 |
 | --- | --- |
 | [apps/api/app/api/workflow.py](../apps/api/app/api/workflow.py) | `9f279670868d542078978c890e367915ae95b1590d0e96178fcd42917d77a1ac` |
-| [apps/api/app/integrations/startrack.py](../apps/api/app/integrations/startrack.py) | `3d88590c47543169e4ed0a4d4539ab13a569e1df7e47e0c0dbd1694243a3b9a2` |
-| [apps/api/app/models/hub.py](../apps/api/app/models/hub.py) | `7b13cc312cb95bf0e3d1dc5cefaad43235972b66e2cc2bb4cfa2577c8e4e6e38` |
-| [apps/api/app/models/operations.py](../apps/api/app/models/operations.py) | `e0f7038d28376442e8ab46885e480e3d8bb8452ed9d35cddc2c101c4398d1117` |
+| [apps/api/app/integrations/startrack.py](../apps/api/app/integrations/startrack.py) | `93d29082911d4b898535deb0b9fec232d17d9fcd214d2442fcb022fac165f697` |
+| [apps/api/app/models/hub.py](../apps/api/app/models/hub.py) | `e61ced48832d329deb0f5aa243fccc3b9db3fbf1854f87f2a6d87ce654598100` |
+| [apps/api/app/models/operations.py](../apps/api/app/models/operations.py) | `137146be44910d5d53a11800c733e4038312dd45319535021963230e69448574` |
 | [apps/api/app/models/workflow.py](../apps/api/app/models/workflow.py) | `6964fb17bdbe0b64ad4e7edc62eb5c59f2207819cd2cb2b1aabda40fdcc1379d` |
-| [apps/api/app/services/transfers.py](../apps/api/app/services/transfers.py) | `319d871c9b9a8a6a478f55987ac84d65a822bc514d542209a00b103b43b2a3f2` |
+| [apps/api/app/services/transfers.py](../apps/api/app/services/transfers.py) | `154e80587fd6b2da56499fa7131706ed190d82f1bbe8a76a83ea61e5c967a619` |
 
 ## Inventario estructurado
 
@@ -81,6 +81,18 @@ Procedencia: ECON: disponibilidad y cobertura del conector. [Código](../apps/ap
 | `$.last_evidence_at` | date-time / null | No | `null` — valor por defecto del modelo | Observación más reciente de evidencia local del proveedor; no renueva sus hechos al consultar el panel. | Derivación o metadato ECON |
 | `$.message` | texto | Sí | `"<message-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Explicación legible de disponibilidad/cobertura, sin cuerpos privados ni secretos. | Derivación o metadato ECON |
 
+### ReceiptSummary
+
+Procedencia: Proyección de la recepción declarada en el registro local; sin muestra proporcionada. [Código](../apps/api/app/models/hub.py).
+
+| Campo / JSONPath | Tipo JSON | Obligatorio | Ejemplo y clase de evidencia | Significado | Procedencia |
+| --- | --- | --- | --- | --- | --- |
+| `$.receiver` | texto | Sí | `"<receiver-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Nombre declarado del receptor; no acredita identidad autenticada. | Derivación o metadato ECON |
+| `$.received_at` | date-time | Sí | `"2000-01-01T00:00:00Z"` — instante técnico ilustrativo, no evento del sandbox | Instante declarado de recepción; el servicio exige zona horaria. | Derivación o metadato ECON |
+| `$.reference` | texto | Sí | `"<reference-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Referencia de constancia declarada; no adjunto ni comprobación automática del documento. | Derivación o metadato ECON |
+| `$.recorded_at` | date-time / null | No | `null` — valor por defecto del modelo | Instante en que ECON almacena la evidencia o declaración. | Derivación o metadato ECON |
+| `$.note` | texto / null | No | `null` — valor por defecto del modelo | Nota opcional de la declaración de recepción. | Derivación o metadato ECON |
+
 ### TransferRecord
 
 Procedencia: Proyección de evidencia persistida del traslado; sin tareas en la muestra proporcionada. [Código](../apps/api/app/models/hub.py).
@@ -102,6 +114,11 @@ Procedencia: Proyección de evidencia persistida del traslado; sin tareas en la 
 | `$.evidence_origin` | enum(task_observation, creation_acknowledgment) | No | `"task_observation"` — valor por defecto del modelo | Observación de tarea o acuse de creación: un acuse no demuestra consulta posterior del estado. | Proyección de Startrack prevista; sin muestra |
 | `$.source_data` | objeto JSON | No | `{}` — ejemplo técnico de objeto; ver significado y modelo anidado | Campos conservados de la observación de tarea; vacío si solo existe acuse de creación. | Proyección de Startrack prevista; sin muestra |
 | `$.provenance` | Provenance | Sí | `{}` — estructura técnica; campos en la tabla del modelo referenciado | Procedencia del objeto o evento; ver Provenance. | Proyección de Startrack prevista; sin muestra |
+| `$.arrival_observed` | booleano | No | `false` — valor por defecto del modelo | Existe una visita GPS a la geocerca de destino vinculada al movimiento; no acredita recepción. | Proyección de Startrack prevista; sin muestra |
+| `$.arrival_event_time` | date-time / null | No | `null` — valor por defecto del modelo | Instante de la última visita a la geocerca de destino, según Startrack; null sin visita. | Proyección de Startrack prevista; sin muestra |
+| `$.arrival_poi_id` | texto / null | No | `null` — valor por defecto del modelo | ID de la geocerca de destino donde se observó la llegada; null sin visita. | Proyección de Startrack prevista; sin muestra |
+| `$.arrival_evidence_origin` | texto / null | No | `null` — valor por defecto del modelo | Origen de la evidencia de llegada (visit_observation); null sin visita. | Proyección de Startrack prevista; sin muestra |
+| `$.receipt` | ReceiptSummary / null | No | `null` — valor por defecto del modelo | Declaración explícita de recepción; nunca generada por GPS o cierre de tarea. | Proyección de Startrack prevista; sin muestra |
 
 ### LocationObservation
 
@@ -112,6 +129,28 @@ Procedencia: Proyección de ubicación; sin muestra proporcionada. [Código](../
 | `$.label` | texto | Sí | `"<label-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Etiqueta de presentación de la fuente o ubicación; no clave de unión. | Proyección de Startrack prevista; sin muestra |
 | `$.observed_at` | date-time | Sí | `"2000-01-01T00:00:00Z"` — instante técnico ilustrativo, no evento del sandbox | Instante de la posición; puede ser anterior a provenance.observed_at. | Proyección de Startrack prevista; sin muestra |
 | `$.provenance` | Provenance | Sí | `{}` — estructura técnica; campos en la tabla del modelo referenciado | Procedencia del objeto o evento; ver Provenance. | Proyección de Startrack prevista; sin muestra |
+
+### EquipmentOperator
+
+Procedencia: Prisma associated_operators del detalle de equipo; código MOT-xxx compartido con Startrack. [Código](../apps/api/app/models/hub.py).
+
+| Campo / JSONPath | Tipo JSON | Obligatorio | Ejemplo y clase de evidencia | Significado | Procedencia |
+| --- | --- | --- | --- | --- | --- |
+| `$.id` | texto | Sí | `"<id-tecnico>"` — ejemplo técnico de texto; no hecho operativo | Identificador del objeto; su ámbito depende del modelo, nunca de un nombre visible. | Derivación o metadato ECON |
+| `$.name` | texto / null | No | `null` — valor por defecto del modelo | Nombre descriptivo de la maquinaria. | Derivación o metadato ECON |
+| `$.worker_code` | texto / null | No | `null` — valor por defecto del modelo | Código MOT-xxx del operador; clave documentada compartida con el conductor de Startrack, nunca unir por nombre. | Derivación o metadato ECON |
+| `$.is_active` | booleano / null | No | `null` — valor por defecto del modelo | El operador sigue activo en Prisma. | Derivación o metadato ECON |
+
+### EquipmentRate
+
+Procedencia: Prisma current_project_rate del detalle de equipo; tarifa por proyecto y vigencia. [Código](../apps/api/app/models/hub.py).
+
+| Campo / JSONPath | Tipo JSON | Obligatorio | Ejemplo y clase de evidencia | Significado | Procedencia |
+| --- | --- | --- | --- | --- | --- |
+| `$.project_id` | texto / null | No | `null` — valor por defecto del modelo | UUID de proyecto Prisma asociado al objeto; no equivale a poi_id. | Derivación o metadato ECON |
+| `$.hourly_rate` | number / null | No | `null` — valor por defecto del modelo | Prisma precio_x_hora de la tarifa vigente. | Derivación o metadato ECON |
+| `$.effective_from` | texto / null | No | `null` — valor por defecto del modelo | Inicio de vigencia de la tarifa según Prisma. | Derivación o metadato ECON |
+| `$.effective_to` | texto / null | No | `null` — valor por defecto del modelo | Fin de vigencia de la tarifa; null si sigue vigente. | Derivación o metadato ECON |
 
 ### EquipmentRecord
 
@@ -127,11 +166,15 @@ Procedencia: Prisma → normalización ECON; fixtures.py / hub.py. [Código](../
 | `$.equipment_class` | texto / null | No | `"Cargador frontal"` — muestra normalizada | Clase de maquinaria del origen, distinta del tipo de tarea. | Prisma: clase_equipo |
 | `$.project_id` | texto / null | No | `"39723f32-8bb5-4158-a415-2a3d49b0993b"` — muestra normalizada | UUID de proyecto Prisma asociado al objeto; no equivale a poi_id. | Prisma: project_id |
 | `$.project_name` | texto / null | No | `"PROY-014 - The Hub - Proyecto Xi - La Unión"` — muestra normalizada | Nombre de proyecto del origen; solo presentación. | Prisma: project_name |
-| `$.driver` | texto / null | No | `null` — muestra normalizada | Etiqueta de motorista, sin equivalencia automática a usuario o conductor Startrack. | Derivación o metadato ECON |
+| `$.assignment_starts_on` | texto / null | No | `"2026-09-11"` — muestra normalizada | Prisma fecha_inicio_uso: inicio de la asignación del equipo al proyecto; no es programación del traslado. | Derivación o metadato ECON |
+| `$.assignment_ends_on` | texto / null | No | `"2026-09-14"` — muestra normalizada | Prisma fecha_fin_uso: fin de la asignación del equipo al proyecto. | Derivación o metadato ECON |
+| `$.assignment_note` | texto / null | No | `"Solicitud aprobada: Cargador frontal"` — muestra normalizada | Prisma observaciones_asignacion: texto de la asignación tal como lo informa Prisma. | Derivación o metadato ECON |
 | `$.machinery_status` | texto | Sí | `"OBSOLETA"` — muestra normalizada | Estado administrativo de maquinaria Prisma, conservado literalmente. | Prisma: estado |
 | `$.maintenance_failure_id` | texto / null | No | `null` — muestra normalizada | Referencia de falla activa, si está disponible. | Prisma: active_failure_id |
 | `$.maintenance_status` | texto / null | No | `null` — muestra normalizada | Estado de falla/mantenimiento, separado del estado administrativo. | Prisma: active_failure_status |
 | `$.maintenance_is_stopped` | booleano / null | No | `false` — muestra normalizada | Paro explícito: true/false; null significa desconocido. | Prisma: active_failure_is_paro |
+| `$.operators` | lista<EquipmentOperator> / null | No | `null` — muestra normalizada | Operadores asociados según el detalle de Prisma; null si la lectura acotada no lo cubrió, [] si no informa ninguno. | Derivación o metadato ECON |
+| `$.project_rate` | EquipmentRate / null | No | `null` — muestra normalizada | Tarifa por hora vigente para el proyecto asignado (current_project_rate); no es costo de traslado. | Derivación o metadato ECON |
 | `$.request_ids` | lista<texto> | No | `["nexus:request:46d2573e-08d3-4855-971d-2fbf9564e135"]` — muestra normalizada | Solicitudes de la consulta vinculadas por maquinaria_id exacto. | Derivación o metadato ECON |
 | `$.transfers` | lista<TransferRecord> | No | `[]` — muestra normalizada | Lista de traslados del contrato de lectura; no hay ejemplos Startrack en la muestra. | Derivación o metadato ECON |
 | `$.location` | LocationObservation / null | No | `null` — muestra normalizada | Observación de ubicación fechada; ausente en el dataset proporcionado. | Derivación o metadato ECON |
@@ -151,6 +194,9 @@ Procedencia: Prisma → normalización ECON; fixtures.py / hub.py. [Código](../
 | `$.project_id` | texto / null | No | `"39723f32-8bb5-4158-a415-2a3d49b0993b"` — muestra normalizada | UUID de proyecto Prisma asociado al objeto; no equivale a poi_id. | Prisma: project_id |
 | `$.project_name` | texto / null | No | `"PROY-014 - The Hub - Proyecto Xi - La Unión"` — muestra normalizada | Nombre de proyecto del origen; solo presentación. | Prisma: project_name |
 | `$.machinery_id` | texto / null | No | `"nexus:equipment:66faacde-728c-4378-8b46-dbfb38254e03"` — muestra normalizada | ID normalizado de maquinaria asignada; conserva prefijo del contrato del hub. | Prisma: maquinaria_id + prefijo ECON |
+| `$.machinery_name` | texto / null | No | `"Cargador frontal 03"` — muestra normalizada | Prisma maquinaria_nombre expandido en la solicitud; la identidad sigue siendo machinery_id. | Derivación o metadato ECON |
+| `$.machinery_asset_number` | texto / null | No | `"CF-03"` — muestra normalizada | Prisma maquinaria_no_activo expandido en la solicitud. | Derivación o metadato ECON |
+| `$.machinery_code` | texto / null | No | `null` — muestra normalizada | Prisma maquinaria_clave expandido en la solicitud; puede ser null. | Derivación o metadato ECON |
 | `$.status` | texto | Sí | `"APROBADA"` — muestra normalizada | Estado original del flujo de solicitud en Prisma. | Prisma: status |
 | `$.starts_on` | texto / null | No | `"2026-09-11"` — muestra normalizada | Inicio del uso solicitado, conservado como texto; no ventana de entrega. | Prisma: fecha_inicio |
 | `$.ends_on` | texto / null | No | `"2026-09-14"` — muestra normalizada | Fin del uso solicitado, conservado como texto; no vencimiento del traslado. | Prisma: fecha_fin |
@@ -162,6 +208,7 @@ Procedencia: Prisma → normalización ECON; fixtures.py / hub.py. [Código](../
 | `$.updated_at` | date-time / null | No | `"2026-09-12T01:00:01.535958Z"` — muestra normalizada | Actualización en Prisma para equipo/solicitud; última actualización local del movimiento. | Prisma: updated_at |
 | `$.approved_at` | date-time / null | No | `"2026-09-12T01:00:01.535958Z"` — muestra normalizada | Instante de aprobación informado por Prisma; no salida, llegada o recepción. | Prisma: approved_at |
 | `$.approved_by_user_id` | texto / null | No | `"98bf9d4d-fb00-4680-9883-6a72cf0bae0e"` — muestra normalizada | ID original del usuario que aprobó en Prisma, cuando la fuente lo aporta. | Prisma: approved_by_user_id |
+| `$.approved_by` | texto / null | No | `"María José López Ramírez"` — muestra normalizada | Prisma approved_by_name: nombre del aprobador tal como lo informa la fuente. | Derivación o metadato ECON |
 | `$.provenance` | Provenance | Sí | `{}` — ver Provenance; muestra normalizada | Procedencia del objeto o evento; ver Provenance. | Derivación o metadato ECON |
 
 ### AlertRecord
