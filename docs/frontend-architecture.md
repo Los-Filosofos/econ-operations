@@ -79,8 +79,10 @@ por modo. Los planes, cortes, eventos y recepciones persisten en PostgreSQL:
 el store del navegador es una proyección, no el registro durable.
 
 `WorkflowOverview.available` indica si se pudo leer el registro y `complete`
-si todos los movimientos de ese modo/solicitud caben en la ventana. Se consulta
-un registro adicional para detectar truncación y se devuelven hasta 100.
+si todos los movimientos de ese modo/solicitud caben en la primera página.
+Coincide con `coverage.is_complete`; el contrato incluye total y paginación HTTP
+mediante `page` y `page_size` (hasta 500). Dash consulta la primera página de 100
+movimientos y muestra su cobertura; todavía no tiene controles para otras páginas.
 Un resultado parcial conserva los movimientos observados, pero no acredita la
 ausencia de otros ni habilita recomendaciones que presuponen ese conocimiento.
 Esto es independiente de la cobertura integrada de `HubResponse.scope`.

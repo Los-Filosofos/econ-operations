@@ -68,7 +68,9 @@ MovementIdPath = Annotated[
     summary="Consultar planes e historial de movimientos",
     description=(
         "Lee el registro local del modo elegido, sin sincronizar proveedores. Devuelve hasta "
-        "100 movimientos; complete indica si la consulta cubre todos los registros del filtro. "
+        "100 movimientos por defecto (page_size admite hasta 500). page selecciona la página. "
+        "complete y coverage.is_complete indican si esta página cubre todos los registros "
+        "del filtro; coverage también informa total, displayed y has_more. "
         "available=false explica registro SQL inaccesible o live deshabilitado, también con 200. "
         "La ausencia de movimientos con cobertura incompleta no acredita ausencia de traslados. "
         "last_sync_at es el último corte guardado del modo, no una fecha de actualización de "
@@ -86,8 +88,17 @@ def list_operations(
             examples=["46d2573e-08d3-4855-971d-2fbf9564e135"],
         ),
     ] = None,
+    page: Annotated[int, Query(ge=1, description="Página del registro, comenzando en 1.")] = 1,
+    page_size: Annotated[
+        int, Query(ge=1, le=500, description="Máximo de movimientos devueltos por página.")
+    ] = 100,
 ) -> WorkflowOverview:
-    return request.app.state.workflow.read(mode, request_source_id)
+    return request.app.state.workflow.read(
+        mode,
+        request_source_id,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get(

@@ -64,6 +64,15 @@ PRISMA_FIELDS = {
 }
 
 MEANINGS = {
+    "next_review_at": "Marca durable para ordenar revisiones del worker; no modifica la fecha de observación del proveedor.",
+    "total": "Total de movimientos locales del modo y filtro, antes de paginar; evaluar available antes de interpretarlo.",
+    "page": "Página solicitada del registro local, comenzando en 1.",
+    "page_size": "Máximo de movimientos por página; 100 por defecto y hasta 500.",
+    "total_pages": "Número de páginas de la población filtrada, con mínimo 1 incluso vacía.",
+    "coverage": "Cobertura de la página local; null cuando no se pudo consultar el registro.",
+    "displayed": "Número de movimientos devueltos en esta página.",
+    "has_more": "Existen páginas posteriores; false no significa que esta página contenga toda la población.",
+    "is_complete": "La primera página contiene todos los movimientos del modo y filtro; coincide con WorkflowOverview.complete.",
     "configured": "Configuración de acceso disponible en el servidor; no demuestra conexión ni consulta exitosa.",
     "last_evidence_at": "Observación más reciente de evidencia local del proveedor; no renueva sus hechos al consultar el panel.",
     "evidence_current_assignment": "El movimiento corresponde a la asignación y período vigentes de la solicitud; false conserva evidencia histórica.",
@@ -213,7 +222,8 @@ OVERRIDES = {
     (
         "WorkflowOverview",
         "complete",
-    ): "Todos los movimientos locales del modo/solicitud caben en la lectura acotada a 100; false ante truncación, fallo o cobertura desconocida. No certifica cobertura de proveedores.",
+    ): "La primera página contiene todos los movimientos locales del modo/solicitud; coincide con coverage.is_complete. False ante lectura parcial, fallo o cobertura desconocida. No certifica cobertura de proveedores.",
+    ("OperationsCoverage", "note"): "Texto de cobertura de la página: filas devueltas, total y página; no describe recepción.",
     (
         "EquipmentRecord",
         "code",
@@ -274,6 +284,7 @@ MODEL_ORIGINS = {
     "MovementRecord": "Proyección de Movement y su historial local",
     "SnapshotRecord": "Proyección de SourceSnapshot",
     "WorkflowOverview": "ECON: resumen de operaciones consultadas",
+    "OperationsCoverage": "ECON: población y cobertura de la página de operaciones",
     "MappingCatalogs": "Startrack SDK → catálogos acotados de ECON",
     "TransferMapping": "Correspondencias y programación proporcionadas explícitamente",
     "TransferPreparation": "ECON: services/transfers.py prepare_transfer",

@@ -66,7 +66,7 @@ credenciales: estas permanecen en configuración del servidor.
 | `GET /health/live` | Responde `{"status":"ok"}` si el proceso atiende. No consulta SQL ni proveedores. |
 | `GET /health/ready` | Ejecuta `SELECT 1`. Un 200 no acredita tablas migradas ni acceso a proveedores. |
 | `GET /api/v1/hub` | Consulta maquinaria, solicitudes y evidencia relacionada. Revisar `sources`, `scope`, `operation_evidence` y procedencia. |
-| `GET /api/v1/operations` | Lee planes e historial locales, hasta 100 movimientos. Revisar `available`, `complete` y `message`. |
+| `GET /api/v1/operations` | Lee una página de planes e historial locales, 100 movimientos por defecto. Revisar `available`, `complete`, `coverage` y `message`. |
 | `GET /api/v1/operations/catalogs` | Consulta catálogos acotados de Startrack. Siempre es live; no declara selector de modo. Añadir `mode=fixture` no cambia el origen. |
 | `POST /api/v1/operations/plans` | Guarda correspondencias y preparación local. Un 201 puede ser un plan `blocked`; revisar `preparation`. |
 | `POST /api/v1/operations/{movement_id}/queue` | Revalida un plan live y lo encola. No envía el POST a Startrack en esa petición. |
@@ -85,8 +85,11 @@ credenciales: estas permanecen en configuración del servidor.
   original exacto de solicitud. No usar el prefijo normalizado `nexus:request:`.
 - El contrato HTTP del hub no implementa filtros por fecha o estado ni
   paginación solicitada por el cliente. Los filtros adicionales de Dash son
-  de presentación. El registro de operaciones indica `complete=false` si
-  existen más de 100 movimientos en el ámbito; no expone todavía paginación.
+  de presentación. El registro de operaciones admite `page` (desde 1) y
+  `page_size` (1–500; por defecto 100). `complete` y `coverage.is_complete`
+  coinciden: solo son verdaderos si la primera página contiene toda la población
+  del modo y filtro. La última página de una población mayor sigue siendo parcial,
+  aunque `coverage.has_more=false`. `coverage` informa total, filas y páginas.
 
 ### Cómo interpretar una respuesta
 
