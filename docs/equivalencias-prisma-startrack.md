@@ -134,7 +134,7 @@ esos usuarios. El adaptador conserva esos IDs como hechos separados.
 | SKU | `clave` y `no_activo` identifican el equipo en su dominio; no son un SKU acreditado. | `code` y `asset_number` separados. | No documentado en Job. | Sin equivalente y no soportado. |
 | Volumen m³ | No disponible en el contrato leído de maquinaria/solicitud. | Sin campo. | No documentado en Job. | Sin equivalente y no soportado; no estimar por clase de máquina. |
 | Peso kg | No disponible en el contrato leído de maquinaria/solicitud. | Sin campo. | No documentado en Job. | Sin equivalente y no soportado; no estimar por nombre/modelo. |
-| Precio unitario | `precio_x_hora`, `current_project_rate.precio_x_hora`, `effective_precio_x_hora` son tarifas por hora de equipo. | No están en `EquipmentRecord` ni en el borrador. | No documentado como precio de artículo de Job. | Sin equivalente y no soportado. No convertir tarifa horaria en precio de transporte o de artículo. |
+| Precio unitario | `precio_x_hora`, `current_project_rate.precio_x_hora`, `effective_precio_x_hora` son tarifas por hora de equipo. | `EquipmentRecord.project_rate` conserva la tarifa vigente con su proyecto y vigencia (solo en la lectura de detalle); no entra en el borrador. | No documentado como precio de artículo de Job. | Sin equivalente y no soportado. No convertir tarifa horaria en precio de transporte o de artículo. |
 | Total GTQ | La solicitud no aporta total de artículos ni moneda acreditada para su tarifa horaria. | Sin cálculo ni conversión monetaria. | No documentado en Job. | Sin equivalente y no soportado. GTQ es la etiqueta de esa pantalla; no fija la moneda de Prisma. |
 
 ### Contacto y notificaciones
@@ -195,7 +195,7 @@ campo Prisma con ECON **no implica** que tenga equivalente en Startrack.
 | `Solicitud.status` | `RequestRecord.status`. | Aprobación como condición previa; no traducción a estado de tarea. |
 | `Solicitud.comentarios` | `RequestRecord.comments`. | Contexto preservado; el borrador actual no lo transmite. |
 | `Solicitud.created_at`, `updated_at`, `approved_at` | Mismos nombres en `RequestRecord`. | Instantes de Prisma, distintos de creación/cierre del Job. |
-| `Solicitud.approved_by_user_id`, `approved_by_name` | El DTO admite el ID del aprobador, pero `RequestRecord` no lo conserva; el nombre no está en el DTO. | Brecha de trazabilidad del aprobador; no sustituirlo por solicitante. |
+| `Solicitud.approved_by_user_id`, `approved_by_name` | `RequestRecord.approved_by_user_id` y `approved_by` conservan el aprobador tal como lo informa Prisma. | Trazabilidad del aprobador; no sustituirlo por solicitante. |
 | `Solicitud.org_id` / `Equipo.org_id` | Fuera de los DTO mínimos. | No equivale a `Startrack.client_id`; actualmente la operación se acota por proveedor y sandbox. |
 | `Equipo.id`, `clave`, `no_activo`, `nombre` | `provenance.source_id`, `code`, `asset_number`, `name`. | UUID técnico separado de las etiquetas; texto derivado para título. `clave=null` permanece distinto de `no_activo`. |
 | `Equipo.empresa`, `clase_equipo` | `company`, `equipment_class`. | No son cliente, grupo, etiqueta ni tipo de tarea Startrack. |
@@ -204,10 +204,10 @@ campo Prisma con ECON **no implica** que tenga equivalente en Startrack.
 | `Equipo.active_failure_id`, `active_failure_status`, `active_failure_is_paro` | `maintenance_failure_id`, `maintenance_status`, `maintenance_is_stopped`. | Restricción de mantenimiento independiente del traslado. `null`/ausente no se convierte en `false`. |
 | `Equipo.created_at`, `updated_at` | Mismos nombres en `EquipmentRecord`. | No son observación GPS ni lectura actual. |
 | `Equipo.marca`, `modelo`, `anio` | Fuera del DTO actual. | Posibles atributos descriptivos de un vehículo; solo después de confirmar identidad. No se sincronizan. |
-| `Equipo.fecha_inicio_uso`, `fecha_fin_uso`, `observaciones_asignacion` | Fuera del DTO actual. | Hechos de asignación; no programación del traslado. |
+| `Equipo.fecha_inicio_uso`, `fecha_fin_uso`, `observaciones_asignacion` | `EquipmentRecord.assignment_starts_on`, `assignment_ends_on`, `assignment_note`. | Hechos de asignación; no programación del traslado. |
 | `Equipo.line_item_id`, `assigned_line_item`, `assigned_personnel` | Fuera del DTO actual. | Partida/personal de obra; no artículos, formularios o asignados de Job. |
-| `Equipo.associated_operators` del detalle | Fuera de `NexusEquipment`. El catálogo `NexusOperator` se lee por separado. | No hay mapeo operador/conductor/usuario vigente. |
-| `Equipo.precio_x_hora`, `minimum_usage_hours`, `catalog_precio_x_hora`, `current_project_rate`, `project_rates`, `effective_precio_x_hora` | Fuera del DTO actual. | Tarifas y vigencias; no precio de artículo, duración del Job ni costo de traslado. |
+| `Equipo.associated_operators` del detalle | `EquipmentRecord.operators` (id, nombre, `worker_code` MOT-xxx, activo) solo en la lectura de detalle; `None` cuando la lectura acotada no lo cubrió. | La correspondencia con el conductor de Startrack se hace por el código MOT-xxx documentado, nunca por nombre; no es un ID de usuario Startrack. |
+| `Equipo.precio_x_hora`, `minimum_usage_hours`, `catalog_precio_x_hora`, `current_project_rate`, `project_rates`, `effective_precio_x_hora` | Solo `current_project_rate` se conserva como `EquipmentRecord.project_rate`; el resto queda fuera del DTO. | Tarifas y vigencias; no precio de artículo, duración del Job ni costo de traslado. |
 | `Equipo.motivo_baja`, `fecha_baja`, `mantenimiento_fecha_inicio`, `mantenimiento_fecha_fin`, `mantenimiento_notas`, `occupied_without_project`, `fallas_count` | Fuera del DTO actual; algunos aparecen solo en listado o detalle. | Información adicional de inventario/mantenimiento; no debe reducirse a estado de tarea. |
 | `Proyecto.id`, `name`, `status`, `description`, `start_date`, `end_date`, `project_manager_user_id`, `manager_name`, fechas de auditoría/archivo | `NexusProject` en lectura opcional; no forma parte del `read()` habitual del hub. | Catálogo administrativo; correspondencia con POI requiere decisión independiente. |
 | Presupuestos, avance, cliente, notas e indicadores de Proyecto | Fuera de `NexusProject`. | Sin destino definido en Job; no se fabrican costos de artículos ni porcentajes operativos. |
@@ -387,11 +387,10 @@ requiere una columna y una migración.
    Conservar evidencia fechada; no interpretar un catálogo parcial como mapeo.
 2. Obtener contrato soportado para las opciones de pantalla sin campo público:
    origen, plazo, ventana de entrega, restricción de geocerca y artículos.
-3. Incorporar al modelo normalizado la identidad del aprobador si debe auditarse.
-   `NexusRequest.operador_id` es una tolerancia del DTO actual sin ese campo en
-   el esquema de lectura suministrado; el cuerpo de aprobación usa **`operator_id`**.
-   Tampoco se conserva `associated_operators`. No presentar estas rutas como
-   una asignación de operador completamente integrada.
+3. La identidad del aprobador (`approved_by_user_id`, `approved_by`) y los
+   operadores asociados (`operators`, con código MOT-xxx) ya se conservan en el
+   modelo normalizado; el cuerpo de aprobación de Prisma usa **`operator_id`**.
+   No presentar estas rutas como una asignación de operador integrada en Startrack.
 4. Acordar el tratamiento del estado `OBSOLETA` y la revalidación de mantenimiento:
    el bloqueo actual depende de paro explícito y no de equiparar etiquetas.
    El detalle puede omitir campos presentes en el listado.

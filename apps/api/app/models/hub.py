@@ -71,6 +71,24 @@ class LocationObservation(BaseModel):
     provenance: Provenance
 
 
+class EquipmentOperator(BaseModel):
+    """Operator linked to a unit in Prisma. The shared key with Startrack is the MOT code."""
+
+    id: str
+    name: str | None = None
+    worker_code: str | None = None
+    is_active: bool | None = None
+
+
+class EquipmentRate(BaseModel):
+    """Rate reported by Prisma for one project and validity window; not a global price."""
+
+    project_id: str | None = None
+    hourly_rate: float | None = None
+    effective_from: str | None = None
+    effective_to: str | None = None
+
+
 class EquipmentRecord(BaseModel):
     id: str
     code: str | None
@@ -80,11 +98,16 @@ class EquipmentRecord(BaseModel):
     equipment_class: str | None = None
     project_id: str | None = None
     project_name: str | None = None
-    driver: str | None = None
+    assignment_starts_on: str | None = None
+    assignment_ends_on: str | None = None
+    assignment_note: str | None = None
     machinery_status: str
     maintenance_failure_id: str | None = None
     maintenance_status: str | None = None
     maintenance_is_stopped: bool | None = None
+    # None means the bounded read did not cover it; [] means Prisma reported no operator.
+    operators: list[EquipmentOperator] | None = None
+    project_rate: EquipmentRate | None = None
     request_ids: list[str] = Field(default_factory=list)
     transfers: list[TransferRecord] = Field(default_factory=list)
     location: LocationObservation | None = None
@@ -100,6 +123,9 @@ class RequestRecord(BaseModel):
     project_id: str | None = None
     project_name: str | None = None
     machinery_id: str | None = None
+    machinery_name: str | None = None
+    machinery_asset_number: str | None = None
+    machinery_code: str | None = None
     status: str
     starts_on: str | None = None
     ends_on: str | None = None
@@ -111,6 +137,7 @@ class RequestRecord(BaseModel):
     updated_at: datetime | None = None
     approved_at: datetime | None = None
     approved_by_user_id: str | None = None
+    approved_by: str | None = None
     provenance: Provenance
 
 

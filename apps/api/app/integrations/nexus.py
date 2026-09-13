@@ -10,7 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, Valida
 
 from app.core.config import Settings
 from app.integrations.http import MAX_RESPONSE_BYTES, BoundedClient
-from app.models.hub import EquipmentRecord, Provenance, RequestRecord
+from app.models.hub import (
+    EquipmentOperator,
+    EquipmentRate,
+    EquipmentRecord,
+    Provenance,
+    RequestRecord,
+)
 
 NEXUS_ORIGIN = "https://econ-key.maic.ai"
 __all__ = ["MAX_RESPONSE_BYTES", "NexusConnector", "NexusReadError", "NexusSnapshot"]
@@ -20,7 +26,32 @@ class NexusReadError(Exception):
     """Only fixed, public messages are allowed; upstream content is never included."""
 
 
+class NexusOperatorLink(BaseModel):
+    """Operator associated with a unit; `cod_trabajador` is the documented MOT-xxx code."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    nombre: str | None = None
+    cod_trabajador: str | None = None
+    is_active: StrictBool | None = None
+
+
+class NexusProjectRate(BaseModel):
+    """A rate always belongs to its own project and validity window; never to another."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str | None = None
+    project_id: str | None = None
+    precio_x_hora: float | None = None
+    effective_from: str | None = None
+    effective_to: str | None = None
+
+
 class NexusEquipment(BaseModel):
+    """List and detail share this shape; detail-only fields stay None in a list read."""
+
     model_config = ConfigDict(extra="ignore")
 
     id: str
@@ -32,9 +63,15 @@ class NexusEquipment(BaseModel):
     clase_equipo: str | None = None
     project_id: str | None = None
     project_name: str | None = None
+    fecha_inicio_uso: str | None = None
+    fecha_fin_uso: str | None = None
+    observaciones_asignacion: str | None = None
     active_failure_id: str | None = None
     active_failure_status: str | None = None
     active_failure_is_paro: StrictBool | None = None
+    # Only /api/maquinaria/equipos/{id} documents these; a list read leaves them unread.
+    associated_operators: list[NexusOperatorLink] | None = None
+    current_project_rate: NexusProjectRate | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -53,11 +90,14 @@ class NexusRequest(BaseModel):
     requested_by_name: str | None = None
     requested_by_user_id: str | None = None
     comentarios: str | None = None
+    maquinaria_nombre: str | None = None
+    maquinaria_no_activo: str | None = None
+    maquinaria_clave: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     approved_at: datetime | None = None
     approved_by_user_id: str | None = None
-    operador_id: str | None = None
+    approved_by_name: str | None = None
 
 
 class NexusPage[T: BaseModel](BaseModel):
@@ -78,6 +118,31 @@ class NexusSnapshot(BaseModel):
 ProvenanceFactory = Callable[[str, int, str], Provenance]
 
 
+def _operators(item: NexusEquipment) -> list[EquipmentOperator] | None:
+    """Only the equipment detail documents operators; a list read stays unread, not empty."""
+    if item.associated_operators is None:
+        return None
+    return [
+        EquipmentOperator(
+            id=link.id, name=link.nombre, worker_code=link.cod_trabajador, is_active=link.is_active
+        )
+        for link in item.associated_operators
+    ]
+
+
+def _project_rate(item: NexusEquipment) -> EquipmentRate | None:
+    """Keep the rate with its own project so it is never read as another project's price."""
+    rate = item.current_project_rate
+    if rate is None:
+        return None
+    return EquipmentRate(
+        project_id=rate.project_id,
+        hourly_rate=rate.precio_x_hora,
+        effective_from=rate.effective_from,
+        effective_to=rate.effective_to,
+    )
+
+
 def to_records(
     equipment: list[NexusEquipment],
     requests: list[NexusRequest],
@@ -91,6 +156,9 @@ def to_records(
             project_id=item.project_id,
             project_name=item.project_name,
             machinery_id=f"nexus:equipment:{item.maquinaria_id}" if item.maquinaria_id else None,
+            machinery_name=item.maquinaria_nombre,
+            machinery_asset_number=item.maquinaria_no_activo,
+            machinery_code=item.maquinaria_clave,
             status=item.status,
             starts_on=item.fecha_inicio,
             ends_on=item.fecha_fin,
@@ -102,6 +170,7 @@ def to_records(
             updated_at=item.updated_at,
             approved_at=item.approved_at,
             approved_by_user_id=item.approved_by_user_id,
+            approved_by=item.approved_by_name,
             provenance=provenance("requests", index, item.id),
         )
         for index, item in enumerate(requests)
@@ -116,10 +185,15 @@ def to_records(
             equipment_class=item.clase_equipo,
             project_id=item.project_id,
             project_name=item.project_name,
+            assignment_starts_on=item.fecha_inicio_uso,
+            assignment_ends_on=item.fecha_fin_uso,
+            assignment_note=item.observaciones_asignacion,
             machinery_status=item.estado,
             maintenance_failure_id=item.active_failure_id,
             maintenance_status=item.active_failure_status,
             maintenance_is_stopped=item.active_failure_is_paro,
+            operators=_operators(item),
+            project_rate=_project_rate(item),
             request_ids=[
                 r.id for r in request_records if r.machinery_id == f"nexus:equipment:{item.id}"
             ],

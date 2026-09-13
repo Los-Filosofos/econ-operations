@@ -321,3 +321,76 @@ def test_detail_id_mismatch_and_missing_upstream_are_explicit_errors():
     finally:
         connector.close()
     assert "private-test-value" not in str(caught.value)
+
+
+def test_to_records_keeps_documented_assignment_operator_and_rate_fields():
+    """Documented fields are projected by ID; a list read leaves detail-only ones unread."""
+    from app.integrations.nexus import NexusEquipment, NexusRequest, to_records
+    from app.models.hub import Provenance
+
+    def provenance(collection, index, source_id):
+        return Provenance(
+            source="nexus",
+            source_id=source_id,
+            environment="sandbox",
+            observed_at=None,
+            is_synthetic=True,
+            evidence_kind="live_read",
+        )
+
+    detail = NexusEquipment.model_validate(
+        {
+            "id": "66faacde",
+            "clave": None,
+            "no_activo": "CF-03",
+            "nombre": "Cargador frontal 03",
+            "estado": "OBSOLETA",
+            "project_id": "39723f32",
+            "fecha_inicio_uso": "2026-09-11",
+            "fecha_fin_uso": "2026-09-14",
+            "observaciones_asignacion": "Solicitud aprobada: Cargador frontal",
+            "associated_operators": [
+                {"id": "7753f3fe", "nombre": "Carlos Herrera", "cod_trabajador": "MOT-015"}
+            ],
+            "current_project_rate": {
+                "project_id": "39723f32",
+                "precio_x_hora": 45,
+                "effective_from": "2026-09-11",
+            },
+        }
+    )
+    listed = NexusEquipment.model_validate(
+        {
+            "id": "2a49b73e",
+            "clave": None,
+            "no_activo": "CF-01",
+            "nombre": "Cargador frontal 01",
+            "estado": "DISPONIBLE",
+        }
+    )
+    request = NexusRequest.model_validate(
+        {
+            "id": "req-1",
+            "tipo": "Cargador frontal",
+            "status": "APROBADA",
+            "maquinaria_id": "66faacde",
+            "maquinaria_nombre": "Cargador frontal 03",
+            "maquinaria_no_activo": "CF-03",
+            "approved_by_user_id": "98bf9d4d",
+            "approved_by_name": "María José López Ramírez",
+        }
+    )
+
+    equipment, requests = to_records([detail, listed], [request], provenance, "note")
+
+    unit = equipment[0]
+    assert unit.assignment_starts_on == "2026-09-11"
+    assert unit.assignment_note == "Solicitud aprobada: Cargador frontal"
+    assert [op.worker_code for op in unit.operators] == ["MOT-015"]
+    assert unit.project_rate.project_id == "39723f32"
+    assert unit.project_rate.hourly_rate == 45
+    assert equipment[1].operators is None
+    assert equipment[1].project_rate is None
+    assert requests[0].machinery_asset_number == "CF-03"
+    assert requests[0].approved_by == "María José López Ramírez"
+    assert requests[0].machinery_id == "nexus:equipment:66faacde"

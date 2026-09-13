@@ -386,6 +386,18 @@ class StartrackClient(BoundedClient):
             )
         return {"filter_by": field, "filter_values": value, "filter_comp": "equal"}
 
+    def find_pois_by_remote_id(self, remote_id: str) -> StartrackReadResult[StartrackPoi]:
+        """Look up a destination geofence by its documented external reference.
+
+        This resolves a project-to-geofence correspondence by ID instead of by name.
+        It never creates a POI: the geometry and the destination decision belong to
+        Startrack and to the person who confirms the mapping.
+        """
+        result = self._read("/api/pois", StartrackPoi, params=self._filter("remote_id", remote_id))
+        if any(item.remote_id != remote_id for item in result.items):
+            raise StartrackReadError("Startrack no respetó el filtro de referencia solicitado.")
+        return result
+
     def find_jobs_by_remote_id(self, remote_id: str) -> StartrackReadResult[StartrackJob]:
         result = self._read("/api/job", StartrackJob, params=self._filter("remote_id", remote_id))
         if any(item.remote_id != remote_id for item in result.items):
