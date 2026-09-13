@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Cargador">
-  <path fill="#dce8f0" d="M7 42h9l5-18h19l9 18h4v7H7zm19-13-3 13h19l-6-13z"/>
-  <path fill="#68aee8" d="M3 33h9l5 9H7zm45 5h10l3 9H49z"/>
-  <circle cx="19" cy="51" r="7" fill="#dce8f0"/><circle cx="45" cy="51" r="7" fill="#dce8f0"/>
-  <circle cx="19" cy="51" r="3" fill="#111820"/><circle cx="45" cy="51" r="3" fill="#111820"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120" role="img" aria-label="Cargador frontal">
+  <path fill="#e6e2d8" d="M52 76h79l10 13H46zM73 43h42l18 34H63zm10 8-8 22h46l-12-22z"/>
+  <path fill="#8ba99d" d="M121 57h12l16 25-8 5-14-20zM143 80h27l-5 17h-23zM20 71h38l10 12H31z"/>
+  <path fill="#b7c4be" d="M34 64h30l8 12H45zM53 51h12v22H58z"/>
+  <circle cx="62" cy="91" r="18" fill="#d8d6cd"/><circle cx="62" cy="91" r="9" fill="#26302c"/>
+  <circle cx="128" cy="91" r="16" fill="#d8d6cd"/><circle cx="128" cy="91" r="8" fill="#26302c"/>
 </svg>

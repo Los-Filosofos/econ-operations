@@ -15,8 +15,10 @@ from app.models.hub import EquipmentRecord, HubResponse, Provenance, RequestReco
 from app.models.operations import MovementRecord
 from app.models.workflow import WorkflowOverview
 
-PLACE_RADIUS = 66
-MACHINE_RADIUS = 43
+PLACE_RADIUS = 48
+MACHINE_RADIUS = 29
+COLLECTION_RADIUS = 42
+UNASSIGNED_KEY = "collection:unassigned"
 MODE_LABELS = {"fixture": "Muestras proporcionadas", "live": "Sandbox actual · sintético"}
 READABLE_SOURCE_STATES = {"fixture", "connected", "partial"}
 ACTIVE_TRANSFER_ROLES = {"pending", "active", "in_progress", "in progress", "en curso"}
@@ -34,16 +36,23 @@ class GraphNode:
     status: str
     source: str
     age: str
+    subtitle: str | None = None
     equipment: EquipmentRecord | None = None
     project_records: list[RequestRecord | EquipmentRecord | TransferRecord] = field(
         default_factory=list
     )
     x: float = 0
     y: float = 0
+    member_keys: list[str] = field(default_factory=list)
+    member_of: str | None = None
 
     @property
     def radius(self) -> int:
-        return PLACE_RADIUS if self.kind == "place" else MACHINE_RADIUS
+        if self.kind == "place":
+            return PLACE_RADIUS
+        if self.kind == "collection":
+            return COLLECTION_RADIUS
+        return MACHINE_RADIUS
 
 
 @dataclass
@@ -197,6 +206,7 @@ def build_operations_graph(hub: HubResponse) -> OperationsGraph:
             status=item.machinery_status,
             source=_source(item.provenance),
             age=_age(item.provenance, hub.generated_at),
+            subtitle=item.machinery_status,
             equipment=item,
         )
         project = _add_project(projects, item.project_id, item.project_name, item, hub.generated_at)
@@ -222,6 +232,7 @@ def build_operations_graph(hub: HubResponse) -> OperationsGraph:
                 status="Registro fuera de la lectura",
                 source="ID de maquinaria informado por la solicitud",
                 age=_age(request.provenance, hub.generated_at),
+                subtitle="FUERA DE LA LECTURA",
             )
         if project:
             connection = _edge(edges, machine, project)
@@ -250,15 +261,18 @@ def build_operations_graph(hub: HubResponse) -> OperationsGraph:
 
     project_nodes = sorted(projects.values(), key=lambda value: value.entity_id)
     machine_nodes = sorted(machines.values(), key=lambda value: value.entity_id)
-    width = max(1180, 600 + max(0, len(project_nodes) - 1) * 460)
-    if len(project_nodes) == 1:
-        project_nodes[0].x = width / 2
-    elif project_nodes:
-        gap = (width - 480) / (len(project_nodes) - 1)
-        for index, node in enumerate(project_nodes):
-            node.x = 240 + index * gap
-    for node in project_nodes:
-        node.y = 170
+    width = max(1120, 880 + max(0, len(project_nodes) - 1) * 180)
+    height = max(680, 340 + max(1, len(project_nodes)) * 180)
+    center_y = height / 2
+    for index, node in enumerate(project_nodes):
+        node.x = 210
+        node.y = center_y + (index - (len(project_nodes) - 1) / 2) * 180
+        request_count = sum(isinstance(record, RequestRecord) for record in node.project_records)
+        node.subtitle = (
+            f"{request_count} SOLICITUD{'ES' if request_count != 1 else ''}"
+            if request_count
+            else "SIN SOLICITUD VISIBLE"
+        )
 
     targets: dict[str, list[str]] = {}
     for connection in edges.values():
@@ -275,24 +289,51 @@ def build_operations_graph(hub: HubResponse) -> OperationsGraph:
     max_group_rows = 1
     for project in project_nodes:
         group = sorted(grouped[project.key], key=lambda value: value.entity_id)
-        max_group_rows = max(max_group_rows, (len(group) + 3) // 4)
-        offsets = (170, -170, 300, -300)
+        max_group_rows = max(max_group_rows, (len(group) + 2) // 3)
         for index, node in enumerate(group):
-            row, column = divmod(index, 4)
-            node.x = min(width - 80, max(80, project.x + offsets[column]))
-            node.y = 420 + row * 150
+            row, column = divmod(index, 3)
+            node.x = 495 + column * 132
+            node.y = project.y + (row - (len(group) - 1) / 6) * 104
 
-    unassigned_y = 450 + max_group_rows * 150
-    columns = max(1, min(5, len(unassigned)))
-    gap = (width - 240) / max(1, columns - 1) if columns > 1 else 0
-    for index, node in enumerate(unassigned):
-        row, column = divmod(index, columns)
-        node.x = width / 2 if columns == 1 else 120 + column * gap
-        node.y = unassigned_y + row * 145
-    unassigned_rows = (len(unassigned) + columns - 1) // columns if unassigned else 0
-    height = max(760, int(unassigned_y + max(1, unassigned_rows) * 145))
+    collection_nodes: list[GraphNode] = []
+    if unassigned:
+        center_x = width - 215
+        collection = GraphNode(
+            key=UNASSIGNED_KEY,
+            kind="collection",
+            subtype="pool",
+            entity_id="unassigned",
+            source_id=None,
+            label="SIN ASIGNACIÓN",
+            subtitle=f"{len(unassigned)} UNIDAD{'ES' if len(unassigned) != 1 else ''}",
+            status="Agrupación visual; no es una ubicación física",
+            source="Derivado de la ausencia de una asignación verificable en esta lectura",
+            age="Conserva la fecha individual de cada unidad",
+            member_keys=[node.key for node in unassigned],
+            x=center_x,
+            y=center_y,
+        )
+        collection_nodes.append(collection)
+        ring = (
+            (0, -112),
+            (112, 0),
+            (0, 112),
+            (-112, 0),
+            (82, -82),
+            (82, 82),
+            (-82, 82),
+            (-82, -82),
+        )
+        for index, node in enumerate(unassigned):
+            lap, position = divmod(index, len(ring))
+            dx, dy = ring[position]
+            factor = 1 + lap * 0.58
+            node.x = center_x + dx * factor
+            node.y = center_y + dy * factor
+            node.member_of = collection.key
+        height = max(height, int(center_y + 180 + max(0, (len(unassigned) - 1) // 8) * 110))
     return OperationsGraph(
-        nodes=[*project_nodes, *machine_nodes],
+        nodes=[*project_nodes, *collection_nodes, *machine_nodes],
         edges=sorted(edges.values(), key=lambda value: value.key),
         width=width,
         height=height,
@@ -316,6 +357,8 @@ def _line_geometry(source: GraphNode, target: GraphNode) -> dict[str, str]:
         "top": f"{start_y:.2f}px",
         "width": f"{length:.2f}px",
         "transform": f"rotate({angle:.3f}deg)",
+        "--edge-angle": f"{angle:.3f}deg",
+        "--edge-counter-angle": f"{-angle:.3f}deg",
     }
 
 
@@ -351,6 +394,7 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
         for record in node.project_records
         if getattr(record, "project_name", None)
     }
+    equipment_by_id = {candidate.entity_id: candidate for candidate in connected}
     return [
         html.P("Proyecto / obra", className="graph-detail-kicker"),
         html.H2(node.label),
@@ -360,6 +404,7 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
                 ("Fuente", node.source),
                 ("Observación", node.age),
                 ("Solicitudes visibles", len(requests)),
+                ("Unidades relacionadas", len(connected)),
             ]
         ),
         html.Section(
@@ -381,8 +426,26 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
                 html.Ul(
                     [
                         html.Li(
-                            f"{request.provenance.source_id or request.id} · {request.status} · "
-                            f"{request.machinery_type or 'tipo no informado'}"
+                            [
+                                html.Strong(request.provenance.source_id or request.id),
+                                html.Span(f" · {request.status}"),
+                                html.Br(),
+                                html.Span(
+                                    f"{request.machinery_type or 'Tipo no informado'} · "
+                                    f"{request.starts_on or 'inicio pendiente'} → "
+                                    f"{request.ends_on or 'fin pendiente'}"
+                                ),
+                                html.Br(),
+                                html.Span(
+                                    "Unidad: "
+                                    + (
+                                        equipment_by_id[request.machinery_id].label
+                                        if request.machinery_id in equipment_by_id
+                                        else "sin asignación verificable"
+                                    )
+                                    + f" · Solicita: {request.requested_by or 'no informado'}"
+                                ),
+                            ]
                         )
                         for request in requests
                     ]
@@ -401,10 +464,95 @@ def _project_detail(node: GraphNode, graph: OperationsGraph):
     ]
 
 
+def _collection_detail(node: GraphNode, graph: OperationsGraph):
+    members = [candidate for candidate in graph.nodes if candidate.key in node.member_keys]
+    available = [member for member in members if member.status.strip().upper() == "DISPONIBLE"]
+    other = [member for member in members if member not in available]
+
+    def member_list(values: list[GraphNode]):
+        return (
+            html.Ul(
+                [
+                    html.Li(
+                        [
+                            html.Strong(member.label),
+                            html.Span(f" · {member.status}"),
+                            html.Br(),
+                            html.Span(
+                                f"{member.equipment.equipment_class or 'Tipo no informado'} · "
+                                f"{member.source_id or member.entity_id}"
+                                if member.equipment
+                                else member.entity_id
+                            ),
+                            html.Br(),
+                            html.Span(member.age),
+                        ]
+                    )
+                    for member in values
+                ]
+            )
+            if values
+            else html.P("Ninguna en esta lectura.")
+        )
+
+    return [
+        html.P("Agrupación operativa", className="graph-detail-kicker"),
+        html.H2("Sin asignación verificada"),
+        html.P(
+            "Reúne visualmente unidades que no tienen una relación exacta con un proyecto "
+            "en la lectura actual.",
+            className="graph-detail-subtitle",
+        ),
+        _facts(
+            [
+                ("Unidades", len(members)),
+                ("Disponibles", len(available)),
+                ("Otros estados", len(other)),
+                ("Ubicación física", "No proporcionada"),
+            ]
+        ),
+        html.Section([html.H3("Disponibles"), member_list(available)]),
+        html.Section([html.H3("Otros estados"), member_list(other)]) if other else None,
+        html.P(
+            "Este nodo no representa una base, almacén o taller físico. Cuando el origen "
+            "exponga un ID y tipo de lugar verificables, podrá mostrarse como ubicación real.",
+            className="graph-detail-warning",
+        ),
+    ]
+
+
+def _duration_label(raw: Any) -> str | None:
+    try:
+        seconds = int(float(str(raw)))
+    except (TypeError, ValueError):
+        return None
+    if seconds < 0:
+        return None
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours} h")
+    if minutes:
+        parts.append(f"{minutes} min")
+    if seconds or not parts:
+        parts.append(f"{seconds} s")
+    return " ".join(parts)
+
+
 def _transfer_lines(transfer: TransferRecord) -> list:
     active = _active_transfer(transfer)
     destination = (
         transfer.destination_project_name or transfer.destination_project_id or "no informado"
+    )
+    planned_duration = _duration_label(transfer.source_data.get("duration"))
+    scheduled = " ".join(
+        str(value)
+        for value in [
+            transfer.source_data.get("start_date"),
+            transfer.source_data.get("start_time"),
+        ]
+        if value not in (None, "")
     )
     return [
         html.Li(
@@ -417,6 +565,14 @@ def _transfer_lines(transfer: TransferRecord) -> list:
                 html.Span("Origen físico: no proporcionado por el servicio normalizado"),
                 html.Br(),
                 html.Span(f"Responsable: {transfer.driver or 'no informado'}"),
+                html.Br(),
+                html.Span(f"Programación Startrack: {scheduled or 'no informada'}"),
+                html.Br(),
+                html.Span(
+                    f"Duración planificada: {planned_duration}"
+                    if planned_duration
+                    else "Duración planificada no informada"
+                ),
                 html.Br(),
                 html.Span(
                     "En traslado · tiempo no disponible"
@@ -495,12 +651,75 @@ def _machine_detail(
                 ("Observación", node.age),
                 ("Proyecto conocido", ", ".join(sorted(project_ids)) or None),
                 (
+                    "Período de asignación",
+                    (
+                        f"{item.assignment_starts_on or 'inicio no informado'} → "
+                        f"{item.assignment_ends_on or 'fin no informado'}"
+                    )
+                    if item and (item.assignment_starts_on or item.assignment_ends_on)
+                    else None,
+                ),
+                (
                     "Ubicación observada",
                     item.location.label if item and item.location else None,
                 ),
             ]
         ),
     ]
+    if item and item.operators is not None:
+        detail.append(
+            html.Section(
+                [
+                    html.H3("Operadores asociados en Prisma"),
+                    html.Ul(
+                        [
+                            html.Li(
+                                f"{operator.name or 'Nombre no informado'} · "
+                                f"{operator.worker_code or operator.id} · "
+                                + (
+                                    "activo"
+                                    if operator.is_active is True
+                                    else "inactivo"
+                                    if operator.is_active is False
+                                    else "vigencia no informada"
+                                )
+                            )
+                            for operator in item.operators
+                        ]
+                    )
+                    if item.operators
+                    else html.P("Prisma informó que no hay operadores asociados."),
+                ]
+            )
+        )
+    if item and (item.assignment_note or item.project_rate):
+        detail.append(
+            html.Section(
+                [
+                    html.H3("Asignación administrativa"),
+                    _facts(
+                        [
+                            ("Nota", item.assignment_note),
+                            (
+                                "Tarifa horaria informada",
+                                item.project_rate.hourly_rate if item.project_rate else None,
+                            ),
+                            (
+                                "Proyecto de la tarifa",
+                                item.project_rate.project_id if item.project_rate else None,
+                            ),
+                        ]
+                    ),
+                    html.P(
+                        "La fuente no aporta aquí una moneda; la tarifa no se interpreta "
+                        "como costo de traslado ni como duración.",
+                        className="graph-detail-note",
+                    )
+                    if item.project_rate
+                    else None,
+                ]
+            )
+        )
     if item and (
         item.maintenance_failure_id or item.maintenance_status or item.maintenance_is_stopped
     ):
@@ -585,11 +804,12 @@ def _machine_detail(
 def _detail(
     node: GraphNode, hub: HubResponse, workflow: WorkflowOverview | None, graph: OperationsGraph
 ):
-    content = (
-        _project_detail(node, graph)
-        if node.kind == "place"
-        else _machine_detail(node, hub, workflow, graph)
-    )
+    if node.kind == "place":
+        content = _project_detail(node, graph)
+    elif node.kind == "collection":
+        content = _collection_detail(node, graph)
+    else:
+        content = _machine_detail(node, hub, workflow, graph)
     return html.Aside(
         [
             html.Button(
@@ -628,6 +848,7 @@ def _node(node: GraphNode):
     tooltip = " · ".join(
         [node.label, node.source_id or node.entity_id, node.status, node.source, node.age]
     )
+    label_class = f"graph-node-label graph-node-label--{node.kind}"
     return html.Button(
         [
             html.Span(
@@ -635,7 +856,15 @@ def _node(node: GraphNode):
                 className="graph-node-disc",
                 **{"aria-hidden": "true"},
             ),
-            html.Span(node.label, className="graph-node-label") if node.kind == "place" else None,
+            html.Span(
+                [
+                    html.Span(node.label, className="graph-node-label-main"),
+                    html.Span(node.subtitle, className="graph-node-label-meta")
+                    if node.subtitle
+                    else None,
+                ],
+                className=label_class,
+            ),
             html.Span("!", className="graph-node-incident", **{"aria-hidden": "true"})
             if incident
             else None,
@@ -650,6 +879,8 @@ def _node(node: GraphNode):
             "aria-describedby": tooltip_id,
             "data-node-key": node.key,
             "data-node-kind": node.kind,
+            "data-members": "|".join(node.member_keys),
+            "data-member-of": node.member_of or "",
         },
     )
 
@@ -664,16 +895,130 @@ def _edge_component(edge: GraphEdge, nodes: dict[str, GraphNode]):
         if edge.kind == "transfer"
         else f"Asignación verificada entre {source.label} y {target.label}"
     )
+    count = len(edge.transfer_ids) if edge.kind == "transfer" else len(edge.request_ids)
+    label = (
+        f"TRASLADO · {count or 1} EVIDENCIA"
+        if edge.kind == "transfer"
+        else f"ASIGNACIÓN · {count or 1} SOLICITUD"
+    )
     return html.Div(
-        html.Span(className="graph-edge-pulse", **{"aria-hidden": "true"}) if edge.active else None,
+        [
+            html.Span(className="graph-edge-pulse", **{"aria-hidden": "true"})
+            if edge.active
+            else None,
+            html.Button(
+                label,
+                type="button",
+                className="graph-edge-label",
+                title=f"{relationship}. Abrir evidencia de la conexión.",
+                **{
+                    "aria-label": f"{relationship}. Abrir evidencia de la conexión.",
+                    "data-edge-select": edge.key,
+                },
+            ),
+        ],
         className=" ".join(classes),
         style=_line_geometry(source, target),
         title=relationship,
         **{
-            "aria-hidden": "true",
             "data-edge-key": edge.key,
             "data-source": edge.source,
             "data-target": edge.target,
+        },
+    )
+
+
+def _edge_detail(edge: GraphEdge, nodes: dict[str, GraphNode], hub: HubResponse):
+    source, target = nodes[edge.source], nodes[edge.target]
+    requests = [request for request in hub.requests if request.id in edge.request_ids]
+    transfers = [
+        transfer
+        for item in hub.equipment
+        for transfer in item.transfers
+        if transfer.id in edge.transfer_ids
+    ]
+    heading = "Traslado confirmado" if edge.kind == "transfer" else "Asignación verificada"
+    content = [
+        html.P("Conexión operativa", className="graph-detail-kicker"),
+        html.H2(heading),
+        _facts(
+            [
+                ("Maquinaria", source.label if source.kind == "machine" else target.label),
+                ("Proyecto", target.label if target.kind == "place" else source.label),
+                ("Solicitudes", len(requests)),
+                ("Traslados", len(transfers)),
+                ("Actividad", "En traslado" if edge.active else "Sin actividad confirmada"),
+            ]
+        ),
+        html.Section(
+            [
+                html.H3("Evidencia de la relación"),
+                html.Ul([html.Li(value) for value in dict.fromkeys(edge.evidence)]),
+            ]
+        ),
+    ]
+    if requests:
+        content.append(
+            html.Section(
+                [
+                    html.H3("Solicitudes relacionadas"),
+                    html.Ul(
+                        [
+                            html.Li(
+                                [
+                                    html.Strong(request.provenance.source_id or request.id),
+                                    html.Span(f" · {request.status}"),
+                                    html.Br(),
+                                    html.Span(
+                                        f"Período solicitado: {request.starts_on or 'pendiente'} "
+                                        f"→ {request.ends_on or 'pendiente'}"
+                                    ),
+                                    html.Br(),
+                                    html.Span(
+                                        f"Solicita: {request.requested_by or 'no informado'} · "
+                                        f"Aprueba: {request.approved_by or 'no informado'}"
+                                    ),
+                                ]
+                            )
+                            for request in requests
+                        ]
+                    ),
+                ]
+            )
+        )
+    if transfers:
+        content.append(
+            html.Section(
+                [
+                    html.H3("Tareas Startrack"),
+                    html.Ul(sum((_transfer_lines(t) for t in transfers), [])),
+                ]
+            )
+        )
+    content.append(
+        html.P(
+            "La línea representa correspondencia documental. Su longitud no representa "
+            "distancia, duración, avance ni tiempo restante.",
+            className="graph-detail-note",
+        )
+    )
+    return html.Aside(
+        [
+            html.Button(
+                "Cerrar",
+                type="button",
+                className="graph-detail-close",
+                **{"data-graph-close": "true", "aria-label": "Cerrar detalle"},
+            ),
+            *content,
+        ],
+        className="graph-detail",
+        hidden=True,
+        role="dialog",
+        **{
+            "aria-hidden": "true",
+            "aria-label": f"Detalle de {heading.lower()}",
+            "data-edge-detail": edge.key,
         },
     )
 
@@ -797,6 +1142,7 @@ def operations_graph_view(hub: HubResponse, workflow: WorkflowOverview | None = 
             html.Ul([html.Li(value) for value in relationships], className="sr-only"),
             _controls(),
             *[_detail(node, hub, workflow, graph) for node in graph.nodes],
+            *[_edge_detail(edge, nodes, hub) for edge in graph.edges],
         ],
         className="operations-graph",
         **{"data-layout-key": layout_key},

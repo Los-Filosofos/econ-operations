@@ -44,19 +44,23 @@ alcance mientras el grafo está montado. Las demás rutas recuperan el shell nor
 ## Presentación y paleta
 
 La portada es un lienzo carbón sin cards, tablas, leyenda extensa ni paneles
-permanentes. Los lugares tienen diámetro de 132 px y la maquinaria de 86 px;
+permanentes. Los proyectos tienen diámetro de 96 px y la maquinaria de 58 px;
 las posiciones se derivan de IDs ordenados y permanecen estables al actualizar.
+Las unidades sin asignación verificable rodean una agrupación visual de 84 px:
+no es una base física, no crea relaciones y su detalle enumera las disponibles.
 Los nodos usan botones HTML enfocados por teclado y siluetas SVG locales. Las
-aristas son segmentos CSS rectos: asignación fina; traslado confirmado dirigido;
-una tarea explícitamente activa usa azul y movimiento discreto. Ámbar identifica
-mantenimiento y rojo una falla/condición confirmada, siempre con texto o símbolo.
-`prefers-reduced-motion` detiene la animación.
+aristas son segmentos CSS rectos y su etiqueta abre la evidencia de conexión:
+asignación fina; traslado confirmado dirigido; una tarea explícitamente activa
+usa azul y movimiento discreto. Ámbar identifica mantenimiento y rojo una
+falla/condición confirmada, siempre con texto o símbolo. `prefers-reduced-motion`
+detiene la animación.
 
 Hover o foco muestra identidad, estado, fuente y antigüedad. Seleccionar abre un
 detalle temporal con asignación, destino, estado, responsable disponible,
-historial, evidencia, incidentes, recepción y faltantes. La selección resalta
-sus conexiones y atenúa el resto. Zoom, centrado, rueda y pan sólo cambian la
-presentación; nunca escriben datos operativos.
+historial, evidencia, incidentes, recepción y faltantes. Una conexión seleccionada
+muestra sus IDs, solicitudes, períodos y evidencia. La selección resalta el flujo
+relacionado y atenúa el resto. El autoencuadre abre el flujo principal en móvil;
+zoom, centrado, rueda y pan sólo cambian la presentación y nunca escriben datos.
 
 `dashboard/theme.py` es la única fuente de color, compartida por Mantine, AG
 Grid y el template Plotly `econ`:
@@ -68,8 +72,9 @@ Grid y el template Plotly `econ`:
 | Magnitudes | Secuencial azul `#86b6ef → #0d366b` (`SEQUENTIAL`) | Un solo tono; más oscuro es más |
 | Desviación frente a meta | Divergente `#0d366b … #f0efec … #b3261e` (`DIVERGING`) | Neutro `#f0efec` en el cero; azul por debajo, rojo por encima |
 
-Tipografía Inter (OFL) servida localmente; radios pequeños, superficies claras
-y `focusRing: auto`. Los gráficos Plotly usan `figure()` del tema (sin zoom,
+Tipografía Inter (OFL) para el shell y Roboto Mono Variable en peso 300 para el
+grafo, ambas servidas localmente; radios pequeños, superficies claras y
+`focusRing: auto`. Los gráficos Plotly usan `figure()` del tema (sin zoom,
 ejes fijos, leyenda por texto) y siempre tienen una tabla alternativa; ver
 [definiciones analíticas](analitica-decisiones.md). Capturas de referencia
 verificadas a 1280 y 390 px en `docs/screenshots/`
@@ -106,7 +111,7 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `services/hub.py` | Proyección de lectura `HubResponse`, compartida con HTTP |
 | `services/evidence.py` | Proyección de evidencia persistida mediante identidades y períodos compatibles |
 | `services/workflow.py`, `services/ledger.py` | Reglas operativas, permiso por acción, persistencia, cortes, eventos y cola transaccional |
-| `dashboard/assets` | `style.css` mínimo (skip link, foco, grid, impresión), Inter y logotipos ECON |
+| `dashboard/assets` | Estilos, Inter, Roboto Mono (OFL), siluetas SVG, iconos y logotipos ECON |
 
 `assets/operations-graph.js` implementa únicamente interacción visual local
 (zoom, pan, selección, cierre y reencuadre responsive). No inicia consultas: el

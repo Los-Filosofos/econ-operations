@@ -598,9 +598,7 @@ def create_dashboard(server: FastAPI) -> Dash:
             )
             return page, nav, nav, None
         page = render_page(path, hub, context, workflow)
-        page_scope = (
-            None if path in {"/", "/resumen"} else scope(hub, context, workflow, path)
-        )
+        page_scope = None if path in {"/", "/resumen"} else scope(hub, context, workflow, path)
         return page, nav, nav, page_scope
 
     @dashboard.callback(

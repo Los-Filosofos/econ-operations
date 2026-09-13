@@ -1,4 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Excavadora">
-  <path fill="#dce8f0" d="M9 45h34a9 9 0 0 1 9 9H12a7 7 0 0 1-3-9zm12-4V25h17l7 8v8zm5-12v8h13l-4-8zM7 42l7-19 5 2-7 19z"/>
-  <path fill="#68aee8" d="m11 20 4-12 5 2-4 12zm8-12 4-3 16 16-4 4zM44 52h8v4h-8z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120" role="img" aria-label="Excavadora">
+  <path fill="#d8d6cd" d="M35 86h98c13 0 24 8 27 20H45c-10 0-18-8-18-18zm16 7c-5 0-9 3-9 7h101c-4-5-9-7-16-7z"/>
+  <path fill="#e6e2d8" d="M72 53h45l24 33H62zm13 9-9 18h49l-13-18z"/>
+  <path fill="#8ba99d" d="m78 58-13-8 28-33 9 7zM93 16l8-9 42 29-7 10zM136 36l8-2 18 36-10 5zM152 69h20l-3 18h-14z"/>
+  <path fill="#b7c4be" d="M55 48h12v38H49zM41 42h18v8H41z"/>
+  <circle cx="61" cy="99" r="5" fill="#27312d"/><circle cx="126" cy="99" r="5" fill="#27312d"/>
 </svg>

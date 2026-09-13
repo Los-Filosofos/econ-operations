@@ -41,9 +41,10 @@ que no exista; tampoco una ausencia de alertas demuestra ausencia de riesgo.
 | --- | --- | --- |
 | Proyecto / obra | Un nodo por `project_id` | El nombre sólo etiqueta; nunca une identidades y una contradicción de nombres queda visible |
 | Maquinaria | Un nodo por ID normalizado | La silueta específica requiere `equipment_class`; sin esa evidencia se usa el tipo genérico |
+| Sin asignación | Agrupación visual sin aristas | Reúne las unidades que no tienen relación exacta en la lectura; permite consultar las `DISPONIBLE` sin afirmar una base o ubicación física |
 | Asignación | Segmento recto y fino | Sólo existe con `maquinaria_id` y `project_id` exactos, ya sea en la solicitud o la maquinaria normalizada |
 | Traslado confirmado | Segmento recto dirigido | Sólo promueve una relación cuya evidencia ya coincide por IDs, entorno, asignación y período vigentes |
-| Detalle contextual | Hechos y faltantes del nodo seleccionado | Expone fuente, observación, asignación, traslado, responsable disponible, incidentes, recepción, historia y contradicciones sin completar campos ausentes |
+| Detalle contextual | Hechos y faltantes del nodo o conexión seleccionados | Expone fuente, observación, asignación, períodos, operadores, traslado, responsable disponible, incidentes, recepción, historia y contradicciones sin completar campos ausentes |
 
 Las incidencias de envío se atienden antes de sugerir otro movimiento. Un envío
 incierto requiere conciliación; una consulta del registro indisponible no se

@@ -92,6 +92,12 @@ def test_unassigned_machines_stay_visible_without_connections_or_invented_places
     assert len(unconnected_machines) == 4
     assert {node.subtype for node in graph.nodes if node.kind == "place"} == {"project"}
     assert all("base" not in node.key and "workshop" not in node.key for node in graph.nodes)
+    collection = next(node for node in graph.nodes if node.kind == "collection")
+    assert collection.label == "SIN ASIGNACIÓN"
+    assert set(collection.member_keys) == {node.key for node in unconnected_machines}
+    assert all(
+        edge.source != collection.key and edge.target != collection.key for edge in graph.edges
+    )
 
 
 def test_layout_is_stable_when_source_lists_arrive_in_another_order():
@@ -212,12 +218,30 @@ def test_full_page_graph_has_local_assets_straight_edges_and_no_tables_or_metric
         "roller",
         "truck",
         "machinery",
+        "pool",
     ]:
         svg = (assets / f"graph-{name}.svg").read_text(encoding="utf-8")
         assert svg.startswith("<svg") and "<path" in svg
     css = (assets / "style.css").read_text(encoding="utf-8")
     script = (assets / "operations-graph.js").read_text(encoding="utf-8")
-    assert "width: 132px; height: 132px" in css
-    assert "width: 86px" in css and "height: 86px" in css
+    assert "width: 96px; height: 96px" in css
+    assert "width: 58px" in css and "height: 58px" in css
+    assert 'font-family: "Roboto Mono"' in css
+    assert "RobotoMono-wght.ttf" in css
+    assert (assets / "RobotoMono-wght.ttf").stat().st_size > 100_000
+    assert "SIL OPEN FONT LICENSE Version 1.1" in (assets / "RobotoMono-OFL.txt").read_text(
+        encoding="utf-8"
+    )
     assert "prefers-reduced-motion" in css and "graph-edge--active" in css
     assert "pointerdown" in script and "wheel" in script and "keydown" in script
+    assert "selectEdge" in script and "data-edge-selection" in script
+
+
+def test_unassigned_collection_and_connection_expose_context_without_inventing_a_base():
+    payload = serialized(operations_graph_view(hub_fixture()))
+    assert "Sin asignación verificada" in payload
+    assert "Este nodo no representa una base, almacén o taller físico" in payload
+    assert "Disponibles" in payload
+    assert "graph-edge-label" in payload
+    assert "Evidencia de la relación" in payload
+    assert "La línea representa correspondencia documental" in payload

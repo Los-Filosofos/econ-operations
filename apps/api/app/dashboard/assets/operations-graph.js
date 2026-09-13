@@ -3,7 +3,7 @@
 
   const viewStates = new Map();
   // Keep machine targets at roughly 44 px even on narrow screens; the canvas remains pannable.
-  const MIN_SCALE = 0.52;
+  const MIN_SCALE = 0.62;
   const MAX_SCALE = 2.4;
 
   const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -40,14 +40,18 @@
     function center() {
       const bounds = viewport.getBoundingClientRect();
       if (!bounds.width || !bounds.height) return;
-      const scale = clamp(
-        Math.min((bounds.width - 56) / width, (bounds.height - 56) / height, 1.15),
-        MIN_SCALE,
-        MAX_SCALE
+      const fitScale = Math.min(
+        (bounds.width - 56) / width,
+        (bounds.height - 56) / height,
+        1.15
       );
+      const scale = clamp(fitScale, MIN_SCALE, MAX_SCALE);
+      const firstProject = root.querySelector(".graph-node--place");
+      const projectX = Number.parseFloat(firstProject?.style.left || "");
+      const mobileFlowStart = bounds.width < 600 && fitScale < MIN_SCALE && Number.isFinite(projectX);
       state = {
         scale,
-        x: (bounds.width - width * scale) / 2,
+        x: mobileFlowStart ? 68 - projectX * scale : (bounds.width - width * scale) / 2,
         y: (bounds.height - height * scale) / 2,
       };
       draw();
@@ -70,6 +74,23 @@
 
     function select(nodeKey, returnFocus = false) {
       const connected = new Set(nodeKey ? [nodeKey] : []);
+      const selectedNode = [...root.querySelectorAll(".graph-node")].find(
+        (node) => node.dataset.nodeKey === nodeKey
+      );
+      if (selectedNode) {
+        (selectedNode.dataset.members || "").split("|").filter(Boolean).forEach(
+          (member) => connected.add(member)
+        );
+        if (selectedNode.dataset.memberOf) connected.add(selectedNode.dataset.memberOf);
+      }
+      root.querySelectorAll(".graph-edge-label").forEach((control) => {
+        control.setAttribute("aria-pressed", "false");
+      });
+      root.querySelectorAll("[data-edge-detail]").forEach((detail) => {
+        detail.hidden = true;
+        detail.setAttribute("aria-hidden", "true");
+      });
+      root.removeAttribute("data-edge-selection");
       root.querySelectorAll(".graph-edge").forEach((edge) => {
         const active = Boolean(
           nodeKey && (edge.dataset.source === nodeKey || edge.dataset.target === nodeKey)
@@ -96,6 +117,36 @@
       if (nodeKey) root.dataset.selection = nodeKey;
       else root.removeAttribute("data-selection");
       if (!nodeKey && returnFocus && lastSelected) lastSelected.focus();
+    }
+
+    function selectEdge(edgeKey) {
+      select(null, false);
+      const edge = [...root.querySelectorAll(".graph-edge")].find(
+        (candidate) => candidate.dataset.edgeKey === edgeKey
+      );
+      if (!edge) return;
+      const endpoints = new Set([edge.dataset.source, edge.dataset.target]);
+      root.querySelectorAll(".graph-edge").forEach((candidate) => {
+        const selected = candidate === edge;
+        candidate.classList.toggle("is-connected", selected);
+        candidate.classList.toggle("is-dimmed", !selected);
+      });
+      root.querySelectorAll(".graph-node").forEach((node) => {
+        node.classList.toggle("is-dimmed", !endpoints.has(node.dataset.nodeKey));
+        node.classList.remove("is-selected");
+        node.setAttribute("aria-pressed", "false");
+      });
+      root.querySelectorAll(".graph-edge-label").forEach((control) => {
+        const selected = control.dataset.edgeSelect === edgeKey;
+        control.setAttribute("aria-pressed", selected ? "true" : "false");
+        if (selected) lastSelected = control;
+      });
+      root.querySelectorAll("[data-edge-detail]").forEach((detail) => {
+        const open = detail.dataset.edgeDetail === edgeKey;
+        detail.hidden = !open;
+        detail.setAttribute("aria-hidden", open ? "false" : "true");
+      });
+      root.dataset.edgeSelection = edgeKey;
     }
 
     viewport.addEventListener("wheel", (event) => {
@@ -151,6 +202,11 @@
         select(node.dataset.nodeKey);
         return;
       }
+      const edge = event.target.closest("[data-edge-select]");
+      if (edge) {
+        selectEdge(edge.dataset.edgeSelect);
+        return;
+      }
       const control = event.target.closest("[data-graph-control]");
       if (!control) return;
       const action = control.dataset.graphControl;
@@ -160,7 +216,7 @@
       if (action === "refresh") document.getElementById("refresh")?.click();
     });
     root.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && root.dataset.selection) {
+      if (event.key === "Escape" && (root.dataset.selection || root.dataset.edgeSelection)) {
         event.preventDefault();
         select(null, true);
       }
