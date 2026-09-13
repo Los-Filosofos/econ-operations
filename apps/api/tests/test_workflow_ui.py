@@ -386,6 +386,8 @@ def fixture_plans(client, count: int) -> list[str]:
 
 
 def dispatch(client, key, outputs, inputs, state, changed):
+    """Post one callback the way the renderer does: a single pattern output is a flat list
+    of resolved ids; a multi-output is a list with one entry (dict or list) per output."""
     response = client.post(
         "/_dash-update-component",
         json={
@@ -397,7 +399,8 @@ def dispatch(client, key, outputs, inputs, state, changed):
         },
     )
     assert response.status_code in {200, 204}, response.text
-    return response.json()["response"] if response.status_code == 200 else None
+    # Dash answers an all-no_update callback with an empty response: nothing changed.
+    return (response.json()["response"] or None) if response.status_code == 200 else None
 
 
 def page_request(client, page, size, previous, search="?mode=fixture"):
@@ -423,7 +426,7 @@ def page_request(client, page, size, previous, search="?mode=fixture"):
 
 
 def test_operations_are_paginated_in_pages_of_fifty_from_the_ledger(client):
-    fixture_plans(client, 101)
+    identifiers = fixture_plans(client, 101)
     workflow = WorkflowOverview.model_validate(overview(client)["overview"])
     assert workflow.total == 101 and workflow.page_size == 100 and not workflow.complete
     page = json.dumps(
@@ -437,7 +440,7 @@ def test_operations_are_paginated_in_pages_of_fifty_from_the_ledger(client):
     third = page_request(client, 3, "50", {"page": 1, "size": 50})
     table = json.dumps(third[pattern(TABLE_ID)]["children"], ensure_ascii=False)
     assert "Movimientos 101–101 de 101 · página 3 de 3." in table
-    assert "test-page-000" in table and "test-page-001" not in table
+    assert identifiers[0] in table and identifiers[1] not in table
     assert third[pattern(PAGE_ID)] == {"total": 3, "value": 3}
     assert third[pattern(WINDOW_ID)]["data"] == {"page": 3, "size": 50}
     # A new page size starts again at page 1 and recomputes the number of pages.
@@ -466,7 +469,7 @@ def test_a_movement_beyond_the_first_page_is_fetched_by_id(client):
     fetched = dispatch(
         client,
         callback_key(client, "movement-detail"),
-        [[{"id": movement_id("detail", oldest), "property": "children"}]],
+        [{"id": movement_id("detail", oldest), "property": "children"}],
         [[{"id": movement_id("fetch", oldest), "property": "data", "value": "fixture"}]],
         [{"id": "url", "property": "search", "value": "?mode=fixture"}],
         pattern(movement_id("fetch", oldest)) + ".data",
@@ -477,7 +480,7 @@ def test_a_movement_beyond_the_first_page_is_fetched_by_id(client):
     missing = dispatch(
         client,
         callback_key(client, "movement-detail"),
-        [[{"id": movement_id("detail", "test-missing"), "property": "children"}]],
+        [{"id": movement_id("detail", "test-missing"), "property": "children"}],
         [[{"id": movement_id("fetch", "test-missing"), "property": "data", "value": "fixture"}]],
         [{"id": "url", "property": "search", "value": "?mode=fixture"}],
         pattern(movement_id("fetch", "test-missing")) + ".data",
@@ -726,14 +729,15 @@ def test_long_timelines_are_sliced_in_pages_of_fifty(client):
         ensure_ascii=False,
     )
     assert "Eventos 1–50 de 120 · página 1 de 3." in detail
-    assert "test-event-049" in detail and "test-event-050" not in detail
+    # Event 49 is recorded at 18:49 El Salvador; event 50 (18:50) belongs to the next page.
+    assert "18:49" in detail and "18:50" not in detail
     assert '"total": 3' in detail and "Páginas del historial del movimiento" in detail
     last = json.dumps(events_panel(record, 3), cls=PlotlyJSONEncoder, ensure_ascii=False)
-    assert "Eventos 101–120 de 120 · página 3 de 3." in last and "test-event-119" in last
+    assert "Eventos 101–120 de 120 · página 3 de 3." in last and "19:59" in last
     sliced = dispatch(
         client,
         callback_key(client, "movement-events"),
-        [[{"id": movement_id("events", record.id), "property": "children"}]],
+        [{"id": movement_id("events", record.id), "property": "children"}],
         [[{"id": movement_id("events-page", record.id), "property": "value", "value": 2}]],
         [
             {
@@ -746,7 +750,7 @@ def test_long_timelines_are_sliced_in_pages_of_fifty(client):
         pattern(movement_id("events-page", record.id)) + ".value",
     )
     page = json.dumps(sliced[pattern(movement_id("events", record.id))], ensure_ascii=False)
-    assert "Eventos 51–100 de 120 · página 2 de 3." in page and "test-event-099" in page
+    assert "Eventos 51–100 de 120 · página 2 de 3." in page and "19:39" in page
     short = live_record()
     short.events = record.events[:50]
     assert "Páginas del historial" not in json.dumps(

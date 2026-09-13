@@ -282,15 +282,10 @@ def test_request_timeline_and_receipt_cards_name_who_recorded_or_declared(eviden
         declared_by_email="gerencia@example.com",
         declared_by_role="gerencia_proyecto",
     )
-    for content in [
-        request_detail(hub, QueryContext(), request.id, registry(movement)),
-        equipment_detail(hub, QueryContext(), machine.id, registry(movement)),
-    ]:
-        result = serialized(content)
-        assert "declarado por gerencia@example.com · Gerencia de Proyecto" in result or (
-            "Declarada por" in result and "gerencia@example.com · Gerencia de Proyecto" in result
-        )
-        assert "Receptor de prueba" in result
+    unit = serialized(equipment_detail(hub, QueryContext(), machine.id, registry(movement)))
+    assert "Declarada por" in unit and "gerencia@example.com · Gerencia de Proyecto" in unit
+    assert "Receptor de prueba" in unit  # The declared receiver stays a separate fact.
     timeline = serialized(request_detail(hub, QueryContext(), request.id, registry(movement)))
+    assert "declarado por gerencia@example.com · Gerencia de Proyecto" in timeline
     assert "registrado por usuario 7 · Logística y Equipo" in timeline
     assert "quién registró o declaró cada hecho" in timeline
