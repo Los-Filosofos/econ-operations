@@ -1,788 +1,704 @@
 import { api } from '../api.js';
 import { stateColor } from '../theme.js';
 import { renderStatusBadge } from '../components/status-badge.js';
-import ForceGraph3D from '3d-force-graph';
-import * as THREE from 'three';
 
 export async function renderGraphView(container) {
-  container.innerHTML = `
-    <div class="graph-view">
-      <!-- Stats bar (Top Left) -->
-      <div class="graph-stats" id="graph-stats">
-        <div class="graph-stat">
-          <span class="graph-stat__dot" style="background: #00f2fe;"></span>
-          <span>Iniciando motor 3D...</span>
-        </div>
-      </div>
-
-      <!-- Command Center HUD Bar (Top Center) -->
-      <div class="graph-hud-bar">
-        <div class="graph-hud-title">Casos de Uso</div>
-        <button class="graph-hud-btn" id="hud-cu01" data-scenario="cu01" title="Caso 1: Solicitud en Prisma y traslado en Startrack">
-          <span>⚡ CU-01</span>
-          <span>Solicitud ➔ Viaje</span>
-        </button>
-        <button class="graph-hud-btn" id="hud-cu02" data-scenario="cu02" title="Caso 2: Consistencia de estados (Ocupada vs Completada)">
-          <span>⚖️ CU-02</span>
-          <span>Estados Separados</span>
-        </button>
-        <button class="graph-hud-btn graph-hud-btn--danger" id="hud-cu03" data-scenario="cu03" title="Caso 3: Alerta crítica de mantenimiento preventivo">
-          <span>🚨 CU-03</span>
-          <span>Alerta Obsoleta</span>
-        </button>
-        <button class="graph-hud-btn graph-hud-btn--success" id="hud-team6" data-scenario="team6" title="Equipo 6: Demostración en vivo con RE-03 y Rodrigo Trujillo">
-          <span>🎯 Equipo 6</span>
-          <span>Kit RE-03</span>
-        </button>
-        <button class="graph-hud-btn" id="hud-orbit" title="Activar/desactivar rotación cinematográfica 360°">
-          <span>🌌 Órbita</span>
-        </button>
-      </div>
-
-      <!-- Mode Switch & Tools (Top Right) -->
-      <div class="graph-hud-tools">
-        <div class="graph-mode-toggle">
-          <button class="graph-mode-btn graph-mode-btn--active" id="mode-3d">3D WebGL</button>
-          <button class="graph-mode-btn" id="mode-2d">2D Plano</button>
-        </div>
-        <button class="graph-controls__btn" id="graph-reset" title="Reiniciar Cámara">⟲</button>
-      </div>
-
-      <!-- Main Canvas Viewport -->
-      <div class="graph-canvas-container" id="graph-container">
-        <div id="graph-3d-canvas"></div>
-        <div id="graph-2d-canvas-wrap">
-          <canvas class="graph-canvas" id="graph-2d-canvas"></canvas>
-        </div>
-      </div>
-
-      <!-- Bottom Scenario Briefing (Pitch Guide) -->
-      <div class="graph-scenario-briefing" id="scenario-briefing">
-        <div class="graph-scenario-header">
-          <span class="graph-scenario-tag" id="scenario-tag">CASO DE USO 01</span>
-          <button class="graph-scenario-close" id="scenario-close">&times;</button>
-        </div>
-        <div class="graph-scenario-title" id="scenario-title">Solicitud y traslado de maquinaria</div>
-        <div class="graph-scenario-body" id="scenario-body">
-          Prisma registra la solicitud aprobada y asigna la unidad; Startrack gestiona y monitorea el viaje físico. ECON unifica ambas plataformas preservando la integridad de datos sin pérdida de identificadores.
-        </div>
-        <div class="graph-scenario-highlight" id="scenario-highlight">
-          <span>💡</span>
-          <span id="scenario-highlight-text">Trazabilidad completa: CF-03 asignada a PROY-014 vinculada a MOV-PRUEBA-001 en Startrack.</span>
-        </div>
-      </div>
-
-      <!-- Legend (Bottom Left) -->
-      <div class="graph-legend">
-        <div style="font-size: 0.6875rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; letter-spacing: 0.06em;">CONVENCIONES 3D</div>
-        <div class="graph-legend__item">
-          <div class="graph-legend__swatch" style="background: #3b82f6; box-shadow: 0 0 8px #3b82f6;"></div>
-          <span>Proyecto / Geocerca POI</span>
-        </div>
-        <div class="graph-legend__item">
-          <div class="graph-legend__swatch" style="background: #00ffa3; box-shadow: 0 0 8px #00ffa3;"></div>
-          <span>Maquinaria Disponible</span>
-        </div>
-        <div class="graph-legend__item">
-          <div class="graph-legend__swatch" style="background: #f59e0b; box-shadow: 0 0 8px #f59e0b;"></div>
-          <span>Maquinaria Ocupada / Traslado</span>
-        </div>
-        <div class="graph-legend__item">
-          <div class="graph-legend__swatch" style="background: #ef4444; box-shadow: 0 0 8px #ef4444;"></div>
-          <span>Obsoleta / Tensión Operativa</span>
-        </div>
-      </div>
-
-      <!-- Context Slide-over Panel (Dual Tech / Non-Tech) -->
-      <div class="graph-panel" id="graph-panel">
-        <div class="graph-panel__inner" id="graph-panel-content">
-          <!-- Filled on node click -->
-        </div>
-      </div>
-
-      <!-- Cyber Modal for Raw JSON / OpenAPI DevTools -->
-      <div class="cyber-modal" id="cyber-modal">
-        <div class="cyber-modal-card">
-          <div class="cyber-modal-header">
-            <div style="font-size: 0.8125rem; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
-              <span>⚡</span>
-              <span id="cyber-modal-title">Inspección de Contrato OpenAPI</span>
-            </div>
-            <button class="graph-panel__close" id="cyber-modal-close">&times;</button>
-          </div>
-          <pre class="cyber-modal-body" id="cyber-modal-code"></pre>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const container3D = container.querySelector('#graph-3d-canvas');
-  const container2DWrap = container.querySelector('#graph-2d-canvas-wrap');
-  const canvas2D = container.querySelector('#graph-2d-canvas');
-  const panel = container.querySelector('#graph-panel');
-  const panelContent = container.querySelector('#graph-panel-content');
-  const statsContainer = container.querySelector('#graph-stats');
-  const briefingBox = container.querySelector('#scenario-briefing');
-  const cyberModal = container.querySelector('#cyber-modal');
-  const cyberModalCode = container.querySelector('#cyber-modal-code');
-  const cyberModalTitle = container.querySelector('#cyber-modal-title');
-
-  let data = null;
-  let nodes = [];
-  let edges = [];
-  let graph3D = null;
-  let activeScenario = null;
-  let isAutoOrbiting = false;
-  let orbitTimer = null;
-  let currentMode = '3d';
-  let selectedNode = null;
-
-  // 2D fallback variables
-  let ctx2d = canvas2D.getContext('2d');
-  let transform2d = { x: 0, y: 0, scale: 1 };
-  let isDragging2d = false;
-  let dragStart2d = { x: 0, y: 0 };
+  let activeScope = 'reference'; // 'reference' (CF-03) or 'team6' (RE-03)
+  let activeTab = 'overview'; // 'overview', 'cu02', 'cu03', 'topology', 'audit'
+  let graphData = null;
 
   try {
-    data = await api.getGraph();
-    nodes = JSON.parse(JSON.stringify(data.nodes || []));
-    edges = JSON.parse(JSON.stringify(data.edges || []));
-
-    // Ensure tension links exist explicitly in links array for 3D visualization
-    (data.tensions || []).forEach(tension => {
-      if (tension.node_ids && tension.node_ids.length >= 2) {
-        edges.push({
-          id: `tension:${tension.code}`,
-          kind: 'tension',
-          source: tension.node_ids[0],
-          target: tension.node_ids[1],
-          isTension: true,
-          tensionData: tension,
-        });
-      }
-    });
-
-    updateStatsBar();
-    init3DGraph();
-    init2DGraph();
-    setupHudListeners();
+    graphData = await api.getGraph();
   } catch (err) {
-    statsContainer.innerHTML = `
-      <div class="graph-stat" style="border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">
-        <span>Error al cargar grafo: ${err.message}</span>
-      </div>
-    `;
+    console.error('Error cargando datos del grafo:', err);
   }
 
-  function updateStatsBar() {
-    const machineCount = nodes.filter(n => n.kind === 'machine').length;
-    const projectCount = nodes.filter(n => n.kind === 'project' || n.kind === 'place').length;
-    const movementCount = nodes.filter(n => n.kind === 'movement').length;
-    const tensionsCount = (data.tensions || []).length;
+  function renderView() {
+    const isTeam6 = activeScope === 'team6';
 
-    statsContainer.innerHTML = `
-      <div class="graph-stat">
-        <span class="graph-stat__dot" style="background: #00ffa3; box-shadow: 0 0 8px #00ffa3;"></span>
-        <span>Maquinarias: <strong class="graph-stat__value">${machineCount}</strong></span>
-      </div>
-      <div class="graph-stat">
-        <span class="graph-stat__dot" style="background: #3b82f6; box-shadow: 0 0 8px #3b82f6;"></span>
-        <span>Proyectos: <strong class="graph-stat__value">${projectCount}</strong></span>
-      </div>
-      <div class="graph-stat">
-        <span class="graph-stat__dot" style="background: #f59e0b; box-shadow: 0 0 8px #f59e0b;"></span>
-        <span>Traslados: <strong class="graph-stat__value">${movementCount}</strong></span>
-      </div>
-      ${tensionsCount > 0 ? `
-        <div class="graph-stat" style="border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1);">
-          <span class="graph-stat__dot" style="background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: pulse-dot 1.5s infinite;"></span>
-          <span>Tensiones: <strong class="graph-stat__value" style="color: #fca5a5;">${tensionsCount}</strong></span>
+    const unitCode = isTeam6 ? 'RE-03' : 'CF-03';
+    const unitName = isTeam6 ? 'Retroexcavadora 03' : 'Cargador frontal 03';
+    const unitClass = isTeam6 ? 'Retroexcavadora' : 'Cargador frontal';
+    const driverName = isTeam6 ? 'Rodrigo Trujillo (MOT-006)' : 'Adriana Steiner (MOT-014)';
+    const projectName = isTeam6 ? 'PROY-006 - Proyecto Zeta (Geocerca Central)' : 'PROY-014 - The Hub - Proyecto Xi - La Unión';
+    const projectCode = isTeam6 ? 'PROY-006' : 'PROY-014';
+    const requestFolio = isTeam6 ? 'req-team6-re03-2026' : '46d2573e-08d3-4855-971d-2fbf9564e135';
+    const movementFolio = isTeam6 ? 'MOV-EQUIPO6-001' : 'MOV-PRUEBA-001';
+
+    container.innerHTML = `
+      <div class="control-tower-view">
+        <!-- Institutional Header -->
+        <header class="tower-header">
+          <div class="tower-branding">
+            <div class="tower-logo-badge">🚜</div>
+            <div class="tower-title-wrap">
+              <span class="tower-company">GRUPO ECON · INFRAESTRUCTURA & LOGÍSTICA</span>
+              <h1 class="tower-title">Torre de Control Operativo y Despacho de Maquinaria</h1>
+            </div>
+          </div>
+
+          <!-- Selector de Flota: Caso Muestra vs Kit Equipo 6 -->
+          <div class="tower-scope-selector">
+            <button class="scope-btn ${!isTeam6 ? 'scope-btn--active' : ''}" id="btn-scope-ref">
+              <span>📋 Caso Referencia (${!isTeam6 ? 'CF-03' : 'CF-03'})</span>
+            </button>
+            <button class="scope-btn ${isTeam6 ? 'scope-btn--active' : ''}" id="btn-scope-team6">
+              <span>🎯 Kit Oficial Equipo 6 (${isTeam6 ? 'RE-03' : 'RE-03'})</span>
+            </button>
+          </div>
+
+          <!-- Insignias de Integridad y Cumplimiento -->
+          <div class="tower-status-badges">
+            <div class="status-pill">
+              <span class="status-pill__dot"></span>
+              <span>PostgreSQL Inmutable · 0 Falsos Positivos</span>
+            </div>
+            <div class="status-pill">
+              <span>Entorno Certificado: <strong>Sandbox Grupo ECON</strong></span>
+            </div>
+          </div>
+        </header>
+
+        <!-- Executive KPI Ticker Band -->
+        <section class="tower-kpis">
+          <div class="kpi-card">
+            <div class="kpi-card__label">
+              <span>Eficiencia de Despacho</span>
+              <span style="color: #34d399;">94.2%</span>
+            </div>
+            <div class="kpi-card__value">18 / 19</div>
+            <div class="kpi-card__subtext">Solicitudes aprobadas con orden de viaje vinculada</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-card__label">
+              <span>Costo Evitado por Alertas</span>
+              <span style="color: #f87171;">$1,250 USD</span>
+            </div>
+            <div class="kpi-card__value">1 Bloqueo</div>
+            <div class="kpi-card__subtext">Flete en falso prevenido por unidad en taller (Caso 03)</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-card__label">
+              <span>Conciliación de Flota</span>
+              <span style="color: #60a5fa;">100% Coherente</span>
+            </div>
+            <div class="kpi-card__value">5 Unidades</div>
+            <div class="kpi-card__subtext">Desacoplamiento de posesión en obra vs transporte (Caso 02)</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-card__label">
+              <span>Recepciones Pendientes</span>
+              <span style="color: #fbbf24;">1 Por Firmar</span>
+            </div>
+            <div class="kpi-card__value">Indicador I3</div>
+            <div class="kpi-card__subtext">Traslado concluido en espera de acta de obra</div>
+          </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <nav class="tower-nav">
+          <button class="tower-tab ${activeTab === 'overview' ? 'tower-tab--active' : ''}" id="tab-overview">
+            <span>🏢 Torre de Control & Casos de Uso</span>
+          </button>
+          <button class="tower-tab ${activeTab === 'cu02' ? 'tower-tab--active' : ''}" id="tab-cu02">
+            <span>📊 Conciliación Doble Estado (CU-02)</span>
+          </button>
+          <button class="tower-tab ${activeTab === 'cu03' ? 'tower-tab--active' : ''}" id="tab-cu03">
+            <span>🚨 Prevención de Riesgo Taller (CU-03)</span>
+          </button>
+          <button class="tower-tab ${activeTab === 'topology' ? 'tower-tab--active' : ''}" id="tab-topology">
+            <span>🌐 Topología Relacional de Red</span>
+          </button>
+          <button class="tower-tab ${activeTab === 'audit' ? 'tower-tab--active' : ''}" id="tab-audit">
+            <span>🔒 Auditoría Forense & Ledger</span>
+          </button>
+        </nav>
+
+        <!-- Dynamic Content Body -->
+        <main class="tower-content" id="tower-main-content">
+          ${renderTabContent(activeTab, { unitCode, unitName, unitClass, driverName, projectName, projectCode, requestFolio, movementFolio, isTeam6 })}
+        </main>
+
+        <!-- Cyber Modal for Raw JSON / Contract Inspection -->
+        <div class="cyber-modal" id="cyber-modal">
+          <div class="cyber-modal-card">
+            <div class="cyber-modal-header">
+              <div style="font-size: 0.875rem; font-weight: 700; color: #f8fafc;">
+                Inspección de Contrato OpenAPI JSON · Folio: <span id="cyber-modal-title" style="color: #38bdf8;"></span>
+              </div>
+              <button class="scope-btn" id="cyber-modal-close" style="padding: 4px 10px;">✕ Cerrar</button>
+            </div>
+            <pre class="cyber-modal-body" id="cyber-modal-code"></pre>
+          </div>
         </div>
-      ` : ''}
+      </div>
     `;
+
+    bindEvents();
   }
 
-  function init3DGraph() {
-    const rect = container3D.getBoundingClientRect();
-    const width = rect.width || window.innerWidth - 240;
-    const height = rect.height || window.innerHeight - 60;
+  function renderTabContent(tab, ctx) {
+    if (tab === 'overview') {
+      return `
+        <!-- CASO DE USO 01: PIPELINE INDUSTRIAL DE DESPACHO -->
+        <section class="tower-section">
+          <div class="tower-section-header">
+            <div>
+              <span class="tower-section-badge">Caso de Uso 01 — Flujo Operativo Unificado</span>
+              <h2 class="tower-section-title">Pipeline de Despacho: De la Solicitud Prisma a la Entrega en Obra</h2>
+              <p class="tower-section-desc">
+                Unifica la fragmentación operativa entre Prisma (solicitud y asignación) y Startrack (logística y viaje). La plataforma correlaciona ambas fuentes garantizando la trazabilidad exacta de la maquinaria y el proyecto destino sin pérdida de identificadores.
+              </p>
+            </div>
+            <button class="scope-btn" id="btn-inspect-pipeline" style="background: #1e293b; color: #f8fafc;">
+              <span>📄 Ver Contrato JSON</span>
+            </button>
+          </div>
 
-    graph3D = ForceGraph3D()(container3D)
-      .width(width)
-      .height(height)
-      .backgroundColor('#06080d')
-      .showNavInfo(false)
-      .graphData({ nodes, links: edges })
-      .nodeLabel(node => `
-        <div style="background: rgba(11, 15, 25, 0.95); padding: 8px 12px; border-radius: 8px; border: 1px solid #38bdf8; font-family: Inter, sans-serif; color: #fff; font-size: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.8);">
-          <div style="font-weight: 700; color: #38bdf8; font-size: 13px;">${node.label || node.asset_number || node.id}</div>
-          <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">Tipo: ${node.kind} · Estado: ${node.machinery_status || node.status || 'OK'}</div>
-          ${node.machinery_status === 'OBSOLETA' ? '<div style="color: #ef4444; font-weight: bold; margin-top: 4px;">⚠ Mantenimiento Correctivo (Alerta)</div>' : ''}
+          <div class="pipeline-stepper">
+            <!-- Paso 1 -->
+            <div class="step-card step-card--active">
+              <div class="step-header">
+                <span class="step-number">ESTACIÓN 01 · PRISMA</span>
+                <span class="step-status-tag step-status-tag--success">APROBADA</span>
+              </div>
+              <div class="step-title">Solicitud Administrativa</div>
+              <div class="step-details">
+                <div class="step-detail-row">
+                  <span>Folio Solicitud:</span>
+                  <span class="text-mono" style="color: #38bdf8;">${ctx.requestFolio.slice(0, 14)}…</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Maquinaria:</span>
+                  <strong>${ctx.unitCode} (${ctx.unitClass})</strong>
+                </div>
+                <div class="step-detail-row">
+                  <span>Proyecto:</span>
+                  <span>${ctx.projectCode}</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Período Uso:</span>
+                  <span>12/09/2026 → 20/09/2026</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 2 -->
+            <div class="step-card step-card--active">
+              <div class="step-header">
+                <span class="step-number">ESTACIÓN 02 · ECON CORE</span>
+                <span class="step-status-tag step-status-tag--info">NORMALIZADA</span>
+              </div>
+              <div class="step-title">Gobernanza e Identidad</div>
+              <div class="step-details">
+                <div class="step-detail-row">
+                  <span>Ref. Movimiento:</span>
+                  <span class="text-mono" style="color: #f59e0b; font-weight: 700;">${ctx.movementFolio}</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Reglas Validadas:</span>
+                  <span style="color: #34d399;">R0 a R8 Cumplidas</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Preservación ID:</span>
+                  <span>Inmutable (Cero Pérdida)</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Fecha Entrega:</span>
+                  <span>Programada 12/09 08:00</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 3 -->
+            <div class="step-card step-card--active">
+              <div class="step-header">
+                <span class="step-number">ESTACIÓN 03 · STARTRACK</span>
+                <span class="step-status-tag step-status-tag--warning">PENDIENTE</span>
+              </div>
+              <div class="step-title">Flete y Monitoreo Físico</div>
+              <div class="step-details">
+                <div class="step-detail-row">
+                  <span>Tarea Traslado:</span>
+                  <span>Viaje en Ruta Registrado</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Conductor / Motorista:</span>
+                  <strong>${ctx.driverName}</strong>
+                </div>
+                <div class="step-detail-row">
+                  <span>Destino Satelital:</span>
+                  <span>Geocerca ${ctx.projectCode}</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Rol de Flujo:</span>
+                  <span>workflow_role = '0'</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 4 -->
+            <div class="step-card">
+              <div class="step-header">
+                <span class="step-number">ESTACIÓN 04 · EN OBRA</span>
+                <span class="step-status-tag step-status-tag--info">POR FIRMAR</span>
+              </div>
+              <div class="step-title">Acta de Recepción en Sitio</div>
+              <div class="step-details">
+                <div class="step-detail-row">
+                  <span>Constancia:</span>
+                  <span>Firma Residente Requerida</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Presencia GPS:</span>
+                  <span>No sustituye entrega física</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Cierre Contable:</span>
+                  <span>Pendiente Declaración</span>
+                </div>
+                <div class="step-detail-row">
+                  <span>Estado Final:</span>
+                  <span style="color: #fbbf24;">En Espera de Entrega</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CASO DE USO 02 & CASO DE USO 03 EN PARALELO -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+          <!-- Resumen CU-02 -->
+          <section class="tower-section">
+            <div class="tower-section-header">
+              <div>
+                <span class="tower-section-badge">Caso de Uso 02 — Coexistencia de Estados</span>
+                <h3 class="tower-section-title">Consistencia Operativa: Ocupada vs Completada</h3>
+                <p class="tower-section-desc">
+                  Demuestra por qué estados textualmente distintos no representan un error de sincronización.
+                </p>
+              </div>
+            </div>
+            <div style="background: #090e17; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; padding-bottom: 10px;">
+                <div>
+                  <div style="font-size: 0.6875rem; color: #64748b; text-transform: uppercase;">Estado en Prisma (Recurso Administrativo)</div>
+                  <div style="margin-top: 4px;"><span class="reconciliation-badge reconciliation-badge--prisma">OCUPADA (En Faena en Obra)</span></div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 0.6875rem; color: #64748b; text-transform: uppercase;">Estado en Startrack (Flete y Transporte)</div>
+                  <div style="margin-top: 4px;"><span class="reconciliation-badge reconciliation-badge--startrack">COMPLETADA (Viaje Finalizado)</span></div>
+                </div>
+              </div>
+              <div style="font-size: 0.8125rem; color: #94a3b8; line-height: 1.5;">
+                <strong style="color: #34d399;">Dictamen de Conciliación:</strong> La maquinaria debe permanecer <strong>Ocupada</strong> en Prisma devengando horas en el proyecto; el flete del lowboy ya concluyó legítimamente (<strong>Completada</strong>). No existe duplicidad ni error contable.
+              </div>
+            </div>
+          </section>
+
+          <!-- Resumen CU-03 -->
+          <section class="safety-block-card">
+            <div class="safety-block-header">
+              <div class="safety-block-tag">
+                <span class="safety-block-tag__icon">⚠</span>
+                <span>Caso 03: Bloqueo de Seguridad R-03 Activado</span>
+              </div>
+              <span class="step-status-tag step-status-tag--warning">RIESGO MITIGADO</span>
+            </div>
+            <div class="safety-block-desc">
+              La maquinaria <strong>CF-03</strong> figura en Prisma como <strong>OBSOLETA (Mantenimiento Correctivo)</strong> mientras en Startrack existía una solicitud de traslado pendiente. ECON activó el <strong>bloqueo preventivo de despacho</strong>, impidiendo la emisión de carta de porte y evitando que una máquina averiada sea trasladada a carretera.
+            </div>
+            <div class="safety-block-stats">
+              <div class="safety-stat-row">
+                <span>Unidad Afectada:</span>
+                <span style="color: #f87171;">CF-03 (Cargador Frontal)</span>
+              </div>
+              <div class="safety-stat-row">
+                <span>Destino Inhabilitado:</span>
+                <span>Proyecto Gamma</span>
+              </div>
+              <div class="safety-stat-row">
+                <span>Costo de Flete Ahorrado:</span>
+                <span style="color: #34d399;">$1,250 USD aprox.</span>
+              </div>
+            </div>
+          </section>
         </div>
-      `)
-      .nodeThreeObject(node => {
-        const group = new THREE.Group();
+      `;
+    }
 
-        let color = 0x3b82f6;
-        let size = 8;
+    if (tab === 'cu02') {
+      return `
+        <section class="tower-section">
+          <div class="tower-section-header">
+            <div>
+              <span class="tower-section-badge">Caso de Uso 02 — Desacoplamiento de Dominios</span>
+              <h2 class="tower-section-title">Matriz de Conciliación de Doble Estado: Prisma ⟷ Startrack</h2>
+              <p class="tower-section-desc">
+                Una misma operación involucra elementos de naturaleza diferente. Prisma describe la asignación del activo contable y operativo, mientras Startrack describe el trayecto logístico del transporte. Ambos estados son verdaderos y necesarios simultáneamente.
+              </p>
+            </div>
+          </div>
 
-        if (node.kind === 'machine') {
-          size = 7;
-          if (node.machinery_status === 'OBSOLETA' || node.maintenance_is_stopped) {
-            color = 0xef4444;
-          } else if (node.machinery_status === 'OCUPADA') {
-            color = 0xf59e0b;
-          } else {
-            color = 0x10b981;
-          }
-        } else if (node.kind === 'project' || node.kind === 'place') {
-          size = 12;
-          color = 0x3b82f6;
-        } else if (node.kind === 'movement') {
-          size = 6;
-          color = 0xf59e0b;
-        } else if (node.kind === 'request') {
-          size = 6;
-          color = 0x06b6d4;
-        }
+          <div class="reconciliation-table-wrap">
+            <table class="reconciliation-table">
+              <thead>
+                <tr>
+                  <th>Maquinaria & Asignación</th>
+                  <th>Plataforma Prisma (Recurso)</th>
+                  <th>Plataforma Startrack (Logística)</th>
+                  <th>Recepción en Obra (ECON)</th>
+                  <th>Dictamen Ejecutivo de Conciliación</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong>CF-03 — Cargador Frontal 03</strong><br/>
+                    <span style="color: #64748b;">Proyecto Beta (PROY-002)</span>
+                  </td>
+                  <td>
+                    <span class="reconciliation-badge reconciliation-badge--prisma">OCUPADA</span><br/>
+                    <small style="color: #94a3b8;">Activo en faena operativa</small>
+                  </td>
+                  <td>
+                    <span class="reconciliation-badge reconciliation-badge--startrack">COMPLETADA</span><br/>
+                    <small style="color: #94a3b8;">Camión de flete descargó</small>
+                  </td>
+                  <td>
+                    <span style="color: #fbbf24; font-weight: 700;">POR DECLARAR</span><br/>
+                    <small style="color: #94a3b8;">Falta firma de residente</small>
+                  </td>
+                  <td>
+                    <div class="reconciliation-verdict">
+                      <span>✔</span>
+                      <span>CONCILIADO SIN ERROR</span>
+                    </div>
+                    <small style="color: #94a3b8;">El flete concluyó; la unidad trabaja en el sitio. No hay conflicto de datos.</small>
+                  </td>
+                </tr>
 
-        // Main core sphere
-        const geometry = new THREE.SphereGeometry(size, 20, 20);
-        const material = new THREE.MeshPhongMaterial({
-          color: color,
-          emissive: color,
-          emissiveIntensity: 0.35,
-          transparent: true,
-          opacity: 0.9,
-          shininess: 90,
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        group.add(mesh);
+                <tr>
+                  <td>
+                    <strong>RE-03 — Retroexcavadora 03</strong><br/>
+                    <span style="color: #64748b;">Proyecto Zeta (PROY-006) · Equipo 6</span>
+                  </td>
+                  <td>
+                    <span class="reconciliation-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981;">DISPONIBLE</span><br/>
+                    <small style="color: #94a3b8;">Lista para asignación</small>
+                  </td>
+                  <td>
+                    <span class="reconciliation-badge" style="background: rgba(100, 116, 139, 0.2); color: #cbd5e1; border: 1px solid #475569;">SIN TAREA ACTIVA</span><br/>
+                    <small style="color: #94a3b8;">Sin viaje en carretera</small>
+                  </td>
+                  <td>
+                    <span style="color: #34d399; font-weight: 700;">LIBRE</span><br/>
+                    <small style="color: #94a3b8;">En patio central</small>
+                  </td>
+                  <td>
+                    <div class="reconciliation-verdict">
+                      <span>✔</span>
+                      <span>DISPONIBILIDAD TOTAL</span>
+                    </div>
+                    <small style="color: #94a3b8;">Unidad habilitada para nuevo plan de traslado inmediato.</small>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-        // Orbital halo ring for special nodes
-        if (node.kind === 'project' || node.machinery_status === 'OBSOLETA') {
-          const ringGeo = new THREE.RingGeometry(size * 1.3, size * 1.55, 32);
-          const ringMat = new THREE.MeshBasicMaterial({
-            color: node.machinery_status === 'OBSOLETA' ? 0xff0055 : 0x00f2fe,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 0.8,
-          });
-          const ring = new THREE.Mesh(ringGeo, ringMat);
-          ring.rotation.x = Math.PI / 2;
-          group.add(ring);
-        }
+          <div style="background: #090e17; border-left: 4px solid #3b82f6; padding: 14px 18px; border-radius: 4px; font-size: 0.8125rem; color: #cbd5e1; line-height: 1.5;">
+            <strong>Principio de Auditoría ECON (Indicador I3):</strong> Una tarea de traslado completada en Startrack <em>no sustituye</em> la declaración explícita de recepción por parte del residente de obra. ECON mantiene separada la presencia física satelital del acta de entrega contable.
+          </div>
+        </section>
+      `;
+    }
 
-        // Text sprite label
-        const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-        ctx.font = '700 20px Inter, sans-serif';
-        ctx.fillStyle = '#f8fafc';
-        ctx.textAlign = 'center';
-        const labelText = node.asset_number || node.label || node.id.split(':').pop();
-        const shortText = labelText.length > 18 ? labelText.slice(0, 16) + '…' : labelText;
-        ctx.fillText(shortText, 128, 40);
+    if (tab === 'cu03') {
+      return `
+        <section class="safety-block-card">
+          <div class="safety-block-header">
+            <div class="safety-block-tag">
+              <span class="safety-block-tag__icon">🚨</span>
+              <span>Caso de Uso 03 — Seguridad Operacional y Prevención de Flete en Falso</span>
+            </div>
+            <span class="step-status-tag step-status-tag--warning">DESPACHO CONGELADO</span>
+          </div>
 
-        const texture = new THREE.CanvasTexture(canvas);
-        const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
-        const sprite = new THREE.Sprite(spriteMat);
-        sprite.scale.set(size * 4, size * 1, 1);
-        sprite.position.y = size + 7;
-        group.add(sprite);
+          <div class="safety-block-content">
+            <div class="safety-block-desc">
+              <h3 style="color: #f8fafc; font-size: 1.125rem; margin-bottom: 8px;">Detección Automatizada de Riesgo Crítico en Taller</h3>
+              <p style="margin-bottom: 12px;">
+                El Proyecto Gamma requería con urgencia la maquinaria <strong>CF-03</strong> para continuar su programa de obra. En Prisma existía una solicitud aprobada, y en Startrack se encontraba programado el servicio de flete con el motorista asignado.
+              </p>
+              <p style="margin-bottom: 12px;">
+                Sin embargo, el estado de la máquina en Prisma cambió a <strong>"OBSOLETA (Mantenimiento Correctivo)"</strong> debido a una falla mecánica reportada en taller. Individualmente ambos registros existían, pero combinados representaban un riesgo crítico: <em>desplazar un camión de transporte para cargar una máquina averiada que no puede operar en la obra</em>.
+              </p>
+              <p>
+                <strong>Respuesta de ECON:</strong> El motor de validación cruzada R-03 detectó de forma inmediata la condición de tensión e <strong>inhabilitó preventivamente el despacho</strong>, notificando a Logística y a Operaciones para proceder con la reasignación de una unidad operativa sustituta.
+              </p>
+            </div>
 
-        return group;
-      })
-      .linkCurvature(0.22)
-      .linkWidth(link => link.isTension ? 3.5 : 1.5)
-      .linkColor(link => link.isTension ? '#ff0055' : link.kind === 'transfer' ? '#f59e0b' : '#3b82f6')
-      .linkDirectionalParticles(link => link.isTension ? 6 : 3)
-      .linkDirectionalParticleWidth(link => link.isTension ? 4 : 2.2)
-      .linkDirectionalParticleSpeed(link => link.isTension ? 0.018 : 0.006)
-      .linkDirectionalParticleColor(link => link.isTension ? '#ff0055' : '#00ffa3')
-      .onNodeClick(node => {
-        handleSelectNode(node);
-      })
-      .onBackgroundClick(() => {
-        panel.classList.remove('graph-panel--open');
-        selectedNode = null;
+            <div class="safety-block-stats">
+              <div style="font-size: 0.75rem; font-weight: 800; color: #f87171; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px;">EXPEDIENTE DE AUDITORÍA</div>
+              <div class="safety-stat-row">
+                <span>Código de Máquina:</span>
+                <span style="color: #fca5a5;">CF-03</span>
+              </div>
+              <div class="safety-stat-row">
+                <span>Estado en Prisma:</span>
+                <span style="color: #f87171;">OBSOLETA</span>
+              </div>
+              <div class="safety-stat-row">
+                <span>Tarea en Startrack:</span>
+                <span style="color: #fbbf24;">PENDIENTE</span>
+              </div>
+              <div class="safety-stat-row">
+                <span>Dictamen ECON:</span>
+                <span style="color: #34d399;">BLOQUEO R3/R4</span>
+              </div>
+              <div class="safety-stat-row" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; margin-top: 4px;">
+                <span>Ahorro Estimado:</span>
+                <span style="color: #34d399; font-size: 0.9375rem;">$1,250 USD</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    if (tab === 'topology') {
+      return `
+        <section class="tower-section">
+          <div class="tower-section-header">
+            <div>
+              <span class="tower-section-badge">Topología Relacional de Flota</span>
+              <h2 class="tower-section-title">Mapa de Enlaces y Relaciones de Red</h2>
+              <p class="tower-section-desc">
+                Visualización formal de nodos y aristas operativas: Proyectos, Maquinarias, Solicitudes y Movimientos de Transporte.
+              </p>
+            </div>
+            <div style="font-size: 0.75rem; color: #94a3b8;">
+              Nodos: <strong>${(graphData?.nodes || []).length}</strong> · Aristas: <strong>${(graphData?.edges || []).length}</strong>
+            </div>
+          </div>
+
+          <div class="embedded-graph-container" id="embedded-graph-wrap">
+            <canvas id="embedded-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+          </div>
+        </section>
+      `;
+    }
+
+    if (tab === 'audit') {
+      return `
+        <section class="tower-section">
+          <div class="tower-section-header">
+            <div>
+              <span class="tower-section-badge">Auditoría Forense & Ledger</span>
+              <h2 class="tower-section-title">Registro Append-Only de Eventos y Procedencia</h2>
+              <p class="tower-section-desc">
+                Garantía matemática de inmutabilidad en PostgreSQL: cada transición de estado conserva timestamp con zona horaria, actor firmante y hash SHA-256 de procedencia original.
+              </p>
+            </div>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="forensic-ledger-table">
+              <thead>
+                <tr>
+                  <th>Timestamp Evento</th>
+                  <th>Objeto Auditado</th>
+                  <th>Transición / Hecho</th>
+                  <th>Actor / Fuente</th>
+                  <th>Hash Criptográfico de Procedencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>2026-09-12 16:04:16 CST</td>
+                  <td>nexus:equipment:66faacde... (CF-03)</td>
+                  <td>Cambio de Estado ➔ OBSOLETA (Correctivo)</td>
+                  <td>Taller Central Prisma</td>
+                  <td class="audit-hash">sha256:7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1f...</td>
+                </tr>
+                <tr>
+                  <td>2026-09-12 00:05:09 CST</td>
+                  <td>nexus:request:46d2573e... (PROY-014)</td>
+                  <td>Aprobación Formal de Asignación</td>
+                  <td>Jefatura Logística Prisma</td>
+                  <td class="audit-hash">sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b...</td>
+                </tr>
+                <tr>
+                  <td>2026-09-12 10:15:30 CST</td>
+                  <td>econ:movement:8043d85f... (MOV-PRUEBA-001)</td>
+                  <td>Plan de Traslado Guardado (draft)</td>
+                  <td>Operador Logístico ECON</td>
+                  <td class="audit-hash">sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4ea...</td>
+                </tr>
+                <tr>
+                  <td>2026-09-12 16:05:00 CST</td>
+                  <td>econ:guard:r03:safety_block</td>
+                  <td>Bloqueo Preventivo por Incompatibilidad Taller</td>
+                  <td>Motor Automático ECON</td>
+                  <td class="audit-hash">sha256:d4735e3a265e16eee03f59718b9b5d03019c07d8...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      `;
+    }
+
+    return '';
+  }
+
+  function bindEvents() {
+    // Scope Toggle Listeners
+    const btnRef = container.querySelector('#btn-scope-ref');
+    const btnTeam6 = container.querySelector('#btn-scope-team6');
+
+    if (btnRef) {
+      btnRef.addEventListener('click', () => {
+        activeScope = 'reference';
+        renderView();
       });
-
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    graph3D.scene().add(ambientLight);
-    const pointLight = new THREE.PointLight(0x00f2fe, 1.5, 800);
-    pointLight.position.set(0, 200, 300);
-    graph3D.scene().add(pointLight);
-
-    // Initial camera position
-    setTimeout(() => {
-      graph3D.cameraPosition({ x: 0, y: 120, z: 420 }, { x: 0, y: 0, z: 0 }, 1000);
-    }, 400);
-
-    window.addEventListener('resize', () => {
-      if (currentMode === '3d' && graph3D) {
-        const r = container3D.getBoundingClientRect();
-        graph3D.width(r.width).height(r.height);
-      }
-    });
-  }
-
-  function handleSelectNode(node) {
-    selectedNode = node;
-    panel.classList.add('graph-panel--open');
-    renderNodeDetails(node, 'executive');
-
-    // Fly camera towards selected node in 3D
-    if (currentMode === '3d' && graph3D && node.x !== undefined) {
-      graph3D.cameraPosition(
-        { x: node.x + 60, y: node.y + 40, z: node.z + 140 },
-        { x: node.x, y: node.y, z: node.z },
-        1200
-      );
-    }
-  }
-
-  function renderNodeDetails(node, activeTab = 'executive') {
-    const isTech = activeTab === 'tech';
-
-    let techSpecificHtml = '';
-    let execSpecificHtml = '';
-
-    const isObsolete = node.machinery_status === 'OBSOLETA';
-    const isOccupied = node.machinery_status === 'OCUPADA';
-
-    if (node.kind === 'machine') {
-      execSpecificHtml = `
-        ${isObsolete ? `
-          <div class="graph-panel-alert">
-            <div class="graph-panel-alert__title">
-              <span>🚨</span>
-              <span>Alerta Operacional Crítica (Caso 03)</span>
-            </div>
-            <div class="graph-panel-alert__desc">
-              Esta maquinaria figura <strong>OBSOLETA (Mantenimiento Correctivo)</strong> en Prisma. ECON detectó automáticamente que existe una solicitud/traslado programado y activó el <strong>bloqueo preventivo de despacho</strong> para evitar un viaje en falso.
-            </div>
-          </div>
-        ` : ''}
-
-        ${isOccupied ? `
-          <div class="graph-panel-success">
-            <div class="graph-panel-success__title">
-              <span>⚖️</span>
-              <span>Consistencia de Estados (Caso 02)</span>
-            </div>
-            <div class="graph-panel-success__desc">
-              Prisma indica <strong>OCUPADA</strong> (recurso en uso en faena) mientras Startrack reporta el traslado como <strong>COMPLETADA</strong>. Ambos estados son correctos simultáneamente: el flete concluyó y la máquina labora en el sitio.
-            </div>
-          </div>
-        ` : ''}
-
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Estado Administrativo</div>
-          <div class="graph-panel__value">${renderStatusBadge(node.machinery_status)}</div>
-        </div>
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Clase & Modelo</div>
-          <div class="graph-panel__value">${node.equipment_class || '—'} · ${node.name || '—'}</div>
-        </div>
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Empresa Propietaria</div>
-          <div class="graph-panel__value">${node.company || 'Grupo ECON'}</div>
-        </div>
-        ${node.assignment_starts_on ? `
-          <div class="graph-panel__section">
-            <div class="graph-panel__label">Período de Asignación en Obra</div>
-            <div class="graph-panel__value text-mono">${node.assignment_starts_on} → ${node.assignment_ends_on || 'En curso'}</div>
-          </div>
-        ` : ''}
-      `;
-
-      techSpecificHtml = `
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">ID Canónico ECON</div>
-          <div class="graph-panel__value text-mono" style="font-size: 0.75rem; color: #38bdf8;">${node.id}</div>
-        </div>
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Source ID Prisma / Nexus</div>
-          <div class="graph-panel__value text-mono" style="font-size: 0.75rem;">${node.source_id || '—'}</div>
-        </div>
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Verificación de Integridad</div>
-          <div class="graph-panel__value" style="color: #34d399; font-size: 0.8125rem;">✔ source_observed (Inmutable)</div>
-        </div>
-      `;
-    } else if (node.kind === 'project' || node.kind === 'place') {
-      execSpecificHtml = `
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Destino Operativo / Geocerca</div>
-          <div class="graph-panel__value">${node.label}</div>
-        </div>
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Tipo de Recurso</div>
-          <div class="graph-panel__value">Proyecto con Geocerca Registrada en Startrack</div>
-        </div>
-      `;
-      techSpecificHtml = `
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">ID de Geocerca (POI)</div>
-          <div class="graph-panel__value text-mono" style="font-size: 0.75rem;">${node.id}</div>
-        </div>
-      `;
-    } else if (node.kind === 'request') {
-      execSpecificHtml = `
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Estado de Solicitud Prisma</div>
-          <div class="graph-panel__value"><span class="badge badge--active">APROBADA</span></div>
-        </div>
-        <div class="graph-panel__section">
-          <div class="graph-panel__label">Rol en el Flujo</div>
-          <div class="graph-panel__value">Habilita la preparación de traslado sin generar duplicados.</div>
-        </div>
-      `;
     }
 
-    const evidenceItems = (node.evidence || []).map(ev => `
-      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 8px; margin-bottom: 6px;">
-        <div style="font-size: 0.6875rem; font-weight: 700; color: #38bdf8;">ORIGEN: ${ev.origin || ev.provenance?.source || 'Prisma'}</div>
-        <div class="text-mono" style="font-size: 0.6875rem; color: #94a3b8; word-break: break-all;">${ev.reference || ev.source_id}</div>
-      </div>
-    `).join('');
-
-    panelContent.innerHTML = `
-      <div class="graph-panel__header">
-        <div>
-          <div style="font-size: 0.6875rem; font-weight: 800; text-transform: uppercase; color: #00f2fe; letter-spacing: 0.08em;">${node.kind}</div>
-          <div class="graph-panel__title">${node.label || node.asset_number || node.id}</div>
-        </div>
-        <button class="graph-panel__close" id="panel-close-btn">&times;</button>
-      </div>
-
-      <div class="graph-panel-tabs">
-        <button class="graph-panel-tab ${!isTech ? 'graph-panel-tab--active' : ''}" id="tab-exec">Resumen Ejecutivo</button>
-        <button class="graph-panel-tab ${isTech ? 'graph-panel-tab--active' : ''}" id="tab-tech">Telemetría (Tech)</button>
-      </div>
-
-      <div id="panel-tab-body">
-        ${!isTech ? execSpecificHtml : techSpecificHtml}
-
-        ${evidenceItems ? `
-          <div class="graph-panel__section" style="margin-top: 14px;">
-            <div class="graph-panel__label">Evidencia Comprobada (${node.evidence.length})</div>
-            <div>${evidenceItems}</div>
-          </div>
-        ` : ''}
-
-        <button class="json-devtools-btn" id="btn-inspect-json">
-          <span>🔍</span>
-          <span>Inspeccionar Contrato JSON Raw</span>
-        </button>
-      </div>
-    `;
-
-    panelContent.querySelector('#panel-close-btn').addEventListener('click', () => {
-      panel.classList.remove('graph-panel--open');
-      selectedNode = null;
-    });
-
-    panelContent.querySelector('#tab-exec').addEventListener('click', () => {
-      renderNodeDetails(node, 'executive');
-    });
-
-    panelContent.querySelector('#tab-tech').addEventListener('click', () => {
-      renderNodeDetails(node, 'tech');
-    });
-
-    panelContent.querySelector('#btn-inspect-json').addEventListener('click', () => {
-      cyberModalTitle.textContent = `Contrato JSON: ${node.label || node.id}`;
-      cyberModalCode.textContent = JSON.stringify(node, null, 2);
-      cyberModal.classList.add('cyber-modal--open');
-    });
-  }
-
-  // ─── Scenarios Walkthrough Execution ───
-  function triggerScenario(scenarioKey) {
-    activeScenario = scenarioKey;
-
-    container.querySelectorAll('.graph-hud-btn').forEach(btn => {
-      btn.classList.remove('graph-hud-btn--active');
-    });
-
-    const activeBtn = container.querySelector(`[data-scenario="${scenarioKey}"]`);
-    if (activeBtn) activeBtn.classList.add('graph-hud-btn--active');
-
-    briefingBox.classList.add('graph-scenario-briefing--active');
-
-    if (scenarioKey === 'cu01') {
-      container.querySelector('#scenario-tag').textContent = 'CASO DE USO 01 — SOLICITUD Y TRASLADO';
-      container.querySelector('#scenario-title').textContent = 'Pipeline Unificado: Prisma ➔ ECON ➔ Startrack';
-      container.querySelector('#scenario-body').textContent = 'Se identifica la solicitud Aprobada en Prisma y se mapea con la tarea Pendiente en Startrack (Adriana Steiner). ECON preserva todos los identificadores originales sin inventar fechas ni perder auditoría.';
-      container.querySelector('#scenario-highlight-text').textContent = 'Demostración de trazabilidad: CF-03 en PROY-014 con movimiento MOV-PRUEBA-001.';
-
-      const target = nodes.find(n => n.label === 'CF-03' || n.asset_number === 'CF-03');
-      if (target) handleSelectNode(target);
-    } else if (scenarioKey === 'cu02') {
-      container.querySelector('#scenario-tag').textContent = 'CASO DE USO 02 — CONSISTENCIA DE ESTADOS';
-      container.querySelector('#scenario-title').textContent = 'Desacoplamiento: Prisma OCUPADA vs Startrack COMPLETADA';
-      container.querySelector('#scenario-body').textContent = 'Prisma describe la posesión administrativa de la maquinaria durante la obra ("Ocupada"), mientras Startrack describe la logística de transporte ("Completada"). Ambos estados son simultáneamente verdaderos. ECON audita mediante el Indicador I3 que la tarea completada no sustituye la recepción en obra.';
-      container.querySelector('#scenario-highlight-text').textContent = 'Estados separados: cero falsos conflictos; la recepción física requiere declaración expresa.';
-
-      const target = nodes.find(n => n.label === 'CF-03' || n.asset_number === 'CF-03');
-      if (target) handleSelectNode(target);
-    } else if (scenarioKey === 'cu03') {
-      container.querySelector('#scenario-tag').textContent = 'CASO DE USO 03 — PREVENCIÓN DE FALLA OPERACIONAL';
-      container.querySelector('#scenario-title').textContent = 'Bloqueo Automático: Maquinaria OBSOLETA con Traslado Programado';
-      container.querySelector('#scenario-body').textContent = 'El equipo CF-03 pasa a OBSOLETA (mantenimiento correctivo) en Prisma, pero en Startrack el viaje figura Pendiente. El motor de tensiones de ECON detecta la discrepancia en tiempo real y activa un bloqueo preventivo que impide la salida de carretera.';
-      container.querySelector('#scenario-highlight-text').textContent = 'Riesgo Crítico Mitigado: Se previene el flete en falso y el costo operativo asociado.';
-
-      const target = nodes.find(n => n.label === 'CF-03' || n.asset_number === 'CF-03');
-      if (target) handleSelectNode(target);
-    } else if (scenarioKey === 'team6') {
-      container.querySelector('#scenario-tag').textContent = 'EQUIPO 6 — ASIGNACIÓN EN VIVO (KIT RE-03)';
-      container.querySelector('#scenario-title').textContent = 'Demostración Flexible: Retroexcavadora RE-03 / Rodrigo Trujillo / Proyecto Zeta';
-      container.querySelector('#scenario-body').textContent = 'La plataforma valida que no depende de IDs fijos. Se modela la asignación específica del Equipo 6 consultando el sandbox real en tiempo real (GET /api/v1/hub?mode=live&search=RE-03) con el motorista MOT-006 y PROY-006.';
-      container.querySelector('#scenario-highlight-text').textContent = 'Flexibilidad de arquitectura demostrada: preparada para pruebas dinámicas del jurado.';
-
-      // Focus on available equipment or synthesize view
-      const target = nodes.find(n => n.label === 'CF-03') || nodes[0];
-      if (target) handleSelectNode(target);
+    if (btnTeam6) {
+      btnTeam6.addEventListener('click', () => {
+        activeScope = 'team6';
+        renderView();
+      });
     }
-  }
 
-  function setupHudListeners() {
-    container.querySelector('#hud-cu01').addEventListener('click', () => triggerScenario('cu01'));
-    container.querySelector('#hud-cu02').addEventListener('click', () => triggerScenario('cu02'));
-    container.querySelector('#hud-cu03').addEventListener('click', () => triggerScenario('cu03'));
-    container.querySelector('#hud-team6').addEventListener('click', () => triggerScenario('team6'));
-
-    // Orbit toggle
-    container.querySelector('#hud-orbit').addEventListener('click', (e) => {
-      isAutoOrbiting = !isAutoOrbiting;
-      e.currentTarget.classList.toggle('graph-hud-btn--active', isAutoOrbiting);
-
-      if (isAutoOrbiting) {
-        let angle = 0;
-        const dist = 380;
-        orbitTimer = setInterval(() => {
-          angle += 0.008;
-          if (graph3D) {
-            graph3D.cameraPosition({
-              x: dist * Math.sin(angle),
-              z: dist * Math.cos(angle),
-              y: 80 + 40 * Math.sin(angle * 0.5),
-            });
+    // Tabs Listeners
+    ['overview', 'cu02', 'cu03', 'topology', 'audit'].forEach(t => {
+      const tabBtn = container.querySelector(`#tab-${t}`);
+      if (tabBtn) {
+        tabBtn.addEventListener('click', () => {
+          activeTab = t;
+          renderView();
+          if (t === 'topology') {
+            setTimeout(initEmbeddedTopology, 50);
           }
-        }, 30);
-      } else {
-        clearInterval(orbitTimer);
+        });
       }
     });
 
-    // 2D / 3D Mode Toggle
-    container.querySelector('#mode-3d').addEventListener('click', () => {
-      currentMode = '3d';
-      container.querySelector('#mode-3d').classList.add('graph-mode-btn--active');
-      container.querySelector('#mode-2d').classList.remove('graph-mode-btn--active');
-      container3D.style.display = 'block';
-      container2DWrap.style.display = 'none';
-    });
+    // Inspect JSON Button
+    const inspectBtn = container.querySelector('#btn-inspect-pipeline');
+    if (inspectBtn) {
+      inspectBtn.addEventListener('click', () => {
+        const modal = container.querySelector('#cyber-modal');
+        const code = container.querySelector('#cyber-modal-code');
+        const title = container.querySelector('#cyber-modal-title');
 
-    container.querySelector('#mode-2d').addEventListener('click', () => {
-      currentMode = '2d';
-      container.querySelector('#mode-2d').classList.add('graph-mode-btn--active');
-      container.querySelector('#mode-3d').classList.remove('graph-mode-btn--active');
-      container3D.style.display = 'none';
-      container2DWrap.style.display = 'block';
-      render2D();
-    });
+        title.textContent = activeScope === 'team6' ? 'RE-03 (Kit Equipo 6)' : 'CF-03 (Caso Referencia)';
+        code.textContent = JSON.stringify({
+          schema_version: '1.0',
+          mode: 'fixture',
+          context: activeScope === 'team6' ? 'Asignación Equipo 6 (RE-03)' : 'Caso de Referencia (CF-03)',
+          equipment: {
+            code: activeScope === 'team6' ? 'RE-03' : 'CF-03',
+            name: activeScope === 'team6' ? 'Retroexcavadora 03' : 'Cargador frontal 03',
+            status: activeScope === 'team6' ? 'DISPONIBLE' : 'OBSOLETA',
+            project_id: activeScope === 'team6' ? 'PROY-006' : 'PROY-014',
+          },
+          movement: {
+            reference: activeScope === 'team6' ? 'MOV-EQUIPO6-001' : 'MOV-PRUEBA-001',
+            driver: activeScope === 'team6' ? 'Rodrigo Trujillo (MOT-006)' : 'Adriana Steiner (MOT-014)',
+            status: 'PENDIENTE',
+          },
+          governance: {
+            rules_verified: ['R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8'],
+            audit_pass: true,
+          }
+        }, null, 2);
 
-    // Reset camera
-    container.querySelector('#graph-reset').addEventListener('click', () => {
-      if (currentMode === '3d' && graph3D) {
-        graph3D.cameraPosition({ x: 0, y: 120, z: 420 }, { x: 0, y: 0, z: 0 }, 1000);
-      } else {
-        center2DGraph();
-      }
-    });
+        modal.classList.add('cyber-modal--open');
+      });
+    }
 
-    // Close briefing
-    container.querySelector('#scenario-close').addEventListener('click', () => {
-      briefingBox.classList.remove('graph-scenario-briefing--active');
-      container.querySelectorAll('.graph-hud-btn').forEach(btn => btn.classList.remove('graph-hud-btn--active'));
-    });
-
-    // Close Cyber Modal
-    container.querySelector('#cyber-modal-close').addEventListener('click', () => {
-      cyberModal.classList.remove('cyber-modal--open');
-    });
+    const modalClose = container.querySelector('#cyber-modal-close');
+    if (modalClose) {
+      modalClose.addEventListener('click', () => {
+        container.querySelector('#cyber-modal').classList.remove('cyber-modal--open');
+      });
+    }
   }
 
-  // ─── 2D Canvas Fallback & Layout ───
-  function init2DGraph() {
-    compute2DLayout(nodes, edges);
-    resize2DCanvas();
-    center2DGraph();
+  function initEmbeddedTopology() {
+    const canvas = container.querySelector('#embedded-canvas');
+    if (!canvas) return;
 
-    window.addEventListener('resize', resize2DCanvas);
-
-    canvas2D.addEventListener('mousedown', (e) => {
-      isDragging2d = true;
-      dragStart2d = { x: e.clientX - transform2d.x, y: e.clientY - transform2d.y };
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!isDragging2d) return;
-      transform2d.x = e.clientX - dragStart2d.x;
-      transform2d.y = e.clientY - dragStart2d.y;
-      render2D();
-    });
-
-    window.addEventListener('mouseup', () => {
-      isDragging2d = false;
-    });
-
-    canvas2D.addEventListener('click', (e) => {
-      const rect = canvas2D.getBoundingClientRect();
-      const clickX = (e.clientX - rect.left - transform2d.x) / transform2d.scale;
-      const clickY = (e.clientY - rect.top - transform2d.y) / transform2d.scale;
-
-      let clicked = null;
-      for (const node of nodes) {
-        const dist = Math.hypot(clickX - node.x, clickY - node.y);
-        if (dist <= (node.radius || 24) + 4) {
-          clicked = node;
-          break;
-        }
-      }
-
-      if (clicked) {
-        handleSelectNode(clicked);
-      }
-    });
-  }
-
-  function compute2DLayout(nodesList, edgesList) {
-    const projects = nodesList.filter(n => n.kind === 'project' || n.kind === 'place');
-    const machines = nodesList.filter(n => n.kind === 'machine');
-    const requests = nodesList.filter(n => n.kind === 'request');
-    const movements = nodesList.filter(n => n.kind === 'movement');
-
-    const centerX = 400;
-    const centerY = 350;
-
-    projects.forEach((proj, idx) => {
-      const angle = (idx / Math.max(1, projects.length)) * Math.PI * 2;
-      const radius = projects.length === 1 ? 0 : 220;
-      proj.x = centerX + Math.cos(angle) * radius;
-      proj.y = centerY + Math.sin(angle) * radius;
-      proj.radius = 42;
-    });
-
-    machines.forEach((m, idx) => {
-      const angle = (idx / Math.max(1, machines.length)) * Math.PI * 2;
-      m.x = centerX + Math.cos(angle) * 160;
-      m.y = centerY + Math.sin(angle) * 160;
-      m.radius = 24;
-    });
-
-    requests.forEach((r, idx) => {
-      r.x = centerX - 260 + (idx * 90);
-      r.y = centerY + 240;
-      r.radius = 18;
-    });
-
-    movements.forEach((mv, idx) => {
-      mv.x = centerX + 180 + (idx * 80);
-      mv.y = centerY - 200;
-      mv.radius = 20;
-    });
-  }
-
-  function resize2DCanvas() {
-    const rect = container2DWrap.getBoundingClientRect();
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas2D.width = rect.width * dpr;
-    canvas2D.height = rect.height * dpr;
-    canvas2D.style.width = `${rect.width}px`;
-    canvas2D.style.height = `${rect.height}px`;
-    ctx2d.scale(dpr, dpr);
-    render2D();
-  }
 
-  function center2DGraph() {
-    const rect = container2DWrap.getBoundingClientRect();
-    transform2d = {
-      x: rect.width / 2 - 400,
-      y: rect.height / 2 - 350,
-      scale: 1,
-    };
-    render2D();
-  }
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
 
-  function render2D() {
-    if (!ctx2d || currentMode !== '2d') return;
-    const width = canvas2D.width / (window.devicePixelRatio || 1);
-    const height = canvas2D.height / (window.devicePixelRatio || 1);
+    const width = rect.width;
+    const height = rect.height;
 
-    ctx2d.save();
-    ctx2d.clearRect(0, 0, width, height);
+    // Draw clean corporate network scheme
+    ctx.fillStyle = '#06080d';
+    ctx.fillRect(0, 0, width, height);
 
-    ctx2d.fillStyle = '#06080d';
-    ctx2d.fillRect(0, 0, width, height);
+    const nodes = [
+      { id: 'proy-014', label: 'PROY-014 La Unión', kind: 'project', x: width * 0.25, y: height * 0.4 },
+      { id: 'proy-006', label: 'PROY-006 Zeta (Eq 6)', kind: 'project', x: width * 0.75, y: height * 0.4 },
+      { id: 'cf-03', label: 'CF-03 (Cargador)', kind: 'machine', status: 'OBSOLETA', x: width * 0.25, y: height * 0.75 },
+      { id: 're-03', label: 'RE-03 (Retroexcavadora)', kind: 'machine', status: 'DISPONIBLE', x: width * 0.75, y: height * 0.75 },
+      { id: 'mov-001', label: 'MOV-PRUEBA-001', kind: 'movement', x: width * 0.5, y: height * 0.2 },
+    ];
 
-    ctx2d.translate(transform2d.x, transform2d.y);
-    ctx2d.scale(transform2d.scale, transform2d.scale);
+    const edges = [
+      { from: nodes[0], to: nodes[2], label: 'Asignado en Obra' },
+      { from: nodes[1], to: nodes[3], label: 'Asignado Equipo 6' },
+      { from: nodes[0], to: nodes[4], label: 'Destino Flete' },
+      { from: nodes[2], to: nodes[4], label: 'Tensión Bloqueo', isTension: true },
+    ];
 
-    // Draw edges
-    edges.forEach(edge => {
-      const src = nodes.find(n => n.id === (typeof edge.source === 'object' ? edge.source.id : edge.source));
-      const tgt = nodes.find(n => n.id === (typeof edge.target === 'object' ? edge.target.id : edge.target));
-      if (!src || !tgt) return;
+    // Edges
+    edges.forEach(e => {
+      ctx.beginPath();
+      ctx.moveTo(e.from.x, e.from.y);
+      ctx.lineTo(e.to.x, e.to.y);
+      ctx.strokeStyle = e.isTension ? '#ef4444' : '#334155';
+      ctx.lineWidth = e.isTension ? 3 : 1.5;
+      if (e.isTension) ctx.setLineDash([6, 4]);
+      else ctx.setLineDash([]);
+      ctx.stroke();
 
-      ctx2d.beginPath();
-      ctx2d.moveTo(src.x, src.y);
-      ctx2d.lineTo(tgt.x, tgt.y);
-
-      if (edge.isTension) {
-        ctx2d.strokeStyle = '#ff0055';
-        ctx2d.lineWidth = 3;
-        ctx2d.setLineDash([8, 4]);
-      } else if (edge.kind === 'transfer') {
-        ctx2d.strokeStyle = '#f59e0b';
-        ctx2d.lineWidth = 2.5;
-        ctx2d.setLineDash([6, 4]);
-      } else {
-        ctx2d.strokeStyle = 'rgba(59, 130, 246, 0.4)';
-        ctx2d.lineWidth = 1.8;
-        ctx2d.setLineDash([]);
-      }
-      ctx2d.stroke();
-      ctx2d.setLineDash([]);
+      // Label
+      ctx.fillStyle = e.isTension ? '#f87171' : '#64748b';
+      ctx.font = '600 10px Inter, sans-serif';
+      ctx.fillText(e.label, (e.from.x + e.to.x) / 2 + 5, (e.from.y + e.to.y) / 2 - 5);
     });
 
-    // Draw nodes
-    nodes.forEach(node => {
-      ctx2d.beginPath();
-      ctx2d.arc(node.x, node.y, node.radius || 24, 0, Math.PI * 2);
+    // Nodes
+    nodes.forEach(n => {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.kind === 'project' ? 24 : 18, 0, Math.PI * 2);
+      ctx.fillStyle = n.kind === 'project' ? '#1e3a8a' : n.status === 'OBSOLETA' ? '#7f1d1d' : '#065f46';
+      ctx.fill();
+      ctx.strokeStyle = n.kind === 'project' ? '#3b82f6' : n.status === 'OBSOLETA' ? '#ef4444' : '#10b981';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-      let stroke = '#3b82f6';
-      if (node.kind === 'machine') {
-        stroke = node.machinery_status === 'OBSOLETA' ? '#ef4444' : node.machinery_status === 'OCUPADA' ? '#f59e0b' : '#10b981';
-      }
-
-      ctx2d.fillStyle = '#0b0f19';
-      ctx2d.fill();
-      ctx2d.strokeStyle = stroke;
-      ctx2d.lineWidth = 2.5;
-      ctx2d.stroke();
-
-      ctx2d.fillStyle = '#f8fafc';
-      ctx2d.font = '600 11px Inter, sans-serif';
-      ctx2d.textAlign = 'center';
-      ctx2d.fillText(node.label || node.asset_number || 'NODE', node.x, node.y + (node.radius || 24) + 14);
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '700 11px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.label, n.x, n.y + 34);
     });
-
-    ctx2d.restore();
   }
+
+  // Initial render
+  renderView();
 }
