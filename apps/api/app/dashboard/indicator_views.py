@@ -13,9 +13,8 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from html import escape
-from math import isfinite
 from urllib.parse import urlencode
 
 import dash_mantine_components as dmc
@@ -33,16 +32,14 @@ from app.dashboard.components import (
     link,
     markdown_link,
     section,
-    simple_table,
     state_text,
 )
 from app.dashboard.context import QueryContext
 from app.dashboard.decision_analytics import graph
-from app.dashboard.theme import FAMILY_COLORS, MEASURE, PAPER, figure
+from app.dashboard.theme import FAMILY_COLORS, SEQUENTIAL, figure
 from app.models.hub import EquipmentRecord, HubResponse, RequestRecord
 from app.models.indicators import IndicatorResult, IndicatorRow, IndicatorsReport
 from app.models.workflow import WorkflowOverview
-from app.services.hub import BUSINESS_TIMEZONE
 from app.services.indicators import SHEETS, compute_indicators
 
 # ----- static data ------------------------------------------------------------------------
@@ -64,26 +61,6 @@ AUDIENCES = (
     ),
 )
 NUMBERS = {identifier: f"I{index}" for index, identifier in enumerate(SHEETS, start=1)}
-DISPLAY_TITLES = {
-    "approval_time": "Tiempo de aprobación",
-    "open_request_age": "Solicitudes por resolver",
-    "approved_with_unit_without_sent_task": "Envío de traslados",
-    "occupied_without_project": "Asignaciones por corregir",
-    "assignment_ended": "Fin de asignación",
-    "completed_task_without_receipt": "Recepciones pendientes",
-    "active_failure_registered": "Fallas registradas",
-    "evidence_age": "Actualización de evidencia",
-}
-DECISION_PROMPTS = {
-    "approval_time": "Revisar solicitudes que esperan aprobación.",
-    "open_request_age": "Asignar unidad o confirmar la necesidad.",
-    "approved_with_unit_without_sent_task": "Revisar la preparación del traslado.",
-    "occupied_without_project": "Corregir la asignación en Prisma.",
-    "assignment_ended": "Confirmar prórroga, devolución o traslado.",
-    "completed_task_without_receipt": "Solicitar la constancia de recepción.",
-    "active_failure_registered": "Revisar diagnóstico y decisión de paro.",
-    "evidence_age": "Confirmar la lectura antes de decidir.",
-}
 RESULT_STATES = {
     "evaluable": ("Evaluable", "active"),
     "partial": ("Parcial", "pending"),
@@ -125,9 +102,8 @@ MAGNITUDES = {
     ),
     "evidence_age": ("evidence_age_hours", "Horas desde la última lectura", 1),
 }
-MIN_CHART_ROWS = 1
-MAX_CHART_ROWS = 10
-MAX_INSIGHT_ROWS = 3
+MIN_CHART_ROWS = 3
+FOLD_TABLE_ROWS = 5
 PAGE_SIZE = 10
 COLUMNS = [
     ("subject", "Fila"),
@@ -650,52 +626,9 @@ def status_label(result: IndicatorResult) -> tuple[str, str]:
 
 
 def insight_of(result: IndicatorResult, hub: HubResponse, report: IndicatorsReport) -> Insight:
-    # These flags are published by the service. This only chooses which existing
-    # cases to describe first; no dates, SLA or eligibility are recalculated.
-    def calls_for_action(row: IndicatorRow) -> bool:
-        if result.sheet.id == "active_failure_registered":
-            return True
-        if result.sheet.id == "occupied_without_project":
-            return row.values.get("without_project") is True
-        if row.status != "evaluable":
-            return False
-        return {
-            "open_request_age": True,
-            "approved_with_unit_without_sent_task": row.values.get("sent_task") is not True,
-            "assignment_ended": bool(row.values.get("ended")),
-            "completed_task_without_receipt": not row.values.get("receipt_declared"),
-        }.get(result.sheet.id, False)
-
-    actionable = sum(calls_for_action(row) for row in result.rows)
-    preview = result
-    truncated = len(result.rows) > MAX_INSIGHT_ROWS and result.sheet.id != "evidence_age"
-    if truncated:
-        selected = sorted(
-            result.rows,
-            key=lambda row: (
-                not calls_for_action(row),
-                row.status != "evaluable",
-                row.values.get("active_failure_is_paro") is not True,
-            ),
-        )[:MAX_INSIGHT_ROWS]
-        counts = Counter(row.status for row in selected)
-        preview = result.model_copy(
-            update={
-                "rows": selected,
-                "evaluable_count": counts["evaluable"],
-                "partial_count": counts["partial"],
-                "not_evaluable_count": counts["not_evaluable"],
-            }
-        )
-    sentences, _ = BUILDERS[result.sheet.id](preview, hub, report)
+    sentences, actionable = BUILDERS[result.sheet.id](result, hub, report)
     if not sentences:
         sentences = [_sentence(result.reason or "sin filas en esta lectura") + "."]
-    if truncated:
-        sentences.insert(
-            0,
-            f"{_row_counts(result)} en total. Se describen {MAX_INSIGHT_ROWS} casos; "
-            "el resto está en la tabla de filas.",
-        )
     status, family = status_label(result)
     return Insight(
         id=result.sheet.id,
@@ -724,124 +657,10 @@ def top_insights(report: IndicatorsReport, hub: HubResponse, limit: int = 3) -> 
 # ----- figure and table -------------------------------------------------------------------
 
 
-def _chart_label(
-    row: IndicatorRow, result: IndicatorResult, hub: HubResponse | None, position: int
-):
-    """Human labels on axes; original identifiers stay in hover and the evidence table."""
-
-    def compact(value: str | None, fallback: str, limit: int = 28) -> str:
-        text = " ".join((value or fallback).split())
-        return escape(text if len(text) <= limit else text[: limit - 1] + "…")
-
-    def project(name: str | None) -> str:
-        label = name.partition(" - ")[2] or name if name else None
-        return compact(label, "Proyecto sin nombre")
-
-    def short_day(value: str | None) -> str:
-        if value:
-            try:
-                return date.fromisoformat(value).strftime("%d/%m")
-            except ValueError:
-                parsed = _parse(value)
-                if parsed:
-                    return when_text(parsed)[:5]
-        return "sin fecha"
-
-    if hub is not None and result.sheet.grain == "request":
-        request = _request_of(hub, row)
-        if request is not None:
-            return (
-                f"{project(request.project_name)}<br>"
-                f"{compact(request.machinery_type, 'Maquinaria', 22)} · "
-                f"{short_day(request.starts_on)}"
-            )
-    if hub is not None and result.sheet.grain == "equipment":
-        equipment = _equipment_of(hub, row.subject_id)
-        if equipment is not None:
-            return f"{compact(equipment.name, 'Equipo')}<br>{project(equipment.project_name)}"
-    subject = {"request": "Solicitud", "equipment": "Equipo", "movement": "Traslado"}
-    return f"{subject[result.sheet.grain]} · fila {position}"
-
-
-def _approval_interval(result: IndicatorResult, row: IndicatorRow, hub: HubResponse | None):
-    """A single observed process on its actual clock, not a self-scaled score."""
-    created = _parse(row.values.get("created_at"))
-    approved = _parse(row.values.get("approved_at"))
-    if created is None or approved is None or approved < created:
-        return None
-    created, approved = (value.astimezone(BUSINESS_TIMEZONE) for value in (created, approved))
-    start = created.replace(second=0, microsecond=0)
-    end = approved.replace(second=0, microsecond=0) + timedelta(minutes=1)
-
-    # Explicit local tick text prevents the viewer's browser timezone changing the clock.
-    def local(value):
-        return value.replace(tzinfo=None).isoformat()
-
-    span_minutes = max(1, int((end - start).total_seconds() / 60))
-    step = max(1, (span_minutes + 4) // 5)
-    ticks = [start + timedelta(minutes=offset) for offset in range(0, span_minutes + 1, step)]
-    if ticks[-1] != end:
-        ticks.append(end)
-    duration = row.values["seconds"]
-    chart = figure(230)
-    chart.update_layout(meta={"comparable": 1, "displayed": 1, "kind": "interval"})
-    chart.add_scatter(
-        x=[local(created), local(approved)],
-        y=[row.subject_id, row.subject_id],
-        mode="lines+markers",
-        line={"color": MEASURE, "width": 2},
-        marker={"color": MEASURE, "size": 10, "symbol": ["circle-open", "diamond"]},
-        customdata=[
-            [escape(row.source_id or row.subject_id), label, _business_time(moment)]
-            for moment, label in ((created, "Creada"), (approved, "Aprobada"))
-        ],
-        hovertemplate=(
-            "Solicitud %{customdata[0]}<br>%{customdata[1]}: %{customdata[2]}<extra></extra>"
-        ),
-        cliponaxis=False,
-    )
-    for moment, label, shift, anchor in (
-        (created, "Creada", 38, "left"),
-        (approved, "Aprobada", -38, "right"),
-    ):
-        chart.add_annotation(
-            x=local(moment),
-            y=row.subject_id,
-            text=f"{label} {moment:%H:%M:%S}",
-            showarrow=False,
-            yshift=shift,
-            xanchor=anchor,
-            font={"size": 12},
-        )
-    chart.add_annotation(
-        x=local(created + (approved - created) / 2),
-        y=row.subject_id,
-        text=duration_text(duration),
-        showarrow=False,
-        yshift=16,
-        bgcolor=PAPER,
-        font={"color": MEASURE, "size": 17},
-    )
-    chart.update_xaxes(
-        type="date",
-        range=[local(start), local(end)],
-        tickmode="array",
-        tickvals=[local(tick) for tick in ticks],
-        ticktext=[tick.strftime("%H:%M") for tick in ticks],
-        title_text=f"{created:%d/%m/%Y} · Hora de El Salvador",
-    )
-    chart.update_yaxes(showticklabels=False)
-    return chart
-
-
-def hours_figure(result: IndicatorResult, hub: HubResponse | None = None) -> go.Figure | None:
-    """Compare multiple measured durations in one scale per chart.
-
-    Source values remain unchanged. Proposed SLAs never become chart targets: some
-    use business hours while these observations measure elapsed time.
-    """
+def hours_figure(result: IndicatorResult) -> go.Figure | None:
+    """Horizontal bars, one per evaluable row, only when at least three rows carry a magnitude."""
     spec = MAGNITUDES.get(result.sheet.id)
-    if spec is None or result.sheet.id == "evidence_age":
+    if spec is None:
         return None
     field, title, divisor = spec
     points = [
@@ -850,52 +669,26 @@ def hours_figure(result: IndicatorResult, hub: HubResponse | None = None) -> go.
         if row.status == "evaluable"
         and isinstance(row.values.get(field), int | float)
         and not isinstance(row.values.get(field), bool)
-        and isfinite(row.values[field])
     ]
     if len(points) < MIN_CHART_ROWS:
         return None
-    if result.sheet.id == "approval_time" and len(points) == 1:
-        return _approval_interval(result, points[0][0], hub)
     points.sort(key=lambda point: point[1], reverse=True)
-    comparable = len(points)
-    points = points[:MAX_CHART_ROWS]
     identifiers = [row.subject_id for row, _ in points]
-    labels = [
-        _chart_label(row, result, hub, index) for index, (row, _) in enumerate(points, start=1)
-    ]
-    evidence = [
-        [escape(row.label or "Registro"), escape(row.source_id or row.subject_id)]
-        for row, _ in points
-    ]
-    largest = max(abs(value) for _, value in points)
-    if field == "days_since_end":
-        scale, unit, axis_unit = 1, "d", "días"
-        axis_title = "Tiempo desde el fin de uso"
-    else:
-        scale, unit, axis_unit = (
-            (3600, "s", "segundos")
-            if largest < 1 / 60
-            else (60, "min", "minutos")
-            if largest < 1
-            else (1, "h", "horas corridas")
-        )
-        axis_title = title.replace("Horas", "Tiempo", 1)
-    values = [value * scale for _, value in points]
-    chart = figure(max(260, len(points) * 54 + 100))
-    chart.update_layout(meta={"comparable": comparable, "displayed": len(points)})
+    labels = [escape(row.label or row.source_id or row.subject_id) for row, _ in points]
+    values = [round(value, 2) for _, value in points]
+    unit = "días" if divisor == 1 and field == "days_since_end" else "h"
+    chart = figure(max(200, len(points) * 36 + 80))
     chart.add_bar(
         x=values,
         y=identifiers,
         orientation="h",
         width=0.36,
-        marker_color=MEASURE,
+        marker_color=SEQUENTIAL[2],
         text=[f"{value:g} {unit}" for value in values],
         textposition="outside",
         cliponaxis=False,
-        customdata=evidence,
-        hovertemplate="%{customdata[0]}<br>ID: %{customdata[1]}<br>%{x} "
-        + unit
-        + "<extra></extra>",
+        customdata=labels,
+        hovertemplate="%{customdata}<br>%{x} " + unit + "<extra></extra>",
     )
     chart.update_yaxes(
         autorange="reversed",
@@ -905,12 +698,7 @@ def hours_figure(result: IndicatorResult, hub: HubResponse | None = None) -> go.
         tickvals=identifiers,
         ticktext=labels,
     )
-    lower, upper = min(0, min(values) * 1.3), max(0, max(values) * 1.3)
-    chart.update_xaxes(
-        title_text=f"{axis_title} ({axis_unit})",
-        rangemode="tozero",
-        range=[lower, upper if upper != lower else 1],
-    )
+    chart.update_xaxes(title_text=title, rangemode="tozero", range=[0, max(values) * 1.3])
     return chart
 
 
@@ -950,7 +738,7 @@ def indicator_rows(result: IndicatorResult, context: QueryContext) -> list[dict]
     ]
 
 
-def indicator_table(result: IndicatorResult, context: QueryContext, *, folded: bool = True):
+def indicator_table(result: IndicatorResult, context: QueryContext):
     table = grid(f"indicator-rows-{result.sheet.id}", indicator_rows(result, context), COLUMNS)
     table.dashGridOptions.update(
         {"paginationPageSize": PAGE_SIZE, "paginationPageSizeSelector": [PAGE_SIZE, 25, 50]}
@@ -973,11 +761,9 @@ def indicator_table(result: IndicatorResult, context: QueryContext, *, folded: b
         role="group",
         **{"aria-label": caption},
     )
-    return (
-        accordion(disclosure(f"Ver las {len(result.rows)} filas y su evidencia", block), mt="sm")
-        if folded
-        else block
-    )
+    if len(result.rows) > FOLD_TABLE_ROWS:
+        return accordion(disclosure(f"Ver las {len(result.rows)} filas", block), mt="sm")
+    return block
 
 
 # ----- page -------------------------------------------------------------------------------
@@ -1034,22 +820,47 @@ def _summary(report: IndicatorsReport) -> str:
 
 
 def sla_card(sla: ProposedSla):
-    """Methodology for a proposed SLA, shown only inside its disclosure."""
-    return facts(
+    return dmc.Paper(
         [
-            ("Pregunta", sla.question),
-            ("Cobertura hoy", sla.coverage),
-            ("No evaluable cuando", sla.not_evaluable),
-            ("Decisión", sla.decision),
-            ("Fórmula", sla.formula),
+            dmc.Text(f"SLA propuesto · {sla.id} · {sla.audience}", size="xs", c="dimmed"),
+            dmc.Title(sla.name, order=4, size="h6", mb=4),
+            dmc.Text(sla.question, size="sm", mb="xs"),
+            facts(
+                [
+                    ("Umbral sugerido", sla.threshold_text),
+                    ("Cobertura hoy", sla.coverage),
+                    ("No evaluable cuando", sla.not_evaluable),
+                    ("Decisión", sla.decision),
+                    ("Fórmula", sla.formula),
+                ],
+                cols=1,
+            ),
         ],
-        cols=1,
+        withBorder=True,
+        p="md",
+        mb="sm",
+        className="sla-card",
     )
 
 
 def no_sla_card(result: IndicatorResult):
-    """Administrative facts need an action, without an empty SLA card."""
-    return hint(result.sheet.decision)
+    return dmc.Paper(
+        [
+            dmc.Text("Sin SLA propuesto", size="xs", c="dimmed"),
+            dmc.Title("Hecho administrativo por fila", order=4, size="h6", mb=4),
+            dmc.Text(
+                "No hay un plazo que medir: cada fila copia un hecho de Prisma y pide una "
+                "corrección, no un tiempo.",
+                size="sm",
+                mb="xs",
+            ),
+            facts([("Decisión", result.sheet.decision)], cols=1),
+        ],
+        withBorder=True,
+        p="md",
+        mb="sm",
+        className="sla-card",
+    )
 
 
 def _row_counts(result: IndicatorResult) -> str:
@@ -1067,443 +878,117 @@ def _row_counts(result: IndicatorResult) -> str:
     return f"{_count(len(result.rows), 'fila')}: {', '.join(parts)}"
 
 
-def _business_time(value: object) -> str:
-    if value is None:
-        return "No informado"
-    parsed = _parse(value)
-    return (
-        parsed.astimezone(BUSINESS_TIMEZONE).strftime("%d/%m/%Y %H:%M:%S")
-        if parsed
-        else "No verificable"
-    )
-
-
-def _business_reason(reason: str | None) -> str:
-    if not reason:
-        return ""
-    if "sin corte de observación" in reason:
-        return "Falta un corte de lectura para calcular la antigüedad."
-    if "fixture" in reason and "tareas" in reason:
-        return "La muestra documental no incluye envíos de tareas."
-    if "sin approved_at" in reason and "PENDIENTE" in reason:
-        return "Pendiente de aprobación."
-    if "sin approved_at" in reason:
-        return "Falta la fecha de aprobación."
-    if reason.startswith("sin created_at"):
-        return "Falta la fecha de creación."
-    return reason
-
-
-def _business_duration(row: IndicatorRow, identifier: str) -> str:
-    spec = MAGNITUDES.get(identifier)
-    if spec is None:
-        return "No aplica"
-    field, _, _ = spec
-    value = row.values.get(field)
-    if not isinstance(value, int | float) or isinstance(value, bool) or not isfinite(value):
-        return "No calculable"
-    if field == "seconds":
-        return duration_text(value)
-    if field == "days_since_end":
-        return f"{value:g} días"
-    if abs(value) < 1 / 60:
-        return f"{value * 3600:g} s"
-    if abs(value) < 1:
-        return f"{value * 60:g} min"
-    return f"{value:g} h"
-
-
-BUSINESS_COLUMNS = {
-    "approval_time": [
-        ("record", "Solicitud"),
-        ("created", "Creada"),
-        ("approved", "Aprobada"),
-        ("duration", "Tiempo"),
-        ("note", "Observación"),
-    ],
-    "open_request_age": [
-        ("record", "Solicitud"),
-        ("since", "Abierta desde"),
-        ("start", "Inicio solicitado"),
-        ("duration", "Antigüedad"),
-        ("note", "Observación"),
-    ],
-    "approved_with_unit_without_sent_task": [
-        ("record", "Solicitud"),
-        ("approved", "Aprobada"),
-        ("sent", "Envío de tarea"),
-        ("duration", "Aprobación a envío"),
-        ("note", "Observación"),
-    ],
-    "occupied_without_project": [
-        ("record", "Equipo"),
-        ("project", "Proyecto asignado"),
-        ("note", "Observación"),
-    ],
-    "assignment_ended": [
-        ("record", "Equipo"),
-        ("end", "Fin de asignación"),
-        ("duration", "Días desde el fin"),
-        ("note", "Observación"),
-    ],
-    "completed_task_without_receipt": [
-        ("record", "Tarea"),
-        ("completed", "Tarea completada"),
-        ("received", "Recepción"),
-        ("duration", "Espera de recepción"),
-        ("note", "Observación"),
-    ],
-    "active_failure_registered": [
-        ("record", "Equipo"),
-        ("failure", "Estado de falla"),
-        ("stop", "Decisión de paro"),
-        ("note", "Observación"),
-    ],
-    "evidence_age": [
-        ("record", "Tarea"),
-        ("read", "Lectura del registro"),
-        ("observed", "Observación de la tarea"),
-        ("duration", "Antigüedad del registro"),
-    ],
-}
-QUESTION_LABELS = {
-    "approval_time": "Aprobación",
-    "open_request_age": "Solicitudes abiertas",
-    "approved_with_unit_without_sent_task": "Envíos",
-    "occupied_without_project": "Asignaciones",
-    "assignment_ended": "Fin de uso",
-    "completed_task_without_receipt": "Recepciones",
-    "active_failure_registered": "Fallas",
-    "evidence_age": "Actualización",
-}
-REQUIRED_DATA = {
-    "approval_time": "Se necesitan las fechas de creación y aprobación.",
-    "open_request_age": "Se necesita un corte de lectura y la fecha de creación o aprobación.",
-    "approved_with_unit_without_sent_task": (
-        "Se necesita el registro de envíos de la misma asignación; "
-        "debe estar completo para verificar una ausencia."
-    ),
-    "occupied_without_project": "Se necesita leer el estado y la asignación de los equipos.",
-    "assignment_ended": "Se necesitan el corte de lectura y la fecha de fin de asignación.",
-    "completed_task_without_receipt": (
-        "Se necesita el registro de tareas con fechas de estado y un corte de lectura."
-    ),
-    "active_failure_registered": "Se necesita leer las fallas activas de los equipos.",
-    "evidence_age": "Se necesita una lectura fechada del registro.",
-}
-
-
-def business_rows(result: IndicatorResult, hub: HubResponse, context: QueryContext) -> list[dict]:
-    """Business columns use published values; the evidence table retains source fields."""
-    identifier = result.sheet.id
-    rows = []
-    for row in result.rows:
-        values = row.values
-        request = _request_of(hub, row) if result.sheet.grain == "request" else None
-        equipment = (
-            _equipment_of(hub, row.subject_id) if result.sheet.grain == "equipment" else None
-        )
-        if request:
-            label = " · ".join(
-                [
-                    request.machinery_type or "Maquinaria",
-                    request.project_name or "Proyecto sin nombre",
-                ]
-            )
-        elif equipment:
-            label = equipment.name
-            if equipment.asset_number or equipment.code:
-                label = f"{equipment_label(equipment)} · {label}"
-        else:
-            label = row.label or "Movimiento sin referencia"
-        item = {
-            "record": markdown_link(label, _href(context, result, row)),
-            "duration": _business_duration(row, identifier),
-            "note": _business_reason(row.reason),
-        }
-        if identifier == "approval_time":
-            item.update(
-                created=_business_time(request.created_at if request else values.get("created_at")),
-                approved=_business_time(
-                    request.approved_at if request else values.get("approved_at")
-                ),
-            )
-        elif identifier == "open_request_age":
-            since = values.get("since") or _evidence(row, str(values.get("since_field")))
-            item.update(
-                since=_business_time(since),
-                start=day(request.starts_on if request else values.get("starts_on")),
-            )
-        elif identifier == "approved_with_unit_without_sent_task":
-            sent = values.get("sent_task")
-            item.update(
-                approved=_business_time(
-                    request.approved_at if request else _evidence(row, "approved_at")
-                ),
-                sent=(
-                    _business_time(values.get("sent_at"))
-                    if sent is True and values.get("sent_at") is not None
-                    else "Enviada · fecha no informada"
-                    if sent is True
-                    else "Sin tarea enviada"
-                    if sent is False
-                    else "Sin verificar"
-                ),
-            )
-        elif identifier == "occupied_without_project":
-            without_project = values.get("without_project")
-            item["project"] = (
-                "Sin proyecto"
-                if without_project is True
-                else _row_project(hub, row)
-                if without_project is False
-                else "Sin verificar"
-            )
-        elif identifier == "assignment_ended":
-            item["end"] = day(values.get("assignment_ends_on"))
-            if values.get("ended") is False:
-                item["duration"] = "No aplica"
-                item["note"] = "El período no ha vencido al corte."
-        elif identifier == "completed_task_without_receipt":
-            received = values.get("receipt_declared")
-            item.update(
-                completed=_business_time(values.get("completed_event_time")),
-                received=(
-                    _business_time(values.get("received_at"))
-                    if received is True and values.get("received_at") is not None
-                    else "Declarada · fecha no informada"
-                    if received is True
-                    else "Sin constancia"
-                    if received is False
-                    else "Sin verificar"
-                ),
-            )
-            if received is True:
-                item["duration"] = "No aplica"
-        elif identifier == "active_failure_registered":
-            stop = values.get("active_failure_is_paro")
-            item.update(
-                failure=values.get("active_failure_status") or "No informado",
-                stop="Con paro"
-                if stop is True
-                else "Sin paro registrado"
-                if stop is False
-                else "No informado",
-            )
-        elif identifier == "evidence_age":
-            item.update(
-                read=_business_time(values.get("last_registry_read_at")),
-                observed=_business_time(values.get("movement_last_observed_at")),
-            )
-        rows.append(item)
-    return rows
-
-
-def business_table(result: IndicatorResult, hub: HubResponse, context: QueryContext):
-    overrides = {
-        "record": {"minWidth": 240, "flex": 2, "wrapText": True, "autoHeight": True},
-        "duration": {"width": 150, "minWidth": 130, "flex": 0},
-        "note": {"minWidth": 190, "flex": 2, "wrapText": True, "autoHeight": True},
-    }
-    for field in (
-        "created",
-        "approved",
-        "since",
-        "sent",
-        "completed",
-        "received",
-        "read",
-        "observed",
-    ):
-        overrides[field] = {"minWidth": 175, "flex": 1, "wrapText": True, "autoHeight": True}
-    table = grid(
-        f"indicator-business-{result.sheet.id}",
-        business_rows(result, hub, context),
-        BUSINESS_COLUMNS[result.sheet.id],
-        column_overrides=overrides,
-        markdown_fields={"record"},
-    )
-    table.dashGridOptions.update({"pagination": len(result.rows) > 15})
-    return table
-
-
 def indicator_block(
     result: IndicatorResult, hub: HubResponse, report: IndicatorsReport, context: QueryContext
 ):
-    """One selected analysis: outcome, comparison when useful, then actionable records."""
     sheet = result.sheet
-    chart = hours_figure(result, hub)
+    insight = insight_of(result, hub, report)
+    chart = hours_figure(result)
     title_id = f"indicator-{sheet.id}-title"
-    _, family = status_label(result)
-    no_cases = status_label(result)[0] == NO_CASES
-    if result.evaluable_count:
-        headline = (
-            f"{result.evaluable_count} de {len(result.rows)} registros con datos suficientes."
-        )
-        if result.partial_count or result.not_evaluable_count:
-            headline += " Consulta los faltantes en la tabla."
-    else:
-        headline = _business_reason(result.reason) or "No hay registros evaluables en esta lectura."
-    details = [
-        hint("Fechas en hora de El Salvador. A continuación se conservan los campos originales.")
-        if result.rows and sheet.dates
-        else None,
-        indicator_table(result, context, folded=False) if result.rows else None,
-        facts(
+    dates = ", ".join(sheet.dates) or "ninguna (hecho administrativo de la fila)"
+    cards = [sla_card(sla) for sla in INDICATOR_SLAS[sheet.id]] or [no_sla_card(result)]
+    # The reason is part of the insight when it comes from the rows; state it once.
+    reason = result.reason if result.reason and result.reason not in insight.text else None
+    note = result.coverage_note
+    partial = note[note.index("Registro parcial:") :] if "Registro parcial:" in note else ""
+    reading = [
+        dmc.Group(
             [
-                ("Indicador", f"{NUMBERS[sheet.id]} · {sheet.name}"),
-                ("Pregunta", sheet.question),
-                ("Decisión", sheet.decision),
-                ("Población", sheet.population),
-                ("Fórmula", sheet.numerator),
-                ("Fechas de origen", ", ".join(sheet.dates) or "No requiere fechas"),
-                ("Cobertura", result.coverage_note),
-                ("Regla de evaluación", sheet.status_rule),
+                state_text(insight.status, insight.family),
+                dmc.Text(_row_counts(result), size="xs", c="dimmed"),
             ],
-            cols=1,
+            gap="md",
+        ),
+        dmc.Text(
+            insight.text,
+            size="md",
+            fw=500,
+            mt="xs",
+            maw="80ch",
+            className="indicator-insight",
+            style={"overflowWrap": "anywhere"},
+        ),
+        hint(f"Motivo: {reason}.") if reason else None,
+        hint(
+            f"Evidencia: {_count(len(result.rows), 'fila')} en la población; fechas de origen: "
+            f"{dates}. {partial}".rstrip()
         ),
     ]
-    proposed = INDICATOR_SLAS[sheet.id]
-    if proposed:
-        details.append(
-            simple_table(
-                ["SLA propuesto", "Umbral a validar", "Condición"],
-                [[sla.name, sla.threshold, sla.coverage] for sla in proposed],
-                caption="SLA propuestos de esta pregunta; no se calcula cumplimiento",
-            )
-        )
-    chart_note = None
-    if chart is not None:
-        meta = chart.layout.meta
-        chart_note = (
-            None
-            if meta.get("kind") == "interval"
-            else f"Las {meta['displayed']} mayores duraciones de {meta['comparable']} comparables."
-            if meta["displayed"] < meta["comparable"]
-            else None
-        )
     return html.Article(
         [
-            dmc.Title(DISPLAY_TITLES[sheet.id], order=2, size="h4", id=title_id),
-            dmc.Text(
-                REQUIRED_DATA[sheet.id],
-                size="sm",
-                mt="xs",
-            )
-            if not result.rows and not no_cases
-            else None,
-            hint(headline, role="status"),
-            state_text("Sin casos en los registros leídos", family) if no_cases else None,
-            graph(f"indicator-chart-{sheet.id}", chart) if chart is not None else None,
-            hint(chart_note) if chart_note else None,
-            section(
-                {"request": "Solicitudes", "equipment": "Maquinaria", "movement": "Movimientos"}[
-                    sheet.grain
+            dmc.Title(f"{NUMBERS[sheet.id]} · {sheet.name}", order=3, size="h5", id=title_id),
+            dmc.Text(sheet.question, size="sm", c="dimmed", maw="80ch", mb="sm"),
+            dmc.Grid(
+                [
+                    dmc.GridCol(reading, span={"base": 12, "md": 8}),
+                    dmc.GridCol(cards, span={"base": 12, "md": 4}),
                 ],
-                business_table(result, hub, context),
-            )
-            if result.rows
-            else None,
-            accordion(
-                disclosure("Definición y datos de origen", *details),
-                mt="md",
+                gutter="lg",
             ),
+            [
+                graph(f"indicator-chart-{sheet.id}", chart),
+                hint("Una barra por fila evaluable, ordenadas por magnitud; sin promedios."),
+            ]
+            if chart is not None
+            else None,
+            indicator_table(result, context) if result.rows else None,
         ],
         id=f"indicator-{sheet.id}",
-        className="indicator-workspace-panel",
+        className="indicator",
+        style={"marginTop": 24},
         **{"aria-labelledby": title_id},
     )
 
 
 def indicators_page(hub: HubResponse, context: QueryContext, workflow: WorkflowOverview | None):
-    """A single question at a time, with sources and proposed SLAs in a secondary tab."""
+    """Eight sheets grouped by the area that acts on them, each with its proposed SLA beside."""
     report = compute_indicators(hub, workflow)
     params = {"mode": hub.mode, **({"search": hub.scope.search} if hub.scope.search else {})}
-    available = [result for result in report.indicators if result.evaluable_count]
-    available.sort(key=lambda result: PRIORITY.index(result.sheet.id))
-    selected = available[0].sheet.id if available else report.indicators[0].sheet.id
-    cutoff = (
-        f"Corte: {instant(report.data_as_of)}."
-        if report.data_as_of is not None
-        else "Sin corte para calcular antigüedades."
-    )
-    registry_note = (
-        " Registro no disponible."
-        if not report.ledger_available
-        else " Registro parcial."
-        if report.ledger_coverage is not None and not report.ledger_coverage.is_complete
-        else ""
-    )
-    method = [
-        dmc.Title("SLA propuestos", order=2, size="h4"),
-        hint("Objetivos pendientes de acuerdo con ECON. No se calcula cumplimiento."),
-        simple_table(
-            ["Objetivo", "Responsable", "Umbral propuesto"],
-            [[sla.name, sla.audience, sla.threshold] for sla in SLAS],
-            caption="SLA propuestos; no son resultados de la operación",
+    sections = []
+    for audience, role in AUDIENCES:
+        results = [result for result in report.indicators if result.sheet.owner == audience]
+        blocks = []
+        for index, result in enumerate(results):
+            if index:
+                blocks.append(dmc.Divider(my="lg"))
+            blocks.append(indicator_block(result, hub, report, context))
+        sections.append(
+            section(
+                audience,
+                dmc.Text(role, size="sm", c="dimmed", maw="80ch"),
+                blocks,
+                **{"aria-label": f"Indicadores para {audience}"},
+            )
+        )
+    return [
+        heading(
+            "Indicadores y SLA",
+            "Qué dicen las lecturas de hoy, por fila y sin promedios, y el SLA propuesto para "
+            "cada pregunta. La ausencia de un dato no es cero.",
         ),
-        hint("S5 propone 4 h para revisar una falla; su calendario todavía debe acordarse."),
+        coverage_block(report),
+        hint(_summary(report)),
+        hint(
+            "Fechas en hora de El Salvador (America/El_Salvador); la tabla conserva los "
+            "instantes de origen con su zona. Los conteos describen esta lectura, no la flota. "
+            "Los umbrales de SLA son puntos de partida para acordarlos con cada área; no se "
+            "calcula cumplimiento."
+        ),
+        *sections,
         accordion(
             disclosure(
-                "Fuentes, fórmulas y condiciones",
-                coverage_block(report),
-                hint(_summary(report)),
+                "Notas de la lectura",
                 dmc.List([dmc.ListItem(note) for note in report.notes], size="sm"),
                 link(
-                    "Consultar datos y definiciones en JSON",
+                    "Contrato JSON de estos indicadores",
                     f"/api/v1/indicators?{urlencode(params)}",
                     target="_blank",
                     anchorProps={"rel": "noopener noreferrer"},
-                    mt="md",
+                    mt="sm",
                     display="block",
                 ),
-                simple_table(
-                    ["SLA", "Área", "Umbral propuesto"],
-                    [[f"{sla.id} · {sla.name}", sla.audience, sla.threshold] for sla in SLAS],
-                    caption="Propuestas de SLA; no son metas aprobadas ni cumplimiento medido",
-                ),
-                [
-                    html.Section([dmc.Title(sla.name, order=3, size="h6"), sla_card(sla)])
-                    for sla in SLAS
-                ],
             ),
-            mt="md",
-        ),
-    ]
-    return [
-        heading("Indicadores"),
-        hint(
-            f"{cutoff}{registry_note}",
-            role="status",
-        ),
-        dmc.Tabs(
-            [
-                dmc.TabsList(
-                    [
-                        *[
-                            dmc.TabsTab(QUESTION_LABELS[result.sheet.id], value=result.sheet.id)
-                            for result in report.indicators
-                        ],
-                        dmc.TabsTab("SLA propuestos", value="method"),
-                    ],
-                    **{"aria-label": "Pregunta de análisis"},
-                ),
-                *[
-                    dmc.TabsPanel(
-                        indicator_block(result, hub, report, context),
-                        value=result.sheet.id,
-                        pt="lg",
-                    )
-                    for result in report.indicators
-                ],
-                dmc.TabsPanel(method, value="method", pt="lg"),
-            ],
-            id="indicator-question",
-            value=selected,
-            keepMounted=False,
-            persistence=f"indicators-{hub.mode}",
-            persistence_type="memory",
-            className="analysis-tabs indicator-tabs",
+            mt="lg",
         ),
     ]
 
@@ -1525,17 +1010,11 @@ def indicator_insights(hub: HubResponse, context: QueryContext, workflow: Workfl
                 dmc.Group(
                     [
                         state_text(item.status, item.family),
-                        dmc.Title(DISPLAY_TITLES[item.id], order=3, size="h6"),
+                        dmc.Title(f"{NUMBERS[item.id]} · {item.name}", order=3, size="h6"),
                     ],
                     gap="sm",
                 ),
                 dmc.Text(item.text, size="sm", mt=6, style={"overflowWrap": "anywhere"}),
-                link(
-                    "Abrir análisis de indicadores",
-                    context.href("/indicadores"),
-                    mt="xs",
-                    display="block",
-                ),
             ],
             withBorder=True,
             p="md",
@@ -1547,8 +1026,7 @@ def indicator_insights(hub: HubResponse, context: QueryContext, workflow: Workfl
         "Lo que dicen los indicadores",
         hint(
             f"{with_rows} de {len(report.indicators)} indicadores tienen filas evaluables en esta "
-            f"consulta. {cut} Incluye toda la consulta; no aplica el filtro de solicitudes "
-            "de esta página."
+            f"lectura. {cut}"
         ),
         dmc.Stack(items, gap="sm")
         if items
@@ -1558,7 +1036,7 @@ def indicator_insights(hub: HubResponse, context: QueryContext, workflow: Workfl
             role="status",
         ),
         link(
-            "Ver indicadores",
+            "Ver los 8 indicadores y sus SLA propuestos",
             context.href("/indicadores"),
             mt="sm",
             display="block",

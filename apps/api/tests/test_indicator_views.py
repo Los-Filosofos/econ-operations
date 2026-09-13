@@ -27,7 +27,7 @@ from app.dashboard.indicator_views import (
     top_insights,
     when_text,
 )
-from app.dashboard.theme import MEASURE
+from app.dashboard.theme import SEQUENTIAL
 from app.dashboard.views import PAGES, render_page
 from app.models.indicators import IndicatorResult, IndicatorRow
 from app.models.workflow import WorkflowOverview
@@ -105,7 +105,7 @@ def result_of(report, identifier: str):
 # ----- fixture page ------------------------------------------------------------------------
 
 
-def test_fixture_page_shows_eight_questions_one_observed_chart_and_visible_records(hub):
+def test_fixture_page_shows_the_eight_sheets_with_their_states_and_no_chart(hub):
     content = render_page("/indicadores", hub, QueryContext(), registry())
     page = serialized(content)
     report = compute_indicators(hub, registry())
@@ -128,17 +128,14 @@ def test_fixture_page_shows_eight_questions_one_observed_chart_and_visible_recor
     assert "Sin corte; antigüedades no evaluables" in page
     assert "Modo fixture: muestras documentales sin corte de observación" in page
     assert "5 de 15 unidades · 2 de 2 solicitudes" in page
-    assert '"aria-label": "Pregunta de análisis"' in page
-    assert "Definición y datos de origen" in page
-    # A single measured approval is a dated interval, never a trend or SLA result.
+    for audience in ("Mantenimiento", "Logística", "Proyectos", "Información"):
+        assert f'"aria-label": "Indicadores para {audience}"' in page
+    # Fewer than three evaluable rows everywhere: tables only, no figure, nothing folded.
     counts = kinds(content)
-    assert counts["Graph"] == 1
-    assert "indicator-sla-" not in page and "sla-overview-" not in page
-    tables = [
-        item
-        for item in components(content)
-        if str(getattr(item, "id", "")).startswith("indicator-rows-")
-    ]
+    assert counts["Graph"] == 0
+    assert counts["AgGrid"] == 4
+    assert "Ver las" not in page
+    tables = [item for item in components(content) if item.to_plotly_json()["type"] == "AgGrid"]
     for table in tables:
         assert table.dashGridOptions["paginationPageSize"] == 10
         assert [column["field"] for column in table.columnDefs] == [key for key, _ in COLUMNS]
@@ -201,20 +198,6 @@ def test_page_is_readable_in_the_fixture_without_a_ledger_and_guards_a_failed_so
 )
 def test_durations_read_in_plain_language(seconds, expected):
     assert duration_text(seconds) == expected
-
-
-def test_single_approval_keeps_source_instants_and_elapsed_time(hub):
-    result = result_of(compute_indicators(hub, registry()), "approval_time")
-    chart = hours_figure(result, hub)
-    approved = next(row for row in result.rows if row.status == "evaluable")
-    assert chart.layout.meta["kind"] == "interval"
-    start, end = [datetime.fromisoformat(value) for value in chart.data[0].x]
-    assert (end - start).total_seconds() == approved.values["seconds"]
-    assert chart.data[0].type == "scatter"
-    assert chart.data[0].mode == "lines+markers"
-    assert chart.layout.annotations[2].text == "42 s"
-    assert "Creada 18:59:19" == chart.layout.annotations[0].text
-    assert "Aprobada 19:00:01" == chart.layout.annotations[1].text
 
 
 def test_only_zoned_instants_become_dates_in_el_salvador_time():
@@ -380,17 +363,15 @@ def test_top_insights_prefer_actionable_rows_then_the_fixed_priority(hub):
 # ----- chart, SLA cards and table -----------------------------------------------------------
 
 
-def test_chart_uses_only_evaluable_magnitudes_and_orders_them():
+def test_chart_needs_three_evaluable_rows_with_a_magnitude_and_orders_them():
     rows = [
         row(PENDING_ID, "PENDIENTE", hours=2.25),
         row(APPROVED_ID, "APROBADA", hours=36.0),
         row("nexus:request:tercera", "PENDIENTE", hours=12.0),
     ]
-    assert len(hours_figure(result_for("open_request_age", rows[:2])).data[0].x) == 2
+    assert hours_figure(result_for("open_request_age", rows[:2])) is None
     unevaluable = row("nexus:request:x", "P", "not_evaluable", "sin corte")
-    assert (
-        len(hours_figure(result_for("open_request_age", [*rows[:2], unevaluable])).data[0].x) == 2
-    )
+    assert hours_figure(result_for("open_request_age", [*rows[:2], unevaluable])) is None
     occupied = [
         row(f"nexus:equipment:{index}", f"U-{index}", without_project=True) for index in range(4)
     ]
@@ -401,10 +382,10 @@ def test_chart_uses_only_evaluable_magnitudes_and_orders_them():
     assert list(chart.data[0].x) == [36.0, 12.0, 2.25]
     assert list(chart.data[0].y) == [APPROVED_ID, "nexus:request:tercera", PENDING_ID]
     assert list(chart.data[0].text) == ["36 h", "12 h", "2.25 h"]
-    assert chart.data[0].marker.color == MEASURE
-    assert chart.layout.xaxis.title.text == "Tiempo abierta al corte (horas corridas)"
+    assert chart.data[0].marker.color == SEQUENTIAL[2]
+    assert chart.layout.xaxis.title.text == "Horas abierta al corte"
     assert chart.layout.xaxis.range[0] == 0
-    assert len(chart.layout.yaxis.ticktext) == 3
+    assert list(chart.layout.yaxis.ticktext) == ["APROBADA", "PENDIENTE", "PENDIENTE"]
     seconds = [
         row(f"nexus:request:{index}", f"S-{index}", seconds=3600.0 * index) for index in range(1, 4)
     ]
@@ -425,10 +406,10 @@ def test_sla_cards_are_the_documented_table_and_stay_to_be_validated(hub):
         "evidence_age": ["S6"],
     }
     page = serialized(render_page("/indicadores", hub, QueryContext()))
-    for sla in SLAS:
-        assert sla.name in page and sla.threshold in page
-    assert "a validar con ECON" in page
+    assert page.count("a validar con ECON") == 7
+    assert "≤ 24 h hábiles · a validar con ECON" in page
     assert "No calculable: /fallas no se lee" in page
+    assert page.count("Sin SLA propuesto") == 2
     assert "no se calcula cumplimiento" in page
     assert "cumple" not in page.replace("cumplimiento", "")
 
@@ -448,7 +429,7 @@ def test_table_keeps_the_contract_columns_links_each_subject_and_folds_past_five
     unit = indicator_rows(result_of(report, "assignment_ended"), context)[0]
     assert context.equipment_href(CF03_ID) in unit["subject"]
 
-    table = indicator_table(result_of(report, "approval_time"), context, folded=False)
+    table = indicator_table(result_of(report, "approval_time"), context)
     assert table.to_plotly_json()["type"] == "Div"
     many = result_for(
         "open_request_age",
@@ -463,27 +444,34 @@ def test_table_keeps_the_contract_columns_links_each_subject_and_folds_past_five
 # ----- decisions page ---------------------------------------------------------------------
 
 
-def test_decisions_alias_uses_the_same_agenda_and_actions_as_home(hub):
+def test_decisions_page_lists_actions_with_evidence_dates_and_the_indicator_insights(hub):
     context = QueryContext()
     content = render_page("/decisiones", hub, context, registry())
     page = serialized(content)
 
-    assert all(item["path"] != "/decisiones" for item in PAGES)
-    assert page == serialized(render_page("/", hub, context, registry()))
-    assert "Agenda de uso y asignación" in page
+    assert next(page for page in PAGES if page["path"] == "/decisiones")["icon"] == "checklist"
+    assert "Qué requiere atención" in page
     for title in ("Resolver aprobación y asignación", "Revisar la asignación"):
         assert title in page
-    assert "CF-03" in page and "OBSOLETA" in page
-    assert "2026-09-11" in page and "2026-09-14" in page
+    assert (
+        "Solicitud de Cargador frontal · PROY-014 - The Hub - Proyecto Xi - La Unión · Unidad CF-03"
+        in page
+    )
+    assert "11/09/2026 · 19:00" in page and "Pendiente; sin approved_at" in page
+    assert "11/09/2026 — 14/09/2026" in page
     for request in hub.requests:
         assert context.request_href(request.id) in page
-    assert "Lo que dicen los indicadores" not in page
-    assert kinds(content)["Graph"] == 1
+    assert "Lo que dicen los indicadores" in page
+    assert APPROVAL_INSIGHT in page
+    assert "1 de 8 indicadores tienen filas evaluables" in page
+    assert "Sin corte; antigüedades no evaluables" in page
+    assert context.href("/indicadores") in page
+    assert kinds(content)["Graph"] == 2  # usage periods and states, folded as before
 
     unassigned = QueryContext(filter="unassigned")
     narrowed = serialized(render_page("/decisiones", hub, unassigned, registry()))
-    assert "Revisar la asignación" in narrowed
-    assert narrowed == page  # Overview ignores list filters.
+    assert "Filtro aplicado: sin unidad" in narrowed
+    assert "Revisar la asignación" not in narrowed and "Lo que dicen los indicadores" in narrowed
     hub.requests = []
     empty = serialized(render_page("/decisiones", hub, context, registry()))
-    assert "Sin solicitudes en esta lectura" in empty
+    assert "Sin solicitudes para representar" in empty and "Lo que dicen los indicadores" in empty

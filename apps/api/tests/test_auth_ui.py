@@ -95,7 +95,7 @@ def snapshot(client, path="/", search="?mode=fixture"):
         [("snapshot", "data")],
         [
             ("url", "search", search),
-            ("registry", "data", None),
+            ("refresh", "n_clicks", 0),
             ("url", "pathname", path),
             ("workflow-action-result", "data", None),
         ],
@@ -104,24 +104,22 @@ def snapshot(client, path="/", search="?mode=fixture"):
     )
 
 
-def workflow_snapshot(client, search="?mode=fixture", path="/"):
+def workflow_snapshot(client, search="?mode=fixture"):
     return callback(
         client,
         [("workflow-snapshot", "data")],
         [
             ("url", "search", search),
-            ("registry", "data", None),
+            ("refresh", "n_clicks", 0),
             ("workflow-action-result", "data", None),
-            ("url", "pathname", path),
         ],
-        [("workflow-snapshot", "data", None)],
         changed="url.search",
     )
 
 
 def rendered(client, path, search="?mode=fixture"):
-    hub = snapshot(client, path, search).get("snapshot", {}).get("data")
-    workflow = workflow_snapshot(client, search, path)["workflow-snapshot"]["data"]
+    hub = snapshot(client, path, search)["snapshot"]["data"]
+    workflow = workflow_snapshot(client, search)["workflow-snapshot"]["data"]
     return render(client, path, search, hub, workflow)
 
 
@@ -210,9 +208,8 @@ def test_signed_in_user_gets_the_shell_with_identity_and_login_redirects_home(ap
         assert route(client, "/", "?mode=fixture", view="app") == {}
         assert route(client, "/login")["root"]["children"]["props"]["href"] == "/"
         page = rendered(client, "/")
-        assert "Operación" in text(page["content"]["children"])
-        assert "operations-graph" not in text(page["content"]["children"])
-        assert page["scope"]["children"] is not None
+        assert "operations-graph-world" in text(page["content"]["children"])
+        assert page["scope"]["children"] is None
 
 
 def test_read_role_sees_no_action_forms_and_no_administration(app):

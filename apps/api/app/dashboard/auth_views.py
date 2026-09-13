@@ -176,7 +176,10 @@ def header_user(user: User | None, auth_required: bool):
         [
             dmc.MenuTarget(
                 dmc.Button(
-                    dmc.Text(user.full_name, size="sm", fw=500, visibleFrom="sm"),
+                    [
+                        dmc.Text(user.full_name, size="sm", fw=500, visibleFrom="sm"),
+                        dmc.Badge(role, size="xs", variant="light", visibleFrom="sm"),
+                    ],
                     id="user-menu",
                     variant="subtle",
                     color="gray",

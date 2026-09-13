@@ -9,7 +9,7 @@ from dash import dcc
 
 from app.dashboard.analytics import operations_for, readable
 from app.dashboard.context import QueryContext
-from app.dashboard.theme import figure, state_color, state_label_color
+from app.dashboard.theme import figure, state_color
 from app.models.hub import HubResponse, RequestRecord
 from app.models.operations import MovementRecord
 from app.models.workflow import WorkflowOverview
@@ -151,13 +151,7 @@ def request_axis_label(request: RequestRecord) -> str:
         "PENDIENTE": "Pendiente",
         "PENDING": "Pendiente",
     }.get(request.status, request.status or "Sin estado informado")
-    project = request.project_name or "Proyecto sin nombre"
-    if len(project) > 18:
-        project = project[:15].rstrip() + "…"
-    unit = request.machinery_asset_number or (
-        "Unidad asignada" if request.machinery_id else "Sin unidad"
-    )
-    return f"{escape(project.split(' - ')[0])}<br>{escape(unit)}<br>{escape(status)}"
+    return f"{escape(request.machinery_type or 'Solicitud')}<br>{escape(status)}"
 
 
 def states_figure(states: list[tuple[str, int]]):
@@ -198,8 +192,7 @@ def states_figure(states: list[tuple[str, int]]):
 
 def usage_figure(timeline: UsageTimeline):
     periods = timeline.periods
-    chart = figure(max(215, len(periods) * 58 + 90))
-    chart.update_layout(uniformtext={"minsize": 12, "mode": "hide"})
+    chart = figure(max(200, len(periods) * 44 + 90))
     if not periods:
         return chart
     identifiers = [period.request.id for period in periods]
@@ -208,16 +201,8 @@ def usage_figure(timeline: UsageTimeline):
         x=[period.calendar_days * DAY_MS for period in periods],
         y=identifiers,
         orientation="h",
-        width=0.3,
+        width=0.32,
         marker_color=[state_color(period.request.status) for period in periods],
-        text=[
-            f"{short_date(period.starts_on)} – {short_date(period.ends_on)}" for period in periods
-        ],
-        textposition="inside",
-        insidetextanchor="middle",
-        insidetextfont={
-            "color": [state_label_color(period.request.status) for period in periods],
-        },
         customdata=[
             [
                 escape(period.request.provenance.source_id or period.request.id),
@@ -225,12 +210,11 @@ def usage_figure(timeline: UsageTimeline):
                 short_date(period.starts_on, year=True),
                 short_date(period.ends_on, year=True),
                 escape(period.request.status),
-                escape(period.request.machinery_type or "Sin tipo"),
             ]
             for period in periods
         ],
         hovertemplate=(
-            "%{customdata[1]} · %{customdata[5]}<br>Solicitud %{customdata[0]}<br>"
+            "%{customdata[1]}<br>Solicitud %{customdata[0]}<br>"
             "Uso solicitado: %{customdata[2]} – %{customdata[3]}<br>"
             "Estado: %{customdata[4]}<extra></extra>"
         ),
@@ -238,7 +222,7 @@ def usage_figure(timeline: UsageTimeline):
     start = min(period.starts_on for period in periods)
     end = max(period.ends_on for period in periods) + timedelta(days=1)
     span = (end - start).days
-    step = max(1, (span + 3) // 4)
+    step = max(1, (span + 5) // 6)
     ticks = [start + timedelta(days=offset) for offset in range(0, span + 1, step)]
     chart.update_xaxes(
         type="date",

@@ -175,21 +175,22 @@ def test_pending_filter_uses_backend_alert_ids_without_comparing_source_dates_to
 def test_unavailable_source_and_unavailable_registry_are_not_zero(hub):
     assert len(requests_in_scope(hub, QueryContext(), registry(available=False))) == 2
     payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
-    assert "Registro de tareas sin confirmar" in payload
+    assert "operations-graph" in payload
+    assert "Historial ECON" in payload and "No disponible" in payload
     hub.sources[0].status = "error"
     assert requests_in_scope(hub, QueryContext()) == []
     payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
-    assert "origen no disponible" in payload and "decision-request-usage" not in payload
+    assert "Origen no disponible" in payload and "operations-graph-world" not in payload
 
 
 def test_valid_empty_scope_is_zero_but_cross_mode_snapshot_is_unavailable(hub):
     hub.requests = []
     assert requests_in_scope(hub, QueryContext(), registry()) == []
     payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
-    assert "Sin solicitudes en esta lectura" in payload
+    assert "graph-node--machine" in payload
     assert requests_in_scope(hub, QueryContext(mode="live"), registry()) == []
     payload = json.dumps(overview(hub, QueryContext(mode="live")), cls=PlotlyJSONEncoder)
-    assert "origen no disponible" in payload
+    assert "Origen no disponible" in payload
 
 
 def test_sent_task_links_by_source_request_and_current_assignment_not_names(hub):
@@ -303,26 +304,23 @@ def test_repeated_display_names_remain_separate_exact_request_rows(hub):
     }
 
 
-def test_overview_prioritizes_assignment_agenda_and_accessible_evidence(hub):
+def test_overview_serializes_accessible_graph_without_charts_tables_or_fake_kpis(hub):
     component = overview(hub, QueryContext(), registry())
     payload = json.dumps(component, cls=PlotlyJSONEncoder, ensure_ascii=False)
-    assert "decision-request-usage" in payload
-    assert "decision-request-states" not in payload and "executive-summary" not in payload
-    assert "Datos de la agenda" in payload
-    assert "no son plazos de entrega" in payload
-    assert "Operación" in payload and "Acciones por solicitud" in payload
+    assert "operations-graph-world" in payload and "graph-controls" in payload
+    assert "graph-node--place" in payload and "graph-node--machine" in payload
+    assert "decision-request-states" not in payload and "decision-request-usage" not in payload
+    assert '"type": "AgGrid"' not in payload and '"type": "Table"' not in payload
     assert "decision-count" not in payload and "Solicitudes en vista" not in payload
-    assert "Agenda de uso y asignación" in payload
-    assert "CF-03<br>Aprobada" in payload and "Sin unidad<br>Pendiente" in payload
     for request in hub.requests:
-        assert request.provenance.source_id in payload
+        assert request.provenance.source_id not in payload
+    assert "Solicitud pendiente" in payload and "Solicitud aprobada" in payload
     assert "porcentaje" not in payload and "utilización" not in payload
 
 
-def test_unavailable_registry_and_excluded_dates_remain_visible_in_overview(hub):
+def test_unavailable_registry_and_source_age_remain_visible_in_graph_details(hub):
     hub.requests[0].starts_on = "ambiguous"
     payload = json.dumps(overview(hub, QueryContext()), cls=PlotlyJSONEncoder, ensure_ascii=False)
-    assert "Registro de tareas sin confirmar" in payload
-    assert "1 solicitudes con fechas no representables" in payload
-    assert "Fecha no válida o con hora sin zona" in payload
-    assert "ambiguous" in payload
+    assert "Historial ECON" in payload and "No disponible" in payload
+    assert "Fecha documental 12/09/2026" in payload
+    assert "Tiempo no disponible" not in payload

@@ -43,10 +43,9 @@ class QueryContext:
         return self.href(f"/operaciones/{quote(identifier, safe='')}", filter=self.filter)
 
     def for_read(self, path: str | None) -> "QueryContext":
-        # Only these two lists filter the hub; other routes use an unfiltered reading.
-        # Operations searches its persisted registry independently of the providers.
+        # Search limits lists, never the record opened from one of their links.
         normalized = (path or "/").rstrip("/") or "/"
-        if normalized not in {"/maquinaria", "/solicitudes"}:
+        if normalized.startswith(("/maquinaria/", "/solicitudes/")):
             return QueryContext(mode=self.mode)
         return self
 
