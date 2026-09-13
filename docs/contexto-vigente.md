@@ -31,9 +31,7 @@ pertenecer al transportador o al teléfono. Fuentes: [casos](onedrive/04-casos-d
 
 ## Decisiones del usuario
 
-- Un solo proceso Python: Dash, Plotly, AG Grid Community y FastAPI, con
-  SQLModel/Alembic sobre PostgreSQL. React y la salida estática fueron retirados
-  y no se recrean ([ADR 0003](adr/0003-python-dash-hub.md)).
+- Dos modalidades de interfaz gráfica: consola analítica integrada en Python (Dash + FastAPI en puerto 8050) y SPA Web independiente en Vite + Canvas 2D + Chart.js (puerto 5173 en `frontend/`), consumiendo los 18 endpoints REST `/api/v1/*`. Persistencia transaccional con SQLModel/Alembic sobre PostgreSQL/SQLite.
 - Todo el caso usa **datos sintéticos**. `fixture` son ejemplos del archivo;
   `live` es una lectura actual del sandbox. Nunca se sustituyen entre sí.
 - La portada es un grafo operativo a pantalla completa, sin cabecera, sidebar,

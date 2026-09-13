@@ -1,13 +1,11 @@
-# Interfaz Dash y arquitectura del hub
+# Interfaces y arquitectura del hub
 
-La interfaz y la API se ejecutan en **un servicio Python** en `apps/api`: Dash
-con componentes **dash-mantine-components 2.8** (Mantine v8), iconos Tabler locales
-(SVG vendorizados en `assets/icons`), tablas **AG Grid Community** (dash-ag-grid) y gráficos Plotly
-sobre FastAPI. SQLModel, Alembic y PostgreSQL conservan la operación. Las
-decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
-[ADR 0004](adr/0004-persistent-transfer-workflow.md) y
-[ADR 0005](adr/0005-session-auth-and-roles.md). No hay aplicación React,
-`apps/web` ni compilación o despliegue web separado.
+El sistema ofrece **dos modalidades de interfaz gráfica** conectadas al mismo backend FastAPI (`apps/api`):
+
+1. **SPA Web Standalone (`frontend/`)**: Aplicación moderna en **Vite + Vanilla JS + Canvas 2D + Chart.js** (puerto `5173`), con tema oscuro (#0f1218), lienzo interactivo de grafo a 60 FPS, micro-animaciones y consumo directo de los 18 endpoints REST `/api/v1/*` vía CORS/Proxy.
+2. **Consola Analítica Integrada (`apps/api`)**: Aplicación ejecutada en el mismo proceso Python mediante **Dash con componentes dash-mantine-components 2.8**, tablas AG Grid Community e iconos Tabler vendorizados (puerto `8050`).
+
+SQLModel, Alembic y PostgreSQL/SQLite conservan la operación en el libro mayor (*OperationsLedger*). Las decisiones base se detallan en [ADR 0003](adr/0003-python-dash-hub.md), [ADR 0004](adr/0004-persistent-transfer-workflow.md) y [ADR 0005](adr/0005-session-auth-and-roles.md).
 
 ## Rutas y acceso
 
