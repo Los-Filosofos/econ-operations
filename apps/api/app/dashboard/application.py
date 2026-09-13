@@ -29,10 +29,16 @@ from app.dashboard.integration_views import (
     integration_controls,
     trace_panel,
 )
-from app.dashboard.operations_graph import graph_status
-from app.dashboard.theme import BRAND, FAMILY_COLORS, MANTINE_THEME
+from app.dashboard.theme import (
+    BRAND,
+    FAMILY_COLORS,
+    MANTINE_THEME,
+    NAV_SHADES,
+    PAPER,
+    SHELL_VARIABLES,
+    SURFACE,
+)
 from app.dashboard.views import (
-    MODES,
     REQUEST_FILTERS,
     filter_tabs,
     navigation,
@@ -79,7 +85,6 @@ ACTION_ERROR = (
 # The page polls GET /api/v1/status this often and reloads data only when the registry
 # version changed (stale-while-revalidate: what is on screen stays until the new read lands).
 STATUS_POLL_SECONDS = 15
-RUNNING_INDICATOR = [(Output("refresh-indicator", "children"), "Actualizando…", "")]
 AGO_JS = """
   const ago = (iso) => {
     const t = Date.parse(iso || "");
@@ -100,8 +105,11 @@ AGO_JS = """
 # `registry` is written only when a store of the current mode carries another version.
 STATUS_JS = (
     """
-async function(ticks, search, snapshot, workflow) {
+async function(ticks, search, snapshot, workflow, hubLoading, workflowLoading) {
   const noUpdate = window.dash_clientside.no_update;
+  const path = window.location.pathname.replace(/[/]$/, "") || "/";
+  if (path === "/administracion") { return [noUpdate, noUpdate]; }
+  const usesHub = path !== "/operaciones" && !path.startsWith("/operaciones/");
   if (!window.econVisibilityWatch) {
     window.econVisibilityWatch = true;
     document.addEventListener("visibilitychange", () => {
@@ -137,7 +145,8 @@ async function(ticks, search, snapshot, workflow) {
   const version = status.registry_version;
   const stale = (store) => Boolean(store) && typeof store === "object" &&
     store.mode === mode && store.version !== version;
-  const registry = version && (stale(snapshot) || stale(workflow))
+  const registry = version && !hubLoading && !workflowLoading &&
+    ((usesHub && stale(snapshot)) || stale(workflow))
     ? {mode: mode, version: version, at: Date.now()}
     : noUpdate;
   return [status, registry];
@@ -147,20 +156,21 @@ async function(ticks, search, snapshot, workflow) {
 # Header text and the details behind it, recomputed on every tick so "hace X min" moves.
 HEADER_JS = (
     """
-function(ticks, snapshot, status, search) {
-  const labels = %s;
+function(ticks, snapshot, status, path, search) {
   const colors = %s;
 """
     + AGO_JS
     + """
   const mode = modeOf(search);
-  const label = labels[mode] || mode;
   const mine = Boolean(snapshot) && typeof snapshot === "object" && snapshot.mode === mode;
   let text = "Leyendo el origen…";
   let short = "leyendo…";
   let state = "neutral";
-  if (mine && snapshot.hub && snapshot.hub.generated_at) {
-    short = ago(snapshot.hub.generated_at);
+  if (mine && snapshot.hub && mode === "fixture") {
+    short = "Muestra documental";
+    text = short;
+  } else if (mine && snapshot.hub && snapshot.hub.data_as_of) {
+    short = ago(snapshot.hub.data_as_of);
     text = "Última lectura " + short;
     state = "active";
   } else if (mine && snapshot.error) {
@@ -169,6 +179,12 @@ function(ticks, snapshot, status, search) {
     state = "issue";
   }
   const current = status && typeof status === "object" && status.mode === mode ? status : null;
+  if (path === "/operaciones" || (path || "").startsWith("/operaciones/")) {
+    short = current && current.registry_last_read_at
+      ? ago(current.registry_last_read_at) : "Sin lectura confirmada";
+    text = current && current.registry_last_read_at ? "Registro leído " + short : short;
+    state = "neutral";
+  }
   let registry = "Registro del servidor sin comprobar todavía.";
   let sync = "";
   let poll = "Comprobación del registro cada %d s.";
@@ -185,7 +201,7 @@ function(ticks, snapshot, status, search) {
     if (mode !== "live") {
       sync = "Origen local: los cambios provienen del registro de esta base.";
     } else if (!cycle.enabled) {
-      sync = "Sincronización automática desactivada (SYNC_INTERVAL_SECONDS).";
+      sync = "Sincronización automática desactivada.";
     } else {
       const outcome = cycle.last_cycle_result === "ok" ? "correcta"
         : cycle.last_cycle_result === "skipped" ? "omitida: otro proceso sincronizaba"
@@ -197,7 +213,7 @@ function(ticks, snapshot, status, search) {
     }
     if (cycle.in_progress) { sync += " Sincronizando ahora…"; }
   }
-  return [text + " · " + label, short, {background: colors[state]}, registry, sync, poll];
+  return [text, short, {background: colors[state]}, registry, sync, poll];
 }
 """
 )
@@ -213,41 +229,55 @@ function(clicks, search) {
 
 # Pattern ids: only the list pages mount the bar, and its callbacks still register.
 SEARCH_ID = {"type": "query-search", "field": "q"}
-MODE_ID = {"type": "query-mode", "field": "mode"}
 APPLY_ID = {"type": "query-apply", "field": "apply"}
 SEARCH_PATTERN = {"type": "query-search", "field": ALL}
-MODE_PATTERN = {"type": "query-mode", "field": ALL}
 APPLY_PATTERN = {"type": "query-apply", "field": ALL}
 
 
-def query_controls(context: QueryContext | None = None):
-    """The full bar: it exists only where `q` narrows what the page lists."""
+def query_controls(context: QueryContext | None = None, path: str = "/solicitudes"):
+    """A list-specific search, mounted beneath that list's heading."""
     context = context or QueryContext()
+    label, placeholder = {
+        "/solicitudes": ("Buscar solicitudes", "Proyecto, solicitud o unidad"),
+        "/maquinaria": ("Buscar maquinaria", "Código, nombre o proyecto"),
+        "/operaciones": ("Buscar en esta página de movimientos", "Referencia, proyecto o ID"),
+    }.get(path, ("Buscar solicitudes", "Proyecto, solicitud o unidad"))
     return dmc.Group(
         [
             dmc.TextInput(
                 id=SEARCH_ID,
-                label="Buscar",
+                label=label,
                 value=context.query,
-                placeholder="Proyecto, solicitud o maquinaria…",
+                placeholder=placeholder,
                 leftSection=icon("search", 16),
                 autoComplete="off",
-                style={"flex": 1, "minWidth": 220},
+                style={"flex": 1, "minWidth": 180, "maxWidth": 440},
             ),
-            dmc.Select(
-                id=MODE_ID,
-                label="Origen de datos",
-                value=context.mode,
-                data=[{"value": value, "label": label} for value, label in MODES.items()],
-                allowDeselect=False,
-                w={"base": "100%", "xs": 240},
+            dmc.Button(
+                "Buscar",
+                id=APPLY_ID,
+                n_clicks=0,
+                variant="default",
+                style={"alignSelf": "flex-end"},
             ),
-            dmc.Button("Aplicar", id=APPLY_ID, n_clicks=0, style={"alignSelf": "flex-end"}),
+            link(
+                "Limpiar búsqueda",
+                QueryContext(mode=context.mode).href(path, filter=context.filter),
+            )
+            if context.query
+            else None,
         ],
         align="flex-end",
         gap="sm",
         className="query-bar",
+        mb="md",
     )
+
+
+def list_controls(page, path: str, context: QueryContext):
+    if searchable(path):
+        return [page[0], query_controls(context, path), *page[1:]]
+    return page
 
 
 def brand(height=34):
@@ -325,8 +355,6 @@ def read_status():
                             dmc.Text(id="sync-line", **detail),
                             dmc.Text(id="poll-line", **detail),
                             dmc.MenuDivider(),
-                            # Kept mounted while closed so the graph's own control can
-                            # trigger it (assets/operations-graph.js clicks #refresh).
                             dmc.MenuItem(
                                 "Volver a leer ahora",
                                 id="refresh",
@@ -371,12 +399,18 @@ def app_shell(auth_required: bool):
                         "aria-expanded": "false",
                     },
                 ),
-                brand(),
-                dmc.Text("Control de maquinaria", size="sm", c="dimmed", visibleFrom="xs"),
+                brand(32),
+                dmc.Text(
+                    "Centro de operaciones",
+                    size="sm",
+                    fw=600,
+                    visibleFrom="sm",
+                    className="header-product-name",
+                ),
                 dmc.Group(
                     [
                         html.Div(header_user(current_user(), auth_required), id="header-user"),
-                        read_status(),
+                        html.Div(read_status(), id="data-status"),
                     ],
                     gap="xs",
                     ml="auto",
@@ -387,14 +421,30 @@ def app_shell(auth_required: bool):
             px="md",
             gap="md",
             wrap="nowrap",
-        )
+        ),
+        className="econ-header",
+        style={"background": PAPER},
     )
     navbar = dmc.AppShellNavbar(
-        html.Nav(id="navigation", **{"aria-label": "Navegación principal"}), p="sm"
+        [
+            html.Div(
+                [
+                    dmc.Text("Maquinaria y proyectos", fw=600, size="lg"),
+                    dmc.Text("Grupo ECON", size="sm"),
+                ],
+                className="sidebar-heading",
+            ),
+            html.Nav(id="navigation", **{"aria-label": "Navegación principal"}),
+        ],
+        p="sm",
+        className="econ-sidebar",
+        style={"background": NAV_SHADES[9], "borderRight": "none"},
     )
     stores = [
         dcc.Store(id="snapshot", storage_type="memory"),
         dcc.Store(id="workflow-snapshot", storage_type="memory"),
+        dcc.Store(id="hub-loading", data=False, storage_type="memory"),
+        dcc.Store(id="workflow-loading", data=False, storage_type="memory"),
         dcc.Store(id="workflow-action-result", storage_type="memory"),
     ]
     main = dmc.AppShellMain(
@@ -405,7 +455,6 @@ def app_shell(auth_required: bool):
                 dcc.Interval(id="status-poll", interval=STATUS_POLL_SECONDS * 1000, n_intervals=0),
                 dcc.Store(id="status", storage_type="memory"),
                 dcc.Store(id="registry", storage_type="memory"),
-                html.Div(id="query-controls"),
                 html.Div(id="scope"),
                 html.Div(id="workflow-feedback", **{"aria-live": "polite"}),
                 dcc.Loading(
@@ -418,19 +467,20 @@ def app_shell(auth_required: bool):
                     overlay_style={"visibility": "hidden"},
                 ),
             ],
-            size=1400,
+            size=1480,
             px=0,
-            className="application-container",
-        )
+        ),
+        className="econ-workspace",
+        style={"background": SURFACE},
     )
     return html.Div(
         [
             html.A("Saltar al contenido", href="#content", className="skip-link"),
             dmc.AppShell(
                 [header, navbar, main],
-                header={"height": 60},
-                navbar={"width": 236, "breakpoint": "sm", "collapsed": {"mobile": True}},
-                padding="md",
+                header={"height": 68},
+                navbar={"width": 244, "breakpoint": "sm", "collapsed": {"mobile": True}},
+                padding={"base": 12, "md": 16},
             ),
             dmc.Drawer(
                 html.Nav(id="mobile-navigation-links", **{"aria-label": "Navegación principal"}),
@@ -439,11 +489,13 @@ def app_shell(auth_required: bool):
                 opened=False,
                 size=280,
                 padding="md",
+                classNames={"content": "econ-mobile-navigation", "header": "econ-mobile-heading"},
                 closeButtonProps={"aria-label": "Cerrar navegación"},
             ),
         ],
         id="application-shell",
         className="application-shell",
+        style=SHELL_VARIABLES,
     )
 
 
@@ -487,7 +539,7 @@ def create_dashboard(server: FastAPI) -> Dash:
         # Register CSS explicitly so a cold deep link is styled on its first load.
         assets_ignore=r"style\.css",
         external_stylesheets=[f"/assets/style.css?v={STYLESHEET_VERSION}"],
-        title="ECON · Mapa de operaciones",
+        title="ECON · Control de maquinaria",
         update_title="Consultando…",
         index_string=INDEX,
         suppress_callback_exceptions=False,
@@ -548,31 +600,20 @@ def create_dashboard(server: FastAPI) -> Dash:
         return "true" if opened else "false"
 
     @dashboard.callback(
-        Output("query-controls", "children"),
+        Output("data-status", "style"),
         Input("url", "pathname"),
-        State("url", "search"),
     )
-    def query_bar(path, search):
-        """The bar is mounted only where searching applies; elsewhere the scope line carries
-        the origin. Its ids are patterns, so the callbacks below tolerate its absence."""
-        if not searchable(path):
-            return None
-        try:
-            context = parse_context(search)
-        except ValueError:
-            context = QueryContext()
-        return query_controls(context)
+    def data_status_visibility(path):
+        return {"display": "none"} if (path or "").rstrip("/") == "/administracion" else {}
 
     @dashboard.callback(
-        Output(MODE_PATTERN, "value"),
         Output(SEARCH_PATTERN, "value"),
         Input("url", "search"),
         State("url", "pathname"),
-        State(MODE_PATTERN, "id"),
         State(SEARCH_PATTERN, "id"),
     )
-    def sync_controls(search, path, modes, searches):
-        unchanged = ([no_update] * len(modes), [no_update] * len(searches))
+    def sync_controls(search, path, searches):
+        unchanged = [no_update] * len(searches)
         # A search change that leaves a list page also unmounts the bar; do not write to it.
         if not searchable(path):
             return unchanged
@@ -580,19 +621,18 @@ def create_dashboard(server: FastAPI) -> Dash:
             context = parse_context(search)
         except ValueError:
             return unchanged
-        return [context.mode] * len(modes), [context.query] * len(searches)
+        return [context.query] * len(searches)
 
     @dashboard.callback(
         Output("url", "search"),
         Input(APPLY_PATTERN, "n_clicks"),
         Input(SEARCH_PATTERN, "n_submit"),
         Input({"type": "filter-tabs", "page": ALL}, "value"),
-        State(MODE_PATTERN, "value"),
         State(SEARCH_PATTERN, "value"),
         State("url", "search"),
         prevent_initial_call=True,
     )
-    def apply_query(clicks, submits, tabs, modes, queries, search):
+    def apply_query(clicks, submits, tabs, queries, search):
         trigger = ctx.triggered_id
         if not isinstance(trigger, dict):
             return no_update
@@ -611,7 +651,7 @@ def create_dashboard(server: FastAPI) -> Dash:
             if not any(clicks or []) and not any(submits or []):
                 return no_update
             params = {
-                "mode": next(iter(modes), "") or "",
+                "mode": current.mode,
                 "q": (next(iter(queries), "") or "").strip(),
                 "filter": current.filter,
             }
@@ -627,6 +667,14 @@ def create_dashboard(server: FastAPI) -> Dash:
         State("url", "search"),
         State("snapshot", "data"),
         State("workflow-snapshot", "data"),
+        State("hub-loading", "data"),
+        State("workflow-loading", "data"),
+    )
+    dashboard.clientside_callback(
+        "function(hub, workflow) { return hub || workflow ? 'Actualizando…' : ''; }",
+        Output("refresh-indicator", "children"),
+        Input("hub-loading", "data"),
+        Input("workflow-loading", "data"),
     )
     dashboard.clientside_callback(
         REREAD_JS,
@@ -638,7 +686,6 @@ def create_dashboard(server: FastAPI) -> Dash:
     dashboard.clientside_callback(
         HEADER_JS
         % (
-            json.dumps(MODES, ensure_ascii=False),
             json.dumps(FAMILY_COLORS),
             STATUS_POLL_SECONDS,
             STATUS_POLL_SECONDS,
@@ -652,6 +699,7 @@ def create_dashboard(server: FastAPI) -> Dash:
         Input("status-poll", "n_intervals"),
         Input("snapshot", "data"),
         Input("status", "data"),
+        Input("url", "pathname"),
         State("url", "search"),
     )
 
@@ -674,10 +722,17 @@ def create_dashboard(server: FastAPI) -> Dash:
         Input("url", "pathname"),
         Input("workflow-action-result", "data"),
         State("snapshot", "data"),
-        running=RUNNING_INDICATOR,
+        running=[(Output("hub-loading", "data"), True, False)],
     )
     async def load_snapshot(search, registry, path, action, previous):
         if anonymous():
+            return no_update
+        normalized = (path or "/").rstrip("/") or "/"
+        if (
+            normalized == "/administracion"
+            or normalized == "/operaciones"
+            or normalized.startswith("/operaciones/")
+        ):
             return no_update
         if ctx.triggered_id == "workflow-action-result" and (
             not isinstance(action, dict) or not action.get("ok")
@@ -727,10 +782,12 @@ def create_dashboard(server: FastAPI) -> Dash:
         Input("url", "search"),
         Input("registry", "data"),
         Input("workflow-action-result", "data"),
-        running=RUNNING_INDICATOR,
+        Input("url", "pathname"),
+        State("workflow-snapshot", "data"),
+        running=[(Output("workflow-loading", "data"), True, False)],
     )
-    async def load_workflow(search, registry, action):
-        if anonymous():
+    async def load_workflow(search, registry, action, path, previous):
+        if anonymous() or (path or "").rstrip("/") == "/administracion":
             return no_update
         if (
             ctx.triggered_id == "workflow-action-result"
@@ -743,7 +800,22 @@ def create_dashboard(server: FastAPI) -> Dash:
             context = parse_context(search)
         except ValueError:
             return {"mode": None, "overview": None}
-        if ctx.triggered_id == "registry" and not stale_registry(registry, context.mode):
+        if (
+            ctx.triggered_id == "url"
+            and isinstance(previous, dict)
+            and previous.get("mode") == context.mode
+            and previous.get("overview") is not None
+        ):
+            return no_update
+        if ctx.triggered_id == "registry" and (
+            not stale_registry(registry, context.mode)
+            or (
+                not registry.get("forced")
+                and isinstance(previous, dict)
+                and previous.get("mode") == context.mode
+                and previous.get("version") == registry.get("version")
+            )
+        ):
             return no_update
         result = {"mode": context.mode}
         result["version"] = await run_in_threadpool(registry_version, context.mode)
@@ -840,45 +912,33 @@ def create_dashboard(server: FastAPI) -> Dash:
             return notice("Consulta inválida", str(error), error=True), nav, nav, None
         nav = navigation(path, context)
         if path == "/administracion":
-            return admin_page(), nav, nav, origin_line(context, path)
+            return admin_page(), nav, nav, None
         workflow = workflow_from(workflow_snapshot, context.mode)
         # Persisted evidence stays readable when the current provider read is unavailable.
         if path == "/operaciones" or path.startswith("/operaciones/"):
-            line = (
-                dmc.Text(MODES[context.mode], size="xs", fw=500, className="scope-line")
-                if searchable(path)
-                else origin_line(context, path)
+            line = origin_line(context, path)
+            return (
+                list_controls(workflow_page(path, workflow, context), path, context),
+                nav,
+                nav,
+                line,
             )
-            return workflow_page(path, workflow, context), nav, nav, line
+        if path in {"/", "/resumen", "/decisiones", "/indicadores", "/integracion", "/fuentes"}:
+            context = QueryContext(mode=context.mode)
         read_context = context.for_read(path)
         if not isinstance(snapshot, dict) or snapshot.get("key") != read_context.read_key:
-            page = (
-                graph_status(None, "Consultando la operación", "Leyendo proyectos y maquinaria…")
-                if path in {"/", "/resumen"}
-                else loading()
-            )
-            return page, nav, nav, None
+            return loading(), nav, nav, None
         if snapshot.get("error"):
-            page = (
-                graph_status(None, "Consulta no disponible", snapshot["error"])
-                if path in {"/", "/resumen"}
-                else notice("Consulta no disponible", snapshot["error"], error=True)
-            )
-            return page, nav, nav, None
+            return notice("Consulta no disponible", snapshot["error"], error=True), nav, nav, None
         try:
             hub = HubResponse.model_validate(snapshot.get("hub"))
             if hub.mode != context.mode or hub.scope.search != read_context.query:
                 raise ValueError("La respuesta no corresponde a esta consulta.")
         except (ValidationError, ValueError):
             message = "Actualiza la consulta para recuperar los datos."
-            page = (
-                graph_status(None, "Respuesta no válida", message)
-                if path in {"/", "/resumen"}
-                else notice("Respuesta no válida", message, error=True)
-            )
-            return page, nav, nav, None
-        page = render_page(path, hub, context, workflow)
-        page_scope = None if path in {"/", "/resumen"} else scope(hub, context, workflow, path)
+            return notice("Respuesta no válida", message, error=True), nav, nav, None
+        page = list_controls(render_page(path, hub, context, workflow), path, context)
+        page_scope = scope(hub, context, workflow, path)
         return page, nav, nav, page_scope
 
     @dashboard.callback(

@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120" role="img" aria-label="Cargador frontal">
-  <path fill="#e6e2d8" d="M52 76h79l10 13H46zM73 43h42l18 34H63zm10 8-8 22h46l-12-22z"/>
-  <path fill="#aaa9a3" d="M121 57h12l16 25-8 5-14-20zM143 80h27l-5 17h-23zM20 71h38l10 12H31z"/>
-  <path fill="#c6c3bb" d="M34 64h30l8 12H45zM53 51h12v22H58z"/>
-  <circle cx="62" cy="91" r="18" fill="#d8d6cd"/><circle cx="62" cy="91" r="9" fill="#26302c"/>
-  <circle cx="128" cy="91" r="16" fill="#d8d6cd"/><circle cx="128" cy="91" r="8" fill="#26302c"/>
-</svg>

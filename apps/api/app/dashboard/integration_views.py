@@ -61,11 +61,7 @@ TREATMENT_ICONS = {
 }
 NO_VALUE = "No informado"
 NO_FIELD = "Sin campo equivalente"
-INTRO = (
-    "Una solicitud, cuatro etapas: lo que entrega Prisma, cómo lo nombra ECON, qué recibiría "
-    "Startrack en POST /api/job y qué devuelve la tarea. Los valores son los de la solicitud "
-    "elegida; lo que no viaja se marca como tal."
-)
+INTRO = "Prisma → ECON → Startrack. Campos, eventos y tiempos de cada solicitud."
 
 
 def request_options(hub: HubResponse):
@@ -278,6 +274,7 @@ def trace_panel(hub: HubResponse, context: QueryContext, workflow, request_id: s
             "Solicitud fuera de la consulta",
             "Comprueba el origen seleccionado y el identificador de la solicitud.",
         )
+    current = next((stage for stage in trace.stages if stage.state != "done"), None)
     return [
         facts(
             [
@@ -291,22 +288,45 @@ def trace_panel(hub: HubResponse, context: QueryContext, workflow, request_id: s
                 ),
             ]
         ),
-        stepper(trace),
-        hint(
-            "Sin envío registrado para esta solicitud. Prepara el traslado desde el detalle de "
-            "la solicitud; ECON no inventa un mapeo de destino ni de usuarios."
-        )
-        if trace.movement_id is None
-        else None,
-        *[
-            stage_section(position, stage, context)
-            for position, stage in enumerate(trace.stages, start=1)
-        ],
-        times_section(trace),
-        field_map_section(trace),
-        hint(
-            f"Este recorrido está disponible como respuesta JSON en "
-            f"GET /api/v1/integration/{trace.request_id}?mode={trace.mode}."
+        dmc.Tabs(
+            [
+                dmc.TabsList(
+                    [
+                        *[
+                            dmc.TabsTab(
+                                stage.title,
+                                value=stage.key,
+                                leftSection=icon(STAGE_ICONS[stage.key], 16),
+                            )
+                            for stage in trace.stages
+                        ],
+                        dmc.TabsTab("Tiempos", value="times"),
+                        dmc.TabsTab("Mapa de campos", value="fields"),
+                    ]
+                ),
+                *[
+                    dmc.TabsPanel(stage_section(position, stage, context), value=stage.key)
+                    for position, stage in enumerate(trace.stages, start=1)
+                ],
+                dmc.TabsPanel(times_section(trace), value="times"),
+                dmc.TabsPanel(
+                    [
+                        field_map_section(trace),
+                        link(
+                            "Consultar contrato JSON",
+                            f"/api/v1/integration/{trace.request_id}?mode={trace.mode}",
+                        ),
+                    ],
+                    value="fields",
+                ),
+            ],
+            id={"type": "integration-stage", "request": trace.request_id},
+            value=current.key if current else trace.stages[-1].key,
+            persistence=trace.mode,
+            persistence_type="session",
+            keepMounted=False,
+            className="analysis-tabs",
+            mt="md",
         ),
     ]
 
@@ -318,8 +338,9 @@ def integration_page(hub: HubResponse, context: QueryContext, workflow=None):
         dmc.Select(
             id=SELECT_ID,
             label="Solicitud a seguir",
-            description="Se muestran las solicitudes de la consulta actual.",
             value=selected,
+            persistence=context.mode,
+            persistence_type="session",
             data=request_options(hub),
             allowDeselect=False,
             searchable=True,

@@ -27,6 +27,8 @@ PDFs en [`output/pdf`](../output/pdf) con fecha, páginas y SHA-256 en su
 
 ## Implementación y operación
 
+- [Integración por eventos](arquitectura-integracion-eventos.md): base implementada
+  de polling y outbox, y propuesta de orquestación central con consistencia eventual.
 - [Desarrollo local](desarrollo.md), [base de datos](database.md) y
   [despliegue](despliegue-backend.md) (incluye `SYNC_INTERVAL_SECONDS` y
   `GET /api/v1/status`).

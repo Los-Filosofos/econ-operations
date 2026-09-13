@@ -14,15 +14,14 @@ decisiones aceptadas están en [ADR 0003](adr/0003-python-dash-hub.md),
 | Ruta | Contenido | Acceso |
 | --- | --- | --- |
 | `/login` | Formulario de inicio de sesión; `?next=` devuelve a la ruta pedida | Pública |
-| `/` y `/resumen` | Grafo operativo a pantalla completa de identidades y relaciones verificadas | `read` |
+| `/`, `/resumen` y `/decisiones` | Lectura ejecutiva; gráficos de estados y agenda de uso; tabla de asuntos debajo | `read` |
 | `/solicitudes` | Proyecto/solicitud, maquinaria, período, estado, traslado y recepción | `read` |
 | `/solicitudes/{id}` | Asignación, evidencia, faltantes y preparación del movimiento; para una solicitud pendiente sin unidad, las unidades candidatas de `GET /api/v1/requests/{id}/suggestions` (elegible, por revisar o excluida, con motivo y faltantes «no verificable») | `read`; guardar plan exige `manage_transfers` |
-| `/maquinaria` | Inventario consultado, incluidos equipos sin solicitud, con filtros y acceso por ID | `read` |
+| `/maquinaria` | Gráfico de estados administrativos de la lectura y después inventario con filtros y acceso por ID | `read` |
 | `/maquinaria/{id}` | Comparación de evidencia por fuente, interpretación de estados y ubicación fechada | `read` |
 | `/operaciones` y `/operaciones/{id}` | Planes guardados, envío, historial y declaración de recepción | `read`; cola y sincronización exigen `manage_transfers`, recepción `declare_reception` |
-| `/integracion` | Traza de una solicitud: datos leídos de Prisma, transformación de ECON, payload preparado para Startrack, respuesta del proveedor y tiempos del traslado | `read` |
-| `/indicadores` («Indicadores y SLA») | Las ocho fichas de `GET /api/v1/indicators` agrupadas por el área que decide (Mantenimiento, Logística, Proyectos, Información): una lectura en lenguaje llano por ficha, conteo de filas evaluables, parciales y no evaluables con su motivo, fechas de origen y cobertura, una barra por fila evaluable cuando hay horas (sin promedios), tabla AG Grid de filas y, al lado, el SLA propuesto con umbral «a validar con ECON»; enlace al JSON del contrato | `read` |
-| `/decisiones` | Qué requiere atención: un asunto por solicitud con evidencia y siguiente paso, «Lo que dicen los indicadores» (las tres lecturas más accionables, con enlace a `/indicadores`), período de uso solicitado y distribución por estado, cada gráfico con tabla alternativa ([analítica](analitica-decisiones.md#página-de-decisiones)) | `read` |
+| `/integracion` | Visor por etapas con campos y reglas; tiempos y mapeo en pestañas, selección conservada durante la sesión | `read` |
+| `/indicadores` | Una pregunta activa con gráfico primero: intervalo de una aprobación o barras de duraciones; SLA propuestos visuales por tipo de reloj y registros en detalle | `read` |
 | `/fuentes` | Procedencia, alcance y estado de las consultas | `read` |
 | `/administracion` | Alta, rol, activación y contraseña de usuarios | `manage_users` (solo `admin`) |
 
@@ -36,45 +35,30 @@ sesión aparecen en la cabecera (`header-user`). Con `AUTH_REQUIRED=false`
 
 Las páginas se registran en la tabla `PAGES` de `dashboard/views.py` (ruta,
 etiqueta, icono Tabler, función de lista y función de detalle). La navegación
-lateral, el cajón móvil y `render_page` se derivan de esa tabla; `Fuentes` es
-utilidad secundaria. Añadir una vista es añadir una fila.
+lateral, el cajón móvil y `render_page` se derivan de esa tabla; Integración y
+Fuentes son utilidades secundarias. Resumen tiene una entrada; `/resumen` y
+`/decisiones` conservan acceso como alias. Añadir una vista es añadir una fila.
 
-La ruta principal conserva el mismo shell y stores, pero `operations-graph.js`
-activa el modo visual de página completa: oculta cabecera, navegación, consulta y
-alcance mientras el grafo está montado. Las demás rutas recuperan el shell normal.
+Las páginas de trabajo conservan cabecera y navegación. La búsqueda se monta
+bajo el título únicamente en las tres listas que la utilizan; los formularios
+de búsqueda no incluyen selector de modo. Administración no consulta el hub.
+El frontend del mapa se retiró a petición del usuario.
 
 ## Presentación y paleta
 
-La portada es un lienzo carbón cálido (`#111513`) sin cards, tablas, leyenda
-extensa, brillos ni paneles permanentes. Inicia sólo con lugares confirmados.
-Todos los lugares tienen diámetro de 80 px y la maquinaria de 48 px; las
-posiciones se derivan de IDs ordenados y permanecen estables al actualizar. Al
-seleccionar una entidad, el lienzo ocupa 68% y el panel contextual 32% en
-escritorio; en móvil el panel se superpone para conservar una lectura útil.
-Seleccionar un lugar revela
-únicamente las unidades relacionadas por IDs exactos; una unidad en traslado
-activo permanece visible. Una unidad sin relación verificable no se muestra bajo
-una base ni se clasifica como disponible por inferencia. Los nodos usan botones
-HTML enfocados por teclado y siluetas SVG locales. Las
-aristas son segmentos CSS rectos y su etiqueta abre la evidencia de conexión:
-la asignación fina dice «Asignación registrada»; el traslado confirmado es
-dirigido; una tarea explícitamente activa
-usa azul y movimiento discreto. Ámbar identifica mantenimiento y rojo una
-falla/condición confirmada, siempre con texto o símbolo. `prefers-reduced-motion`
-detiene la animación.
-
-Hover o foco muestra identidad, estado, fuente y antigüedad. Seleccionar abre un
-detalle temporal con asignación, destino, estado, responsable disponible,
-historial, evidencia, incidentes, recepción y faltantes. Una conexión seleccionada
-muestra entidades legibles, solicitudes, períodos y evidencia. La selección resalta el flujo
-relacionado y atenúa el resto. El autoencuadre abre el flujo principal en móvil;
-zoom, centrado, rueda y pan sólo cambian la presentación y nunca escriben datos.
-
-El detalle contextual prioriza códigos operativos legibles, iconos, una matriz
-compacta de hechos y una línea de eventos. UUID, claves normalizadas y referencias
-técnicas se conservan en el modelo y en las relaciones internas, pero no se
-imprimen en la ficha ordinaria. Si una fuente no ofrece código o nombre legible,
-la interfaz indica «identificado» sin exponer fragmentos de la clave como etiqueta.
+La navegación usa una barra lateral oscura y el área de trabajo una superficie
+clara; los estados son texto legible, con icono solo para incidencias, sin
+píldoras ni puntos decorativos. El rol de la sesión se consulta en el menú de cuenta.
+La paleta `navigation` y las variables de superficie se definen en `theme.py`.
+Las tablas ocupan el ancho de trabajo; los análisis usan una superficie única,
+sin laterales de explicación ni series de tarjetas.
+El sondeo de estado lee solo metadatos del último corte y no carga su JSON de
+proveedores. Mientras hay lecturas en curso, no dispara otra actualización
+automática; el registro tampoco se vuelve a leer si ya tiene la misma versión.
+La navegación se agrupa en Operación y Sistema; el menú «Datos de la lectura»
+concentra modo, corte, cobertura y cambio de origen. La cobertura parcial permanece
+visible en la franja de contexto. Las leyendas de gráficos conservan muestras
+de color junto al texto para relacionar cada estado con sus barras.
 
 `dashboard/theme.py` es la única fuente de color, compartida por Mantine, AG
 Grid y el template Plotly `econ`:
@@ -86,20 +70,16 @@ Grid y el template Plotly `econ`:
 | Magnitudes | Secuencial azul `#86b6ef → #0d366b` (`SEQUENTIAL`) | Un solo tono; más oscuro es más |
 | Desviación frente a meta | Divergente `#0d366b … #f0efec … #b3261e` (`DIVERGING`) | Neutro `#f0efec` en el cero; azul por debajo, rojo por encima |
 
-Tipografía Inter (OFL) para el shell y Roboto Mono Variable en peso 300 para el
-grafo, ambas servidas localmente; radios pequeños, superficies claras y
+Tipografía Public Sans (OFL), servida localmente y compartida con Plotly y
+AG Grid; radios pequeños, superficies claras y
 `focusRing: auto`. Los gráficos Plotly usan `figure()` del tema (sin zoom,
 ejes fijos, leyenda por texto) y siempre tienen una tabla alternativa; ver
-[definiciones analíticas](analitica-decisiones.md). Capturas de referencia
-verificadas a 1280 y 390 px en `docs/screenshots/`
-(`2026-09-13-<página>-<ancho>.png`).
+[definiciones analíticas](analitica-decisiones.md). Las capturas existentes en
+`docs/screenshots/` son referencias históricas; no validan esta reorganización.
 
 Los iconos de navegación son Tabler locales
 (`app/dashboard/assets/icons/*.svg`, licencia MIT), pintados con `mask-image`
-para heredar el color del texto. Las siluetas del grafo son SVG originales del
-proyecto (`graph-*.svg`) y se eligen únicamente a partir de `equipment_class`;
-cuando ese campo no permite distinguir el tipo se usa maquinaria genérica.
-Ningún icono es el único portador de significado.
+para heredar el color del texto.
 
 ## Servicios y módulos
 
@@ -114,12 +94,11 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `dashboard/theme.py` | Paleta, tema Mantine, tema AG Grid y template Plotly `econ`; `state_family`/`state_color` |
 | `dashboard/components.py` | Bloques reutilizables: `icon`, `heading`, `section`, `notice`, `state_text`, `facts`, `rows_table`, `accordion`, `provenance`, `grid` (AG Grid con locale en español) |
 | `dashboard/context.py` | Parámetros URL validados y enlaces con IDs codificados |
-| `dashboard/views.py` | `PAGES`, navegación, línea de alcance, pestañas de filtro, resumen (grafo), `decisions` (`/decisiones`), solicitudes, maquinaria, fuentes y `render_page` |
+| `dashboard/views.py` | `PAGES`, navegación, línea de alcance, pestañas de filtro, resumen de decisiones, `decisions` (`/decisiones`), solicitudes, maquinaria, fuentes y `render_page` |
 | `dashboard/analytics.py`, `dashboard/decision_analytics.py` | Relación solicitud/unidad, población filtrada, calendario y distribución por estado; `graph()` envuelve una figura Plotly del template `econ` |
 | `dashboard/decision_priorities.py` | Un asunto con evidencia y siguiente paso por solicitud, sin puntajes de urgencia ni reloj |
-| `dashboard/indicator_views.py` | Página `/indicadores`: lectura en lenguaje llano por ficha derivada de las filas de `compute_indicators` (nunca recalcula reglas), tarjetas de SLA propuestos copiadas de `docs/indicadores-calculables.md`, gráfico de horas por fila, tabla AG Grid y bloque de cobertura; `indicator_insights` alimenta «Lo que dicen los indicadores» en `/decisiones` |
+| `dashboard/indicator_views.py` | Página `/indicadores`: una pregunta activa, resultados de `compute_indicators`, filas visibles y comparación gráfica cuando procede; metodología y SLA separados. No recalcula reglas ni alimenta un segundo resumen en la portada |
 | `dashboard/evidence_views.py` | Comparación de hechos por origen, interpretación y cronología por solicitud |
-| `dashboard/operations_graph.py` | Proyección visual de proyectos, maquinaria, aristas respaldadas y detalle contextual; no consulta proveedores ni duplica reglas |
 | `dashboard/workflow_forms.py`, `dashboard/workflow_views.py`, `dashboard/workflow_actions.py` | Preparación, registro de movimientos, recepción y ejecución de acciones con permiso |
 | `dashboard/auth_views.py`, `dashboard/admin_views.py` | Página `/login`, identidad en la cabecera, ayudas de permiso y página `/administracion`; las reglas viven en `api/users.py` |
 | `core/auth.py`, `api/auth.py`, `api/users.py` | Roles, permisos, sesión, login/logout/me y administración de usuarios |
@@ -133,23 +112,14 @@ La función que presenta una página consume las proyecciones ya consultadas.
 | `services/suggestions.py`, `api/suggestions.py` | `AssignmentSuggestion` de `GET /api/v1/requests/{id}/suggestions`: candidatas por reglas R0–R8, sin GPS ni puntajes; recomendar no es asignar |
 | `api/integration.py` | Traza de una solicitud para `/integracion` y `GET /api/v1/integration/{request_id}` |
 | `core/database.py`, `cli/sync_operations.py`, `cli/prune_snapshots.py` | Motor SQL y `cycle_lock` (`pg_try_advisory_lock`, un ciclo por proceso y por base); worker explícito y poda explícita de cortes (ADR 0006) |
-| `dashboard/assets` | Estilos, Inter, Roboto Mono (OFL), siluetas SVG del grafo, iconos Tabler locales y logotipos ECON |
+| `dashboard/assets` | Estilos, Public Sans (OFL), iconos Tabler locales y logotipos ECON |
 
 Se retiraron `icons.py`, `decision_views.py`, `equipment_views.py`, los SVG
 locales, el menú clientside y el botón Actualizar: Mantine, los recursos locales
 y el sondeo de `GET /api/v1/status` cubren esas funciones. La proyección
 `GET /api/v1/graph` se consulta por HTTP y Swagger; los indicadores tienen la
 página `/indicadores`, las sugerencias aparecen en el detalle de la solicitud
-pendiente y el grafo de la portada (`operations_graph.py`) dibuja en el
-navegador la lectura del hub ya cargada.
-
-`assets/operations-graph.js` implementa únicamente interacción visual local
-(zoom, pan, selección, cierre y reencuadre responsive). No inicia consultas: la
-relectura la disparan los callbacks acotados del shell (cambio de origen o
-búsqueda, resultado de una acción del flujo o cambio de `registry_version` en
-`GET /api/v1/status`). Se eligió HTML/CSS más
-SVG locales en lugar de otra dependencia porque preserva nodos como botones
-accesibles y reutiliza el estado Dash sin un segundo modelo de grafo.
+pendiente. El frontend usa los componentes Mantine y AG Grid de la plataforma.
 
 Las relaciones usan IDs originales, fuente, entorno y evidencia compatibles.
 Los movimientos que alimentan las decisiones deben corresponder también a la
@@ -159,13 +129,12 @@ responsable, instante con zona y referencia de constancia.
 
 ## Estado, errores y habilitaciones
 
-La URL conserva `mode`, `q` y `filter`. El **origen de datos (`mode`) se
-conserva en la URL en todas las páginas**, incluidos los detalles, `/fuentes`,
-`/integracion`, `/indicadores`, `/decisiones` y `/administracion`. El
-**buscador (`q`) solo se muestra en las páginas con una población filtrable**
-(Resumen, Solicitudes, Maquinaria, Operaciones y Decisiones); las páginas de
-detalle, `/integracion`, `/indicadores`, `/fuentes` y `/administracion` no lo
-presentan, porque ahí no filtraría nada. Se rechazan
+La URL admite `mode`, `q` y `filter`. La navegación conserva el origen (`mode`)
+y limpia búsqueda y filtro al cambiar de sección. **No hay búsqueda global:**
+el buscador aparece bajo el título de `/solicitudes`, `/maquinaria` y
+`/operaciones`, sin selector de modo dentro del formulario. Resumen y sus alias,
+los detalles y las utilidades no filtran por `q`. Administración no depende de
+los proveedores aunque un enlace conserve el parámetro de origen. Se rechazan
 modos desconocidos, parámetros duplicados, filtros inválidos y búsquedas
 mayores de 100 caracteres.
 Aplicar (o Enter en Buscar) y las pestañas de filtro actualizan la URL;
@@ -191,8 +160,7 @@ llega la nueva lectura. Una relectura sin cambios conserva la versión y no
 recarga nada. La cabecera muestra cuándo se leyó lo que se ve («hace X min»,
 `role="status"`) y un menú «Estado de la lectura de datos» con las líneas de
 registro, sincronización y sondeo más el respaldo accesible **«Volver a leer
-ahora»** (`#refresh`, relectura forzada; el control propio del grafo lo
-reutiliza). El ritmo de la sincronización con los proveedores no lo fija el
+ahora»** (`#refresh`, relectura forzada). El ritmo de la sincronización con los proveedores no lo fija el
 navegador: `SYNC_INTERVAL_SECONDS` (servidor; `0` apagado, mínimo 30) ejecuta
 un ciclo live acotado por intervalo dentro del proceso, bajo el candado de ciclo
 de PostgreSQL, y nunca en `fixture` ([despliegue](despliegue-backend.md)).
@@ -200,10 +168,10 @@ de PostgreSQL, y nunca en `fixture` ([despliegue](despliegue-backend.md)).
 `WorkflowOverview.available` indica si se pudo leer el registro y `complete`
 si todos los movimientos de ese modo/solicitud caben en la página leída (100
 movimientos por defecto; HTTP admite `page` y `page_size` hasta 500). La tabla
-de Operaciones (AG Grid, `components.grid`) pagina en el navegador esa lectura
-en páginas de 15, 30 o 50 filas, filtra por la búsqueda `q` (referencia, IDs de
-solicitud, máquina y proyecto, nombre del proyecto) y, cuando la lectura es
-parcial, muestra `coverage.note` antes de la tabla. Un resultado parcial
+de Operaciones pagina el registro en servidor, con tamaños 25, 50 o 100 y
+50 por defecto; AG Grid no añade una segunda paginación. La búsqueda `q`
+(referencia, IDs de solicitud, máquina y proyecto, nombre del proyecto) filtra
+solo la página cargada. La ventana y su alcance se muestran junto a la tabla. Un resultado parcial
 conserva lo observado, pero no acredita la ausencia de otros movimientos. Esto
 es independiente de `HubResponse.scope`.
 
@@ -217,24 +185,11 @@ no-store`; los mensajes omiten credenciales y cuerpos privados del proveedor.
 `live` consulta datos actuales del sandbox. Ambos son sintéticos y no hay
 fallback entre modos. Las lecturas remotas, escrituras remotas y encolado
 automático siguen deshabilitados por defecto y solo los habilita el servidor;
-un rol o un flag del navegador no los encienden. El worker se inicia por CLI;
-navegar por el panel no lo inicia.
-
-El grafo recibe exclusivamente `HubResponse` y `WorkflowOverview`. Proyectos se
-deduplican por `project_id`; maquinaria por su ID normalizado; solicitudes se
-unen por `maquinaria_id` exacto. Los traslados sólo promueven una arista cuando
-la proyección de evidencia ya validó asignación, entorno y período. Un equipo sin
-asignación no se agrega a un lugar inventado. Las bases y talleres requieren una
-identidad y clasificación física verificables que el modelo normalizado actual
-todavía no aporta. Una geocerca sin tipo físico confirmado no se presenta como
-base o taller. La ubicación, mantenimiento, tarea, presencia GPS y recepción
-permanecen hechos separados.
-
-El detalle de maquinaria cuenta proyectos distintos usando únicamente IDs que
-aparecen en asignaciones, solicitudes, traslados o movimientos persistidos
-visibles. Los presenta por su código o nombre legible, no por el UUID. Es
-trazabilidad documental de la lectura, no prueba de presencia física ni una
-historia completa cuando la cobertura es parcial.
+un rol o un flag del navegador no los encienden. El worker se inicia por CLI o
+mediante el scheduler configurado en el servidor; navegar por el panel no lo inicia.
+La centralización de todas las lecturas y los comandos por cambios posteriores
+al envío son [propuestas de arquitectura](arquitectura-integracion-eventos.md),
+no cambios introducidos por esta reorganización visual.
 
 ## Accesibilidad
 
@@ -249,9 +204,6 @@ historia completa cuando la cobertura es parcial.
   «Volver a leer ahora» por teclado como respaldo del refresco automático.
 - AG Grid con teclado, locale en español y desplazamiento horizontal; las
   tablas no ocultan columnas de negocio en móvil (390 px).
-- Los nodos del grafo son botones con nombre accesible y tooltip asociado; Enter
-  o Espacio abre detalle, Escape lo cierra y devuelve el foco. El lienzo acepta
-  `+`, `-` y `0` para zoom/centrado, además de controles visibles.
 - `prefers-reduced-motion` desactiva animaciones.
 
 ## Desarrollo y verificación

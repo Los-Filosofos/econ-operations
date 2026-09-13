@@ -151,7 +151,10 @@ def request_axis_label(request: RequestRecord) -> str:
         "PENDIENTE": "Pendiente",
         "PENDING": "Pendiente",
     }.get(request.status, request.status or "Sin estado informado")
-    return f"{escape(request.machinery_type or 'Solicitud')}<br>{escape(status)}"
+    project = request.project_name or "Proyecto sin nombre"
+    if len(project) > 18:
+        project = project[:15].rstrip() + "…"
+    return f"{escape(project)}<br>{escape(status)}"
 
 
 def states_figure(states: list[tuple[str, int]]):
@@ -192,7 +195,7 @@ def states_figure(states: list[tuple[str, int]]):
 
 def usage_figure(timeline: UsageTimeline):
     periods = timeline.periods
-    chart = figure(max(200, len(periods) * 44 + 90))
+    chart = figure(min(480, max(180, len(periods) * 36 + 80)))
     if not periods:
         return chart
     identifiers = [period.request.id for period in periods]
@@ -210,11 +213,12 @@ def usage_figure(timeline: UsageTimeline):
                 short_date(period.starts_on, year=True),
                 short_date(period.ends_on, year=True),
                 escape(period.request.status),
+                escape(period.request.machinery_type or "Sin tipo"),
             ]
             for period in periods
         ],
         hovertemplate=(
-            "%{customdata[1]}<br>Solicitud %{customdata[0]}<br>"
+            "%{customdata[1]} · %{customdata[5]}<br>Solicitud %{customdata[0]}<br>"
             "Uso solicitado: %{customdata[2]} – %{customdata[3]}<br>"
             "Estado: %{customdata[4]}<extra></extra>"
         ),
@@ -222,7 +226,7 @@ def usage_figure(timeline: UsageTimeline):
     start = min(period.starts_on for period in periods)
     end = max(period.ends_on for period in periods) + timedelta(days=1)
     span = (end - start).days
-    step = max(1, (span + 5) // 6)
+    step = max(1, (span + 3) // 4)
     ticks = [start + timedelta(days=offset) for offset in range(0, span + 1, step)]
     chart.update_xaxes(
         type="date",
@@ -237,7 +241,10 @@ def usage_figure(timeline: UsageTimeline):
         categoryarray=identifiers,
         autorange="reversed",
         tickmode="array",
-        tickvals=identifiers,
-        ticktext=[request_axis_label(period.request) for period in periods],
+        tickvals=identifiers[:: max(1, (len(periods) + 9) // 10)],
+        ticktext=[
+            request_axis_label(period.request)
+            for period in periods[:: max(1, (len(periods) + 9) // 10)]
+        ],
     )
     return chart

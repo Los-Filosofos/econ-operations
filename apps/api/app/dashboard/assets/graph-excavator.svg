@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120" role="img" aria-label="Excavadora">
-  <path fill="#d8d6cd" d="M35 86h98c13 0 24 8 27 20H45c-10 0-18-8-18-18zm16 7c-5 0-9 3-9 7h101c-4-5-9-7-16-7z"/>
-  <path fill="#e6e2d8" d="M72 53h45l24 33H62zm13 9-9 18h49l-13-18z"/>
-  <path fill="#aaa9a3" d="m78 58-13-8 28-33 9 7zM93 16l8-9 42 29-7 10zM136 36l8-2 18 36-10 5zM152 69h20l-3 18h-14z"/>
-  <path fill="#c6c3bb" d="M55 48h12v38H49zM41 42h18v8H41z"/>
-  <circle cx="61" cy="99" r="5" fill="#27312d"/><circle cx="126" cy="99" r="5" fill="#27312d"/>
-</svg>

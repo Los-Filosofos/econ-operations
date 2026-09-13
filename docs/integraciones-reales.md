@@ -159,6 +159,11 @@ Antes de dimensionar producción faltan: cantidad de activos y eventos por día,
 
 Esta revisión confirma acceso web a ambas plataformas y lecturas HTTP autenticadas de Nexus. Startrack tiene una API oficial, pero la obtención de la clave con esta cuenta quedó bloqueada por `403`; su API externa no se verificó con credenciales válidas. Todavía no implementa los conectores dentro del backend, una base unificada, sincronización continua ni un panel. No se realizaron escrituras de negocio.
 
-Los scripts de inspección, inventarios de recursos y resultados detallados permanecen en `.context-work/site-inspection/`, excluida de Git. El informe HTTP sanitizado es `live-read-check.json`; la prueba de acceso propio de Startrack está en `.context-work/private/startrack-own-api-result.json`. Las capturas de estado y originales de acceso permanecen locales. No se comparten contraseñas, valores de cookies, tokens ni coordenadas precisas.
+Los scripts de inspección, inventarios de recursos, resultados detallados,
+capturas y originales privados de estas revisiones se eliminaron durante la
+limpieza local solicitada por el usuario. Este documento conserva el resumen
+fechado de los hallazgos; los archivos auxiliares de `.context-work/` ya no están
+disponibles. No se comparten contraseñas, valores de cookies, tokens ni
+coordenadas precisas.
 
 Las fuentes convertidas siguen en [onedrive/README.md](onedrive/README.md). Los contratos propuestos en [la propuesta original](onedrive/07-propuesta-original.md) no adquieren validez por parecerse a las rutas observadas aquí.

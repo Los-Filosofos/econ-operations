@@ -34,13 +34,14 @@ class BoundedClient:
 
     @contextmanager
     def _exclusive(self, budget: float, error: type[Exception] | None = None) -> Iterator[float]:
-        """Yield the deadline for one serialized provider operation."""
+        """One budget covers both the lock wait and the serialized provider operation."""
+        deadline = monotonic() + budget
         if not self._lock.acquire(timeout=budget):
             raise (error or self.error)(
                 f"Ya hay una operación de {self._label} en curso; intente más tarde."
             )
         try:
-            yield monotonic() + budget
+            yield deadline
         finally:
             self._lock.release()
 
